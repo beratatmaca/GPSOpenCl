@@ -28,6 +28,7 @@ jobs:
       uses: coverallsapp/github-action@master
       with:
         github-token: ${{ secrets.github_token }}
+        path-to-lcov: ./build/Test/coverage.xml
     - name: Setup python
       uses: actions/setup-python@v2
       if: contains(matrix.os, 'ubuntu')
