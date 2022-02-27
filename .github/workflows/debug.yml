@@ -12,7 +12,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest]
     defaults:
       run:
         shell: bash -l {0}
@@ -24,3 +24,8 @@ jobs:
       run: cd build && make
     - name: move to Test folder and run Test
       run: cd build/Test && ./GPSOpenClTest
+    - name: Publish Unit Test Results
+      uses: EnricoMi/publish-unit-test-result-action/composite@v1
+      if: always()
+      with:
+        files: build/Test/TestResult/**/*.xml
