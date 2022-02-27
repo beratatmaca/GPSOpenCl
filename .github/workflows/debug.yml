@@ -1,4 +1,4 @@
-name: GPSOpenClTests
+name: GPSOpenClTest
 
 on:
   push:
@@ -16,6 +16,6 @@ jobs:
     - name: make
       run: cd build && make
     - name: move to Test folder
-      run: cd build/Test && ls -al
+      run: cd build/Test && ./GPSOpenClTest
     - name: Run Test
-      run: chmod +x ./GPSOpenClTest && ./GPSOpenClTest
+      run: /build/Test/GPSOpenClTest
