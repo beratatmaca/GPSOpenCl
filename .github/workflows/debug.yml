@@ -16,6 +16,6 @@ jobs:
     - name: make
       run: cd build && make
     - name: move to Test folder
-      run: cd build/Test && ls
+      run: cd build/Test && ls -al
     - name: Run Test
-      run: ./GPSOpenClTest
+      run: chmod +x ./GPSOpenClTest && ./GPSOpenClTest
