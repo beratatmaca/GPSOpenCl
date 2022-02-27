@@ -24,8 +24,3 @@ jobs:
       run: cd build && make
     - name: move to Test folder and run Test
       run: cd build/Test && ./GPSOpenClTest
-    - name: Publish Unit Test Results
-      uses: EnricoMi/publish-unit-test-result-action@v1.30
-      if: always()
-        with:
-        files: build/Test/TestResult/**/*.xml
