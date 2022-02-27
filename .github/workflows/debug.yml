@@ -24,22 +24,8 @@ jobs:
       run: cd build && make
     - name: move to Test folder and run Test
       run: cd build/Test && ./GPSOpenClTest
-    - name: Coveralls GitHub Action
-      uses: coverallsapp/github-action@master
-      with:
-        github-token: ${{ secrets.github_token }}
-        path-to-lcov: ./build/Test/TestResult.xml
-    - name: Setup python
-      uses: actions/setup-python@v2
-      if: contains(matrix.os, 'ubuntu')
-      with:
-        python-version: 3.8
-    - name: Upload code coverage to coveralls
-      if: contains(matrix.os, 'ubuntu')
-      env:
-        COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_TOKEN }}
-      run: |
-        python -m venv venv
-        source venv/bin/activate
-        pip install --upgrade pip setuptools cpp-coveralls
-        coveralls -E ".*CMakeFiles.*" -E ".*test/.*.cpp.*" --exclude "venv" --exclude "build/_deps"
+    - name: Publish Unit Test Results
+      uses: EnricoMi/publish-unit-test-result-action@v1.30
+      if: always()
+        with:
+        files: TestResult/**/*.xml
