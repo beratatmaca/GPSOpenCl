@@ -17,18 +17,29 @@ include(GoogleTest)
 add_executable(
     GPSOpenClTest
     Main.cpp
+    SettingsTest.cpp
 )
 
 target_compile_definitions(GPSOpenClTest PUBLIC CTEST)
 
-target_link_libraries(
+target_include_directories(
   GPSOpenClTest
-    gtest_main
+  PUBLIC 
+  ${CMAKE_SOURCE_DIR}/Source
 )
 
-gtest_discover_tests(GPSOpenClTest
-    PROPERTIES
-      LABELS "unit"
-    DISCOVERY_TIMEOUT  # how long to wait (in seconds) before crashing
-      240
-    )
+target_link_libraries(
+  GPSOpenClTest
+  PUBLIC 
+  gtest_main
+  Settings
+)
+
+gtest_discover_tests(
+  GPSOpenClTest
+  PROPERTIES
+  LABELS "unit"
+  DISCOVERY_TIMEOUT  # how long to wait (in seconds) before crashing
+  240
+  DISCOVERY_PATTERN "*Test.cpp"
+)

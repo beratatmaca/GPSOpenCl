@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include <iostream>
+#include "Settings/Settings.h"
 
 namespace GPSOpenClTest
 {
@@ -8,6 +9,7 @@ namespace GPSOpenClTest
     protected:
         SettingsTest()
         {
+            GPSOpenCl::Settings setting;
             // You can do set-up work for each test here.
         }
 
@@ -37,6 +39,5 @@ namespace GPSOpenClTest
     {
         EXPECT_EQ(1, 1);
     }
-    };
 }
 
