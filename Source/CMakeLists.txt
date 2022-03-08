@@ -1,6 +1,7 @@
 add_subdirectory(Acquisition)
 add_subdirectory(Tracking)
 add_subdirectory(Settings)
+add_subdirectory(IOManagement)
 
 add_executable(
     GPSOpenCl
