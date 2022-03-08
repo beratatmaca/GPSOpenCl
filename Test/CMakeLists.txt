@@ -19,6 +19,10 @@ add_executable(
     Main.cpp
     SettingsTest.cpp
 )
+add_test(
+    GPSOpenClTest
+    SettingsTest
+)
 
 target_compile_definitions(GPSOpenClTest PUBLIC CTEST)
 

@@ -1,5 +1,7 @@
 #include "Settings.h"
 
+#include <cstring>
+
 GPSOpenCl::Settings::Settings(/* args */)
 {
 }
@@ -17,7 +19,7 @@ GPSOpenCl::Settings::~Settings()
  */
 void GPSOpenCl::Settings::readIniFile(std::string iniFilePath)
 {
-    std::ifstream iniFile(iniFilePath);
+    std::ifstream iniFile(iniFilePath, std::ios_base::in);
     if (!iniFile.is_open())
     {
         std::cout << "Could not open ini file" << std::endl;
@@ -33,19 +35,23 @@ void GPSOpenCl::Settings::readIniFile(std::string iniFilePath)
             // Get value
             std::string value = line.substr(line.find("=") + 1);
             // Check if param is the correct format
-            if (param.find(" ") != std::string::npos)
-            {
-                std::cout << "Error: Parameter contains spaces" << std::endl;
-                return;
-            }
+            // Extract white spaces from string param
+            //param.erase(std::remove(param.begin(), param.end(), ' '), param.end());
+            //line.erase(std::remove(line.begin(), line.end(), ' '), line.end());
+            // Check if param is empty
             // Set value to map
-            setSettings(param, value);
+            setSetting(param, value);
         }
     }
     iniFile.close();
 }
 
-void GPSOpenCl::Settings::setSettings(std::string param, std::string value)
+void GPSOpenCl::Settings::setSetting(std::string key, std::string value)
 {
-    settingsMap[param] = value;
+    m_settingsMap[key] = value;
+}
+
+void GPSOpenCl::Settings::getSetting(std::string key, std::string& value)
+{
+    value = m_settingsMap[key];
 }

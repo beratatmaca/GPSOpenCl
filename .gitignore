@@ -36,3 +36,7 @@ build/
 
 # VSCode
 .vscode/
+
+# Any Data File
+*.dat
+*.bin

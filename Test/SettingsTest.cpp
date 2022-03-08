@@ -37,7 +37,15 @@ namespace GPSOpenClTest
     };
     TEST_F(SettingsTest, TestSettings)
     {
-        EXPECT_EQ(1, 1);
+        GPSOpenCl::Settings setting;
+        setting.readIniFile("../../Source/default.ini");
+        std::string resultStr = "";
+        setting.getSetting("fileName", resultStr);
+        EXPECT_EQ(resultStr, "gpssim.bin");
+        setting.getSetting("samplingFrequency", resultStr);
+        EXPECT_EQ(resultStr, "16384000");
+        setting.getSetting("dataType", resultStr);
+        EXPECT_EQ(resultStr, "int8");
     }
 }
 

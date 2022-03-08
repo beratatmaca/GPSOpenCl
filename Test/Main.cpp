@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 
 /**
- * @brief 
+ * @brief GTest main function
  * 
  * @param argc 
  * @param argv 

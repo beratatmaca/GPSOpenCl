@@ -3,6 +3,6 @@
 int main()
 {
     GPSOpenCl::Settings settings;
-    settings.readIniFile("Settings/Settings.ini");
+    settings.readIniFile("../../Source/default.ini");
     return 0;
 }

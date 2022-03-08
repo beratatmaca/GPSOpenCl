@@ -16,11 +16,10 @@ namespace GPSOpenCl
         Settings(/* args */);
         ~Settings();
         void readIniFile(std::string iniFilePath);
+        void setSetting(std::string key, std::string value);
+        void getSetting(std::string key, std::string& value);
     private:
-        void setSettings(std::string param, std::string value);
-        // Create a map to hold the settings
-        std::map<std::string, std::string> settingsMap;
-
+        std::map<std::string, std::string> m_settingsMap;
     };
 }
 
