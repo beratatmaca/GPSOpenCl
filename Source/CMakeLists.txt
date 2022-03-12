@@ -3,6 +3,7 @@ add_executable(
     GPSOpenCl.cpp
     IOManagement/FileHandler.cpp
     Code/CACode.cpp
+    Acquisition/Acquisition.cpp
 )
 
 target_include_directories(

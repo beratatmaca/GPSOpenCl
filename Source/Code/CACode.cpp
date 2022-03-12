@@ -1,13 +1,13 @@
 #include "CACode.h"
 
-#include <cstdlib> // for malloc()
 #include <QDebug>  // for qDebug()
+#include <cstdlib> // for malloc()
 #include <cmath>   // for ceil()
 #include <clFFT.h> // for fft
 
 GPSOpenCl::CACode::CACode()
 {
-    m_samplingTime = 1.0 / 16384000.0;
+    m_samplingTime = 1.0 / 4096000.0;
     m_codePeriodTime = 1.0 / 1023000.0;
     m_codeResampledLength = 4096;
 }
