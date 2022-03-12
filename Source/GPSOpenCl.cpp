@@ -11,12 +11,11 @@ int main(int argc, char *argv[])
 
     GPSOpenCl::FileHandler fileHandler("gpssim.bin");
     fileHandler.readFile();
+    
     GPSOpenCl::CACode caCode;
     caCode.createCACodeTable();
-    for (int i=0;i<100;i++)
-    {
-        qDebug() << caCode.m_data[0][i];
-    }
+    int prn = 1;
+    std::complex<double>* arr = caCode.conjFFTcode(caCode.m_code[prn - 1], 4096);
 
     QTimer::singleShot(0, &app, &QCoreApplication::quit);
     return app.exec();

@@ -1,6 +1,8 @@
 #ifndef INCLUDED_CA_CODE_H
 #define INCLUDED_CA_CODE_H
 
+#include <complex>
+
 namespace GPSOpenCl
 {
     class CACode
@@ -9,7 +11,8 @@ namespace GPSOpenCl
         CACode();
         ~CACode();
         void createCACodeTable();
-        double m_data[32][16384];
+        static std::complex<double>* conjFFTcode(double caCode[], int codeLength);
+        double m_code[32][4096];
     private:
         double* calculateCACode(int prn);
         double m_samplingTime;
