@@ -17,12 +17,11 @@ include(GoogleTest)
 add_executable(
     GPSOpenClTest
     Main.cpp
-    SettingsTest.cpp
 )
-add_test(
-    GPSOpenClTest
-    SettingsTest
-)
+
+#add_test(
+#    GPSOpenClTest
+#)
 
 target_compile_definitions(GPSOpenClTest PUBLIC CTEST)
 
@@ -36,7 +35,6 @@ target_link_libraries(
   GPSOpenClTest
   PUBLIC 
   gtest_main
-  Settings
 )
 
 gtest_discover_tests(

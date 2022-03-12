@@ -1,32 +1,39 @@
 #include "FileHandler.h"
 
-GPSOpenCl::FileHandler::FileHandler()
+#include <QDebug> // for qDebug()
+#include <QDir> // for QDir::currentPath()
+
+GPSOpenCl::FileHandler::FileHandler(QString fileName)
 {
-    m_dataBuf = new char[BUF_SIZE];
+    m_rawDataFile = new QFile(QDir::currentPath() + "/../../" + fileName);
+    qDebug() << "FileHandler: " << QDir::currentPath() + "/../../" + fileName;
+    if(!m_rawDataFile->exists())
+    {
+        qDebug() << "FileHandler:" << "File does not exist";
+    }
 }
 
 GPSOpenCl::FileHandler::~FileHandler()
 {
+    delete m_rawDataFile;
 }
 
-GPSOpenCl::FileHandler::readFile(Settings settings)
+void GPSOpenCl::FileHandler::readFile()
 {
-    bool success = false;
-    std::string fileName = settings.getSetting("fileName");
-    std::ifstream file(fileName, std::ios::in);
-    if (!file.is_open())
+    m_rawDataFile->open(QIODevice::ReadOnly);
+    if (m_rawDataFile->isOpen())
     {
-        std::cout << "File not found" << std::endl;
+        m_dataBuffer = m_rawDataFile->read(NUM_OF_SAMPLES * 2); // * sizeof(data)
+        for (int i = 0; i < m_dataBuffer.size(); i+=2)
+        {
+            m_data[i/2] = std::complex<double>(static_cast<double>(m_dataBuffer.at(i)), \
+                                                static_cast<double>(m_dataBuffer.at(i+1)));
+        }
+        qDebug() << "FileHandler: " << m_dataBuffer.size();
+        m_rawDataFile->close();
     }
     else
     {
-        file.seekg (0, file.end);
-        int length = file.tellg();
-        file.seekg (0, file.beg);
-        std::cout << "File length: " << length << std::endl;
-
-        file.read (buffer,length);
-        success = true;
+        qDebug() << "FileHandler:" << "File is not open";
     }
-    return success;
 }

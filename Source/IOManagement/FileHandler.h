@@ -1,22 +1,27 @@
 #ifndef INCLUDED_FILE_HANDLER_H
 #define INCLUDED_FILE_HANDLER_H
 
-#include "../Settings/Settings.h"
+#include <QString>
+#include <QFile>
+#include <QByteArray>
+#include <complex>
+
+#define NUM_OF_SAMPLES 163840
 
 namespace GPSOpenCl
 {
     class FileHandler
     {
     public:
-        FileHandler();
+        FileHandler(QString fileName);
         ~FileHandler();
 
-        bool readFile(Settings settings);
+        void readFile();
+        std::complex<double> m_data[NUM_OF_SAMPLES] = {0};
 
-        char* m_dataBuffer;
     private:
-        std::string m_fileName;
-        std::string 
+        QFile *m_rawDataFile;
+        QByteArray m_dataBuffer;
     };
 }
 

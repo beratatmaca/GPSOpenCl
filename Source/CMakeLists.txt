@@ -1,11 +1,8 @@
-add_subdirectory(Acquisition)
-add_subdirectory(Tracking)
-add_subdirectory(Settings)
-add_subdirectory(IOManagement)
-
 add_executable(
     GPSOpenCl
     GPSOpenCl.cpp
+    IOManagement/FileHandler.cpp
+    Code/CACode.cpp
 )
 
 target_include_directories(
@@ -17,5 +14,7 @@ target_include_directories(
 target_link_libraries(
     GPSOpenCl
     PUBLIC
-    Settings
+    Qt5::Core
+    OpenCL::OpenCL
+    clFFT
 )
