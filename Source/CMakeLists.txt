@@ -5,6 +5,7 @@ add_executable(
     Code/CACode.cpp
     Acquisition/Acquisition.cpp
     Utils/Utils.cpp
+    Logger/Logger.cpp
 )
 
 target_include_directories(

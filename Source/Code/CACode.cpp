@@ -2,13 +2,14 @@
 
 #include <cstdlib> // for malloc()
 #include <cmath>   // for ceil()
-#include <clFFT.h> // for fft
 
 GPSOpenCl::CACode::CACode()
 {
     m_samplingTime = 1.0 / 4096000.0;
     m_codePeriodTime = 1.0 / 1023000.0;
     m_codeResampledLength = 4096;
+
+    createCACodeTable();
 }
 
 GPSOpenCl::CACode::~CACode()
@@ -95,162 +96,4 @@ void GPSOpenCl::CACode::createCACodeTable()
         }
         delete code;
     }
-}
-
-std::complex<double> *GPSOpenCl::CACode::conjFFTcode(double caCode[], int codeLength)
-{
-    std::complex<double> *retCode = (std::complex<double> *)malloc(sizeof(std::complex<double>) * codeLength);
-    // OpenCL variables
-    cl_int err;
-    cl_platform_id platform = 0;
-    cl_device_id device = 0;
-    cl_context ctx = 0;
-    cl_command_queue queue = 0;
-
-    // Setup OpenCL environment
-    err = clGetPlatformIDs(1, &platform, NULL);
-    err = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 1, &device, NULL);
-
-    // Create an OpenCL context
-    ctx = clCreateContext(NULL, 1, &device, NULL, NULL, &err);
-
-    // Create a command queue
-    queue = clCreateCommandQueueWithProperties(ctx, device, 0, &err);
-
-    // Setup clFFT
-    clfftSetupData fftSetup;
-    err = clfftInitSetupData(&fftSetup);
-    err = clfftSetup(&fftSetup);
-
-    // FFT library realted declarations
-    clfftPlanHandle planHandle;
-    clfftDim dim = CLFFT_1D;
-    size_t clLengths[1] = {codeLength};
-
-    // Create a default plan for a complex FFT
-    err = clfftCreateDefaultPlan(&planHandle, ctx, dim, clLengths);
-
-    // Set plan parameters
-    err = clfftSetPlanPrecision(planHandle, CLFFT_SINGLE);
-    err = clfftSetLayout(planHandle, CLFFT_COMPLEX_PLANAR, CLFFT_COMPLEX_PLANAR);
-    err = clfftSetResultLocation(planHandle, CLFFT_OUTOFPLACE);
-
-    // Real and Imaginary arrays
-    cl_float *inReal = (cl_float *)malloc(codeLength * sizeof(cl_float));
-    cl_float *inImag = (cl_float *)malloc(codeLength * sizeof(cl_float));
-    cl_float *outReal = (cl_float *)malloc(codeLength * sizeof(cl_float));
-    cl_float *outImag = (cl_float *)malloc(codeLength * sizeof(cl_float));
-
-    // Input and Output buffer
-    cl_mem buffersIn[2] = {0, 0};
-    cl_mem buffersOut[2] = {0, 0};
-
-    // Bake the plan
-    err = clfftBakePlan(planHandle, 1, &queue, NULL, NULL);
-    // Size of temp buffer
-    size_t tmpBufferSize = 0;
-    int status = 0;
-    // Create temporary buffer
-    status = clfftGetTmpBufSize(planHandle, &tmpBufferSize);
-    // Temporary buffer
-    cl_mem tmpBuffer = 0;
-    if ((status == 0) && (tmpBufferSize > 0))
-    {
-        tmpBuffer = clCreateBuffer(ctx, CL_MEM_READ_WRITE, tmpBufferSize, 0, &err);
-        if (err != CL_SUCCESS)
-        {
-            qDebug() << "Error with tmpBuffer clCreateBuffer";
-        }
-    }
-    float outRealCPU[codeLength] = {0};
-    float outImagCPU[codeLength] = {0};
-
-    for (int j = 0; j < codeLength; j++)
-    {
-        inReal[j] = static_cast<float>(caCode[j]);
-        inImag[j] = 0.0;
-        outReal[j] = 0.0;
-        outImag[j] = 0.0;
-    }
-    // Prepare OpenCL memory objects : create buffer for input
-    buffersIn[0] = clCreateBuffer(ctx, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR,
-                                  codeLength * sizeof(cl_float), inReal, &err);
-    if (err != CL_SUCCESS)
-    {
-        qDebug() << "Error with buffersIn[0] clCreateBuffer";
-    }
-
-    err = clEnqueueWriteBuffer(queue, buffersIn[0], CL_TRUE, 0, codeLength * sizeof(float),
-                               inReal, 0, NULL, NULL);
-    if (err != CL_SUCCESS)
-    {
-        qDebug() << "Error with buffersIn[0] clEnqueueWriteBuffer";
-    }
-    // Prepare OpenCL memory objects : create buffer for input
-    buffersIn[1] = clCreateBuffer(ctx, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR,
-                                  codeLength * sizeof(cl_float), inImag, &err);
-    if (err != CL_SUCCESS)
-    {
-        qDebug() << "Error with buffersIn[1] clCreateBuffer";
-    }
-
-    // Enqueue write tab array into buffersIn[1]
-    err = clEnqueueWriteBuffer(queue, buffersIn[1], CL_TRUE, 0, codeLength * sizeof(float),
-                               inImag, 0, NULL, NULL);
-    if (err != CL_SUCCESS)
-    {
-        qDebug() << "Error with buffersIn[1] clEnqueueWriteBuffer\n";
-    }
-
-    // Prepare OpenCL memory objects : create buffer for output
-    buffersOut[0] = clCreateBuffer(ctx, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, codeLength * sizeof(cl_float), outReal, &err);
-    if (err != CL_SUCCESS)
-    {
-        qDebug() << "Error with buffersOut[1] clCreateBuffer";
-    }
-
-    buffersOut[1] = clCreateBuffer(ctx, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, codeLength * sizeof(cl_float), outImag, &err);
-    if (err != CL_SUCCESS)
-    {
-        qDebug() << "Error with buffersOut[1] clCreateBuffer";
-    }
-
-    // Execute the plan
-    err = clfftEnqueueTransform(planHandle, CLFFT_FORWARD, 1, &queue, 0, NULL, NULL,
-                                buffersIn, buffersOut, tmpBuffer);
-    // Wait for calculations to be finished
-    err = clFinish(queue);
-    // Fetch results of calculations : Real and Imaginary
-    err = clEnqueueReadBuffer(queue, buffersOut[0], CL_TRUE, 0, codeLength * sizeof(float), &outRealCPU[0],
-                              0, NULL, NULL);
-    err = clEnqueueReadBuffer(queue, buffersOut[1], CL_TRUE, 0, codeLength * sizeof(float), &outImagCPU[0],
-                              0, NULL, NULL);
-
-    for (int k = 0; k < codeLength; k++)
-    {
-        retCode[k] = std::complex<double>(outRealCPU[k], -1 * outImagCPU[k]);
-    }
-
-    // Release OpenCL memory objects
-    clReleaseMemObject(buffersIn[0]);
-    clReleaseMemObject(buffersIn[1]);
-    clReleaseMemObject(buffersOut[0]);
-    clReleaseMemObject(buffersOut[1]);
-    clReleaseMemObject(tmpBuffer);
-
-    delete inReal;
-    delete inImag;
-    delete outReal;
-    delete outImag;
-
-    // Release the plan
-    err = clfftDestroyPlan(&planHandle);
-
-    // Release clFFT library
-    clfftTeardown();
-
-    // Release OpenCL working objects
-    clReleaseCommandQueue(queue);
-    clReleaseContext(ctx);
-    return retCode;
 }

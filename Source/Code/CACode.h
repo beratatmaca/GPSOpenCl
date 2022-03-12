@@ -12,7 +12,6 @@ namespace GPSOpenCl
         CACode();
         ~CACode();
         void createCACodeTable();
-        static std::complex<double>* conjFFTcode(double caCode[], int codeLength);
         double m_code[32][4096];
     private:
         double* calculateCACode(int prn);
