@@ -11,7 +11,7 @@ namespace GPSOpenCl
     {
     Q_OBJECT
     public:
-        Acquisition(double code[], std::complex<double> rawData, QObject *parent = 0);
+        Acquisition(double* code, std::complex<double> rawData, QObject *parent = 0);
         ~Acquisition();
         void run();
     private:

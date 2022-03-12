@@ -3,7 +3,7 @@
 #include "../IOManagement/FileHandler.h"
 #include "../Utils/Utils.h"
 
-GPSOpenCl::Acquisition::Acquisition(double code[], std::complex<double> rawData, QObject *parent) : QThread(parent)
+GPSOpenCl::Acquisition::Acquisition(double* code, std::complex<double> rawData, QObject *parent) : QThread(parent)
 {
     memcpy(&m_code[0], &code[0], sizeof(double) * 4096);
     memcpy(&m_rawData[0], &code[0], sizeof(std::complex<double>) * 4096);
