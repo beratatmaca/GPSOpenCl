@@ -2,6 +2,7 @@
 #define INCLUDED_CA_CODE_H
 
 #include <complex>
+#include <QDebug>
 
 namespace GPSOpenCl
 {

@@ -1,6 +1,5 @@
 #include "CACode.h"
 
-#include <QDebug>  // for qDebug()
 #include <cstdlib> // for malloc()
 #include <cmath>   // for ceil()
 #include <clFFT.h> // for fft

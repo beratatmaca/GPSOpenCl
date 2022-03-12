@@ -4,6 +4,7 @@ add_executable(
     IOManagement/FileHandler.cpp
     Code/CACode.cpp
     Acquisition/Acquisition.cpp
+    Utils/Utils.cpp
 )
 
 target_include_directories(
