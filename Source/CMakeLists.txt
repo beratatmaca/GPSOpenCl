@@ -5,6 +5,7 @@ add_executable(
     Code/CACode.cpp
     Acquisition/Acquisition.cpp
     Utils/Utils.cpp
+    Utils/FftUtils.cpp
     Logger/Logger.cpp
 )
 

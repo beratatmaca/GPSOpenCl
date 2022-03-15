@@ -19,6 +19,7 @@ int main(int argc, char *argv[])
 
     GPSOpenCl::Acquisition acquisition(caCode.m_code[0], fileHandler.m_data[0]);
     acquisition.start();
+    acquisition.wait();
 
     QTimer::singleShot(0, &app, &QCoreApplication::quit);
     return app.exec();

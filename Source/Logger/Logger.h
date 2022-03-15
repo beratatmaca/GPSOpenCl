@@ -16,22 +16,24 @@ namespace GPSOpenCl
         template<typename T>
         void log(T data)
         {
-            if (m_file->isOpen())
+            if (!m_file->isOpen())
             {
-                *m_stream << data << "\n";
+                m_file->open(QIODevice::Append | QIODevice::Text);
             }
+            *m_stream << data << "\n";
             m_file->close();
         }
 
         template<typename T>
         void log(T* data, int length)
         {
-            if (m_file->isOpen())
+            if (!m_file->isOpen())
             {
-                for (int i = 0; i < length; i++)
-                {
-                    *m_stream << data[i] << "\n";
-                }
+                m_file->open(QIODevice::Append | QIODevice::Text);
+            }
+            for (int i = 0; i < length; i++)
+            {
+                *m_stream << data[i] << "\n";
             }
             m_file->close();
         }

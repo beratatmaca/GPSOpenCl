@@ -1,12 +1,13 @@
 #include "Logger.h"
 
 #include <QDebug>
+#include <QDir>
 
 GPSOpenCl::Logger::Logger()
 {
     QString fileName = "log.txt";
-    m_file = new QFile("/../../"+fileName);
-    if (!m_file->open(QIODevice::Append | QIODevice::Text))
+    m_file = new QFile(QDir::currentPath() + "/../../" + fileName);
+    if (!m_file->open(QIODevice::WriteOnly | QIODevice::Text))
     {
         qDebug() << "Could not open file for writing";
     }

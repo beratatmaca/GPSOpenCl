@@ -1,12 +1,14 @@
 #include "Acquisition.h"
 
+#include <QElapsedTimer>
+
 #include "../IOManagement/FileHandler.h"
-#include "../Utils/Utils.h"
 
 GPSOpenCl::Acquisition::Acquisition(double* code, std::complex<double> rawData, QObject *parent) : QThread(parent)
 {
     memcpy(&m_code[0], &code[0], sizeof(double) * 4096);
     memcpy(&m_rawData[0], &code[0], sizeof(std::complex<double>) * 4096);
+    m_fftUtils = new FftUtils(4096);
     m_freqBins = 29;
     for (int i = 0 ; i<m_freqBins; i++)
     {
@@ -17,12 +19,17 @@ GPSOpenCl::Acquisition::Acquisition(double* code, std::complex<double> rawData, 
 
 GPSOpenCl::Acquisition::~Acquisition()
 {
-
+    delete m_logger;
 }
 
 void GPSOpenCl::Acquisition::run()
 {
-    std::complex<double>* codeFFT = GPSOpenCl::Utils::fftReal(m_code, 4096);
+    // Get high resolution timer
+    QElapsedTimer timer;
+    timer.start();
+
+
+    std::complex<double>* codeFFT = m_fftUtils->fftReal(m_code);
     codeFFT = GPSOpenCl::Utils::conj(codeFFT, 4096);
 
     for (int freqBin = 0; freqBin < m_freqBins; freqBin++)
@@ -34,7 +41,7 @@ void GPSOpenCl::Acquisition::run()
         {
             multArr[j] = (m_rawData[j] * doppSignal[j]);
         }
-        std::complex<double>* multFFT = GPSOpenCl::Utils::fftComplex(multArr, 4096);
+        std::complex<double>* multFFT = m_fftUtils->fftComplex(multArr);
         
         std::complex<double> convCode[4096];
         for (int j = 0 ; j<4096; j++)
@@ -52,4 +59,5 @@ void GPSOpenCl::Acquisition::run()
         delete convCodeIFFT;
     }
     delete codeFFT;
+    qDebug() << "The slow operation took" << timer.elapsed() << "milliseconds";
 }
