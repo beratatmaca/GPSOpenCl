@@ -40,3 +40,4 @@ build/
 # Any Data File
 *.dat
 *.bin
+log.txt

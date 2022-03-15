@@ -20,6 +20,7 @@ GPSOpenCl::Acquisition::Acquisition(double* code, std::complex<double> rawData, 
 GPSOpenCl::Acquisition::~Acquisition()
 {
     delete m_logger;
+    delete m_fftUtils;
 }
 
 void GPSOpenCl::Acquisition::run()
@@ -49,14 +50,14 @@ void GPSOpenCl::Acquisition::run()
             convCode[j] = (codeFFT[j] * multFFT[j]);
         }
 
-        std::complex<double>* convCodeIFFT = GPSOpenCl::Utils::ifftComplex(convCode, 4096);
+        //std::complex<double>* convCodeIFFT = GPSOpenCl::Utils::ifftComplex(convCode, 4096);
         
-        double* convCodeIFFTReal = GPSOpenCl::Utils::abs(convCodeIFFT, 4096);
-        m_logger->log(convCodeIFFTReal, 4096);
+        //double* convCodeIFFTReal = GPSOpenCl::Utils::abs(convCodeIFFT, 4096);
+        //m_logger->log(convCodeIFFTReal, 4096);
 
         delete doppSignal;
         delete multFFT;
-        delete convCodeIFFT;
+        //delete convCodeIFFT;
     }
     delete codeFFT;
     qDebug() << "The slow operation took" << timer.elapsed() << "milliseconds";
