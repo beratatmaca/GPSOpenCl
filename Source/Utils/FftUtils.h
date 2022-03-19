@@ -12,8 +12,8 @@ namespace GPSOpenCl
     public:
         FftUtils(int length);
         ~FftUtils();
-        std::complex<double> *fftReal(double input[]);
-        std::complex<double> *fftComplex(std::complex<double> input[]);
+        std::vector<std::complex<double>> fftComplex(std::vector<std::complex<double>> input);
+        std::vector<std::complex<double>> ifftComplex(std::vector<std::complex<double>> input);
 
     private:
         cl_context m_ctx;

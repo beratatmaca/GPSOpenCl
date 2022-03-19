@@ -76,6 +76,7 @@ GPSOpenCl::FftUtils::~FftUtils()
     clReleaseMemObject(m_buffersOut[0]);
     clReleaseMemObject(m_buffersOut[1]);
     clReleaseMemObject(m_tmpBuffer);
+
     delete m_inReal;
     delete m_inImag;
     delete m_outReal;
@@ -87,15 +88,15 @@ GPSOpenCl::FftUtils::~FftUtils()
     clReleaseContext(m_ctx);
 }
 
-std::complex<double>* GPSOpenCl::FftUtils::fftReal(double input[])
+std::vector<std::complex<double>> GPSOpenCl::FftUtils::fftComplex(std::vector<std::complex<double>> input)
 {
     cl_int err;
-    std::complex<double> *retVal = (std::complex<double> *)malloc(sizeof(std::complex<double>) * m_length);
-    
+    std::vector<std::complex<double>> retVal;
+
     for (int j = 0; j < m_length; j++)
     {
-        m_inReal[j] = static_cast<float>(input[j]);
-        m_inImag[j] = 0.0;
+        m_inReal[j] = static_cast<float>(std::real(input.at(j)));
+        m_inImag[j] = static_cast<float>(std::imag(input.at(j)));
         m_outReal[j] = 0.0;
         m_outImag[j] = 0.0;
     }
@@ -123,20 +124,20 @@ std::complex<double>* GPSOpenCl::FftUtils::fftReal(double input[])
 
     for (int k = 0; k < m_length; k++)
     {
-        retVal[k] = std::complex<double>(outRealCPU[k], outImagCPU[k]);
+        retVal.push_back(std::complex<double>(outRealCPU[k], outImagCPU[k]));
     }
     return retVal;
 }
 
-std::complex<double>* GPSOpenCl::FftUtils::fftComplex(std::complex<double> input[])
+std::vector<std::complex<double>> GPSOpenCl::FftUtils::ifftComplex(std::vector<std::complex<double>> input)
 {
     cl_int err;
-    std::complex<double> *retVal = (std::complex<double> *)malloc(sizeof(std::complex<double>) * m_length);
-    
+    std::vector<std::complex<double>> retVal;
+
     for (int j = 0; j < m_length; j++)
     {
-        m_inReal[j] = static_cast<float>(std::real(input[j]));
-        m_inImag[j] = static_cast<float>(std::imag(input[j]));
+        m_inReal[j] = static_cast<float>(std::real(input.at(j)));
+        m_inImag[j] = static_cast<float>(std::imag(input.at(j)));
         m_outReal[j] = 0.0;
         m_outImag[j] = 0.0;
     }
@@ -152,7 +153,7 @@ std::complex<double>* GPSOpenCl::FftUtils::fftComplex(std::complex<double> input
         qDebug() << "Error with buffersIn[1] clEnqueueWriteBuffer\n";
     }
     // Execute the plan
-    err = clfftEnqueueTransform(m_planHandle, CLFFT_FORWARD, 1, &m_queue, 0, NULL, NULL,
+    err = clfftEnqueueTransform(m_planHandle, CLFFT_BACKWARD, 1, &m_queue, 0, NULL, NULL,
                                 m_buffersIn, m_buffersOut, m_tmpBuffer);
     err = clFinish(m_queue);
     float outRealCPU[m_length] = {0};
@@ -164,7 +165,7 @@ std::complex<double>* GPSOpenCl::FftUtils::fftComplex(std::complex<double> input
 
     for (int k = 0; k < m_length; k++)
     {
-        retVal[k] = std::complex<double>(outRealCPU[k], outImagCPU[k]);
+        retVal.push_back(std::complex<double>(outRealCPU[k], outImagCPU[k]));
     }
-    return retVal;
+    return retVal;    
 }
