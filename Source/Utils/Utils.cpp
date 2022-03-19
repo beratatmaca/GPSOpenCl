@@ -41,15 +41,3 @@ std::vector<double> GPSOpenCl::Utils::abs(std::vector<std::complex<double>> inpu
     }
     return retVal;
 }
-
-void GPSOpenCl::Utils::calcLoopCoefficients(double noiseBandWidth,
-                                            double dampingRatio,
-                                            double gain,
-                                            double *tau1,
-                                            double *tau2)
-{
-    double naturalFreq = (noiseBandWidth * 8.0 * dampingRatio) / (4 * std::pow(dampingRatio, 2.0) + 1);
-
-    *tau1 = gain / (naturalFreq * naturalFreq);
-    *tau2 = 2.0 * dampingRatio / naturalFreq;
-}

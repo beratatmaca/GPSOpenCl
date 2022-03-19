@@ -16,9 +16,19 @@ namespace GPSOpenCl
                  QObject *parent = 0);
         ~Tracking();
         void run();
-    private:
+    private:        
+        void calcLoopCoefficients(double noiseBandWidth,
+                                  double dampingRatio,
+                                  double gain,
+                                  double *tau1,
+                                  double *tau2);
         std::vector<std::complex<double>> m_code;
         std::vector<std::complex<double>> m_rawData;
+
+        double m_dllTau1;
+        double m_dllTau2;
+        double m_pllTau1;
+        double m_pllTau2;
     };
 }
 
