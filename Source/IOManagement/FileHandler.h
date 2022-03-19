@@ -17,7 +17,7 @@ namespace GPSOpenCl
         ~FileHandler();
 
         void readFile();
-        std::complex<double> m_data[NUM_OF_SAMPLES] = {0};
+        std::vector<std::complex<double>> m_data;
 
     private:
         QFile *m_rawDataFile;
