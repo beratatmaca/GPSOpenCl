@@ -11,12 +11,9 @@ namespace GPSOpenCl
     public:
         Utils();
         ~Utils();
-        static std::complex<double>* fftReal(double input[], int length);
-        static std::complex<double>* fftComplex(std::complex<double> input[], int length);
-        static std::complex<double>* ifftComplex(std::complex<double> input[], int length);
-        static std::complex<double>* conj(std::complex<double> input[], int length);
-        static std::complex<double>* exp(int length, double frequency, double samplingRate);
-        static double* abs(std::complex<double>* input, int length);
+        static void conj(std::vector<std::complex<double>> *input);
+        static std::vector<std::complex<double>> exp(int length, double frequency, double samplingRate);
+        static std::vector<double> abs(std::vector<std::complex<double>> input);
     };
 }
 
