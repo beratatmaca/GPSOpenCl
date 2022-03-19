@@ -19,7 +19,7 @@ namespace GPSOpenCl
     private:        
         void earlyLatePromptGen();
         void numericOscillator();
-        void accumulator();
+        void accumulator(std::vector<std::complex<double>> input);
         void freqDiscriminator();
         void codeDiscriminator();
         void calcLoopCoefficients(double noiseBandWidth,
@@ -33,6 +33,8 @@ namespace GPSOpenCl
         std::vector<double> m_promptCode;
         std::vector<double> m_lateCode;
         std::vector<std::complex<double>> m_rawData;
+
+        int m_totalSamples;
 
         double m_dllTau1;
         double m_dllTau2;
