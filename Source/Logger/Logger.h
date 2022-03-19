@@ -4,6 +4,7 @@
 #include <QFile>
 #include <QIODevice>
 #include <QTextStream>
+#include <complex>
 
 namespace GPSOpenCl
 {
@@ -13,7 +14,7 @@ namespace GPSOpenCl
         Logger();
         ~Logger();
 
-        template<typename T>
+        template <typename T>
         void log(T data)
         {
             if (!m_file->isOpen())
@@ -21,11 +22,12 @@ namespace GPSOpenCl
                 m_file->open(QIODevice::Append | QIODevice::Text);
             }
             *m_stream << data << "\n";
+            m_stream->flush();
             m_file->close();
         }
 
-        template<typename T>
-        void log(T* data, int length)
+        template <typename T>
+        void log(T *data, int length)
         {
             if (!m_file->isOpen())
             {
@@ -35,12 +37,16 @@ namespace GPSOpenCl
             {
                 *m_stream << data[i] << "\n";
             }
+            m_stream->flush();
             m_file->close();
         }
-        
+
+        void log(std::vector<std::complex<double>> data);
+        void log(std::vector<double> data);
+
     private:
-        QFile* m_file;
-        QTextStream* m_stream;
+        QFile *m_file;
+        QTextStream *m_stream;
     };
 }
 

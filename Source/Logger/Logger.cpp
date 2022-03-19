@@ -19,3 +19,32 @@ GPSOpenCl::Logger::~Logger()
     m_file->close();
     delete m_file;
 }
+
+void GPSOpenCl::Logger::log(std::vector<std::complex<double>> data)
+{
+    if (!m_file->isOpen())
+    {
+        m_file->open(QIODevice::Append | QIODevice::Text);
+    }
+    for (auto it = data.begin(); it != data.end(); ++it)
+    {
+        *m_stream << std::real(*it) << "+" << std::imag(*it) << "i"
+                  << "\n";
+    }
+    m_stream->flush();
+    m_file->close();
+}
+
+void GPSOpenCl::Logger::log(std::vector<double> data)
+{
+    if (!m_file->isOpen())
+    {
+        m_file->open(QIODevice::Append | QIODevice::Text);
+    }
+    for (auto it = data.begin(); it != data.end(); ++it)
+    {
+        *m_stream << *it << "\n";
+    }
+    m_stream->flush();
+    m_file->close();
+}
