@@ -41,6 +41,8 @@ GPSOpenCl::Tracking::Tracking(std::vector<std::complex<double>> code,
     m_promptCode.resize(4096);
     m_lateCode.resize(4096);
 
+    m_logger = new Logger();
+
     calcLoopCoefficients(1.0, 0.7, 1.0, &m_dllTau1, &m_dllTau2);
     calcLoopCoefficients(6.5, 0.7, 0.25, &m_pllTau1, &m_pllTau2);
     m_codePhaseStep = m_codeFreq / 4096000;
@@ -54,18 +56,22 @@ void GPSOpenCl::Tracking::run()
 {
     // Get high resolution timer
     QElapsedTimer timer;
-    std::vector<std::complex<double>> inputSignal;
-    std::copy(m_rawData.begin() + 3777, m_rawData.begin() + 3777 + m_totalSamples, std::back_inserter(inputSignal));
-    for (int i = 0; i < 10; i++)
+    int initOffset = 3777;
+    for (int i = 0; i < 100; i++)
     {
         timer.start();
-
+        std::vector<std::complex<double>> inputSignal;
+        std::copy(m_rawData.begin() + initOffset, m_rawData.begin() + initOffset + m_totalSamples, std::back_inserter(inputSignal));
+        auto s = inputSignal.size();
+        m_totalSamples = std::ceil((1023 - m_remCodePhase) / m_codePhaseStep);
         earlyLatePromptGen();
         numericOscillator();
         accumulator(inputSignal);
+        m_logger->log(m_Ip);
         freqDiscriminator();
         codeDiscriminator();
-        std::copy(m_rawData.begin() + 3777, m_rawData.begin() + 3777 + m_totalSamples, inputSignal.begin());
+        resetAccumulation();
+        initOffset += m_totalSamples;
 
         qDebug() << "Tracking operation took" << timer.nsecsElapsed() << "nanoseconds";
     }
@@ -89,7 +95,7 @@ void GPSOpenCl::Tracking::earlyLatePromptGen()
     int indexPrompt = 0;
     int indexLate = 0;
     m_codePhaseStep = m_codeFreq / 4096000;
-    for (int i = 0; i < 4096; i++)
+    for (int i = 0; i < m_totalSamples; i++)
     {
         indexEarly = static_cast<int>(std::ceil(m_remCodePhase - 0.5 + i * m_codePhaseStep));
         indexPrompt = static_cast<int>(std::ceil(m_remCodePhase + i * m_codePhaseStep));
@@ -103,7 +109,7 @@ void GPSOpenCl::Tracking::earlyLatePromptGen()
 
 void GPSOpenCl::Tracking::numericOscillator()
 {
-    m_carrSig = GPSOpenCl::Utils::exp(4096, m_carrFreq, 4096000.0, m_remCarrPhase);
+    m_carrSig = GPSOpenCl::Utils::exp(m_totalSamples, m_carrFreq, 4096000.0, m_remCarrPhase);
     m_remCarrPhase = std::remainder((2.0 * M_PI * m_carrFreq * 0.001) + m_remCarrPhase, (2 * M_PI));
 }
 
@@ -113,22 +119,22 @@ void GPSOpenCl::Tracking::accumulator(std::vector<std::complex<double>> input)
     for (int i = 0; i < m_totalSamples; i++)
     {
         freqMult = m_carrSig.at(i) * input.at(i);
-        m_Ie += std::real(freqMult * m_earlyCode.at(i));
-        m_Qe += std::imag(freqMult * m_earlyCode.at(i));
-        m_Ip += std::real(freqMult * m_promptCode.at(i));
-        m_Qp += std::imag(freqMult * m_promptCode.at(i));
-        m_Il += std::real(freqMult * m_lateCode.at(i));
-        m_Ql += std::imag(freqMult * m_lateCode.at(i));
+        m_Ie += std::imag(freqMult * m_earlyCode.at(i));
+        m_Qe += std::real(freqMult * m_earlyCode.at(i));
+        m_Ip += std::imag(freqMult * m_promptCode.at(i));
+        m_Qp += std::real(freqMult * m_promptCode.at(i));
+        m_Il += std::imag(freqMult * m_lateCode.at(i));
+        m_Ql += std::real(freqMult * m_lateCode.at(i));
     }
 }
 
 void GPSOpenCl::Tracking::freqDiscriminator()
 {
-    double carrError = std::atan(m_Qp / m_Ip) / (2.0 * M_PI);
-    m_carrFreq = m_carrFreq + (m_pllTau1 * carrError);
+    m_carrError = std::atan(m_Qp / m_Ip) / (2.0 * M_PI);
     m_carrNco = m_carrNcoPrev + (m_pllTau2 / m_pllTau1) * (m_carrError - m_carrErrorPrev) + m_carrError * (0.001 / m_pllTau1);
     m_carrNcoPrev = m_carrNco;
     m_carrErrorPrev = m_carrError;
+    m_carrFreq += m_carrNco;
 }
 
 void GPSOpenCl::Tracking::codeDiscriminator()
@@ -137,5 +143,15 @@ void GPSOpenCl::Tracking::codeDiscriminator()
     m_codeNco = m_codeNcoPrev + (m_dllTau2 / m_dllTau1) * (m_codeError - m_codeErrorPrev) + m_codeError * (0.001 / m_dllTau1);
     m_codeNcoPrev = m_codeNco;
     m_codeErrorPrev = m_codeError;
-    m_codeFreq = m_codeFreq + -m_codeNco;
+    m_codeFreq -= m_codeNco;
+}
+
+void GPSOpenCl::Tracking::resetAccumulation()
+{
+    m_Ie = 0;
+    m_Ip = 0;
+    m_Il = 0;
+    m_Qe = 0;
+    m_Qp = 0;
+    m_Ql = 0;
 }

@@ -4,6 +4,7 @@
 #include <QThread>
 #include <QMutex>
 #include <complex>
+#include "../Logger/Logger.h"
 
 namespace GPSOpenCl
 {
@@ -16,18 +17,20 @@ namespace GPSOpenCl
                  QObject *parent = 0);
         ~Tracking();
         void run();
-    private:        
+
+    private:
         void earlyLatePromptGen();
         void numericOscillator();
         void accumulator(std::vector<std::complex<double>> input);
         void freqDiscriminator();
         void codeDiscriminator();
+        void resetAccumulation();
         void calcLoopCoefficients(double noiseBandWidth,
                                   double dampingRatio,
                                   double gain,
                                   double *tau1,
                                   double *tau2);
-        
+
         std::vector<double> m_code;
         std::vector<double> m_earlyCode;
         std::vector<double> m_promptCode;
@@ -62,6 +65,8 @@ namespace GPSOpenCl
         double m_Qe;
         double m_Qp;
         double m_Ql;
+
+        Logger *m_logger;
     };
 }
 
