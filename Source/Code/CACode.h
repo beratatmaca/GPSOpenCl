@@ -13,10 +13,10 @@ namespace GPSOpenCl
         CACode();
         ~CACode();
         void createCACodeTable();
+        static std::vector<double> calculateCACode(int prn);
         std::vector<std::vector<std::complex<double>>> m_code;
 
     private:
-        double *calculateCACode(int prn);
         double m_samplingTime;
         double m_codePeriodTime;
         int m_codeResampledLength;

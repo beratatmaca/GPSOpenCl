@@ -17,7 +17,7 @@ GPSOpenCl::CACode::~CACode()
 {
 }
 
-double *GPSOpenCl::CACode::calculateCACode(int prn)
+std::vector<double> GPSOpenCl::CACode::calculateCACode(int prn)
 {
     const static int delayChips[] = {
         5, 6, 7, 8, 17, 18, 139, 140, 141, 251,
@@ -42,7 +42,7 @@ double *GPSOpenCl::CACode::calculateCACode(int prn)
         292, 901, 339, 208, 711, 189, 263, 537, 663, 942,
         173, 900, 30, 500, 935, 556, 373, 85, 652, 310};
 
-    double *code = (double *)malloc(sizeof(double) * 1024);
+    std::vector<double> codeVector;
     char G1[1023];
     char G2[1023];
     char R1[10];
@@ -73,10 +73,10 @@ double *GPSOpenCl::CACode::calculateCACode(int prn)
 
     for (i = 0, j = 1023 - delayChips[prn - 1]; i < 1023; i++, j++)
     {
-        code[i] = -G1[i] * G2[j % 1023];
+        codeVector.push_back(-G1[i] * G2[j % 1023]);
     }
 
-    return code;
+    return codeVector;
 }
 
 void GPSOpenCl::CACode::createCACodeTable()
@@ -90,12 +90,11 @@ void GPSOpenCl::CACode::createCACodeTable()
 
     for (int i = 1; i <= 32; i++)
     {
-        double *code = calculateCACode(i);
+        std::vector<double> code = calculateCACode(i);
         m_code.push_back(std::vector<std::complex<double>>());
         for (int j = 0; j < m_codeResampledLength; j++)
         {
             m_code[i - 1].push_back(std::complex<double>(code[codeIndexes[j] - 1], 0));
         }
-        delete code;
     }
 }
