@@ -34,10 +34,22 @@ std::vector<std::complex<double>> GPSOpenCl::Utils::exp(int length, double frequ
 
 std::vector<double> GPSOpenCl::Utils::abs(std::vector<std::complex<double>> input)
 {
-    std::vector<double> retVal; 
-    for(auto it = input.begin(); it != input.end(); ++it)
+    std::vector<double> retVal;
+    for (auto it = input.begin(); it != input.end(); ++it)
     {
         retVal.push_back(std::abs(*it));
     }
     return retVal;
+}
+
+void GPSOpenCl::Utils::calcLoopCoefficients(double noiseBandWidth,
+                                            double dampingRatio,
+                                            double gain,
+                                            double *tau1,
+                                            double *tau2)
+{
+    double naturalFreq = (noiseBandWidth * 8.0 * dampingRatio) / (4 * std::pow(dampingRatio, 2.0) + 1);
+
+    *tau1 = gain / (naturalFreq * naturalFreq);
+    *tau2 = 2.0 * dampingRatio / naturalFreq;
 }

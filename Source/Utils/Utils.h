@@ -14,6 +14,11 @@ namespace GPSOpenCl
         static void conj(std::vector<std::complex<double>> *input);
         static std::vector<std::complex<double>> exp(int length, double frequency, double samplingRate);
         static std::vector<double> abs(std::vector<std::complex<double>> input);
+        static void calcLoopCoefficients(double noiseBandWidth,
+                                         double dampingRatio,
+                                         double gain,
+                                         double *tau1,
+                                         double *tau2);
     };
 }
 

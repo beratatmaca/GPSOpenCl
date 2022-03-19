@@ -42,7 +42,7 @@ void GPSOpenCl::Acquisition::run()
     timer.start();
     std::vector<std::vector<double>> corrResult = correlator();
     checkResults(corrResult);
-    qDebug() << "The slow operation took" << timer.elapsed() << "milliseconds";
+    qDebug() << "Acqusition operation took" << timer.nsecsElapsed() << "nanoseconds";
 }
 
 std::vector<std::vector<double>> GPSOpenCl::Acquisition::correlator()
