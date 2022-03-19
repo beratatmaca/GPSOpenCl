@@ -4,16 +4,28 @@
 
 #include "../IOManagement/FileHandler.h"
 
-GPSOpenCl::Acquisition::Acquisition(double* code, std::complex<double> rawData, QObject *parent) : QThread(parent)
+GPSOpenCl::Acquisition::Acquisition(std::vector<std::complex<double>> code, 
+                                    std::vector<std::complex<double>> rawData,
+                                    double threshold,
+                                    QObject *parent) : QThread(parent)
 {
-    memcpy(&m_code[0], &code[0], sizeof(double) * 4096);
-    memcpy(&m_rawData[0], &code[0], sizeof(std::complex<double>) * 4096);
+    m_code = code;
+    m_rawData = rawData;
+
+    m_snr = 0;
+    m_peakFreq = 0;
+    m_peakVal = 0;
+    m_peakIndex = 0;
+    m_snrThreshold = threshold;
+    
     m_fftUtils = new FftUtils(4096);
+
     m_freqBins = 29;
-    for (int i = 0 ; i<m_freqBins; i++)
+    for (int i = 0; i < m_freqBins; i++)
     {
         freqList[i] = -7000.0 + i * 500.0;
     }
+    
     m_logger = new Logger();
 }
 
@@ -28,37 +40,73 @@ void GPSOpenCl::Acquisition::run()
     // Get high resolution timer
     QElapsedTimer timer;
     timer.start();
+    std::vector<std::vector<double>> corrResult = correlator();
+    checkResults(corrResult);
+    qDebug() << "The slow operation took" << timer.elapsed() << "milliseconds";
+}
 
+std::vector<std::vector<double>> GPSOpenCl::Acquisition::correlator()
+{
+    std::vector<std::vector<double>> result;
 
-    std::complex<double>* codeFFT = m_fftUtils->fftReal(m_code);
-    codeFFT = GPSOpenCl::Utils::conj(codeFFT, 4096);
+    std::vector<std::complex<double>> codeFFT = m_fftUtils->fftComplex(m_code);
+    GPSOpenCl::Utils::conj(&codeFFT);
 
     for (int freqBin = 0; freqBin < m_freqBins; freqBin++)
     {
-        std::complex<double>* doppSignal = GPSOpenCl::Utils::exp(4096, freqList[freqBin], 4096000.0);
-        
-        std::complex<double> multArr[4096];
-        for (int j = 0 ; j<4096; j++)
+        std::vector<std::complex<double>> doppSignal = GPSOpenCl::Utils::exp(4096, freqList[freqBin], 4096000.0);
+        std::vector<std::complex<double>> multArr;
+        for (int j = 0; j < 4096; j++)
         {
-            multArr[j] = (m_rawData[j] * doppSignal[j]);
+            multArr.push_back(m_rawData.at(j) * doppSignal.at(j));
         }
-        std::complex<double>* multFFT = m_fftUtils->fftComplex(multArr);
-        
-        std::complex<double> convCode[4096];
-        for (int j = 0 ; j<4096; j++)
+        std::vector<std::complex<double>> multFFT = m_fftUtils->fftComplex(multArr);
+        std::vector<std::complex<double>> convCode;
+        for (int j = 0; j < 4096; j++)
         {
-            convCode[j] = (codeFFT[j] * multFFT[j]);
+             convCode.push_back(codeFFT.at(j) * multFFT.at(j));
         }
-
-        //std::complex<double>* convCodeIFFT = GPSOpenCl::Utils::ifftComplex(convCode, 4096);
-        
-        //double* convCodeIFFTReal = GPSOpenCl::Utils::abs(convCodeIFFT, 4096);
-        //m_logger->log(convCodeIFFTReal, 4096);
-
-        delete doppSignal;
-        delete multFFT;
-        //delete convCodeIFFT;
+        std::vector<std::complex<double>> convCodeIFFT = m_fftUtils->ifftComplex(convCode);
+        std::vector<double> convCodeIFFTReal = GPSOpenCl::Utils::abs(convCodeIFFT);
+        result.push_back(convCodeIFFTReal);
     }
-    delete codeFFT;
-    qDebug() << "The slow operation took" << timer.elapsed() << "milliseconds";
+    return result;
+}
+
+void GPSOpenCl::Acquisition::checkResults(std::vector<std::vector<double>> corrResult)
+{
+    double meanVal = 0;
+    int maxFreqIndex = 0;
+
+    for (int i = 0; i < m_freqBins; i++)
+    {
+        for(auto it = corrResult.at(i).begin(); it != corrResult.at(i).end(); ++it)
+        {
+            // Find max
+            if (*it > m_peakVal)
+            {
+                m_peakVal = *it;
+                m_peakIndex = std::distance(corrResult.at(i).begin(), it);
+                maxFreqIndex = i;
+            }
+            // Find mean
+            meanVal += *it;
+        }
+    }
+    meanVal = meanVal/(corrResult.at(0).size()*m_freqBins);
+    
+    m_peakFreq = freqList[maxFreqIndex];
+    m_snr = m_peakVal/meanVal;
+
+    qDebug() << "Max value: " << m_peakVal << " at code index: " << m_peakIndex << "at freq" << m_peakFreq;
+    qDebug() << "SNR : " << m_snr;
+
+    if(m_snr > m_snrThreshold)
+    {
+        emit acquisitionSuccessful(m_peakFreq, m_peakIndex, m_snr);
+    }
+    else
+    {
+        emit acquisitionFailed();
+    }
 }

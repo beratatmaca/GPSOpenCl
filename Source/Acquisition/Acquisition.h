@@ -12,19 +12,36 @@ namespace GPSOpenCl
 {
     class Acquisition : public QThread
     {
-    Q_OBJECT
+        Q_OBJECT
     public:
-        Acquisition(double* code, std::complex<double> rawData, QObject *parent = 0);
+        Acquisition(std::vector<std::complex<double>> code,
+                    std::vector<std::complex<double>> rawData,
+                    double threshold,
+                    QObject *parent = 0);
         ~Acquisition();
         void run();
+    signals:
+        void acquisitionSuccessful(double peakFreq, double peakCodeIdx, double snr);
+        void acquisitionFailed();
+
     private:
-        Logger* m_logger;
-        FftUtils* m_fftUtils;
-        double m_code[4096];
+        std::vector<std::vector<double>> correlator();
+        void checkResults(std::vector<std::vector<double>> corrResult);
+
+        Logger *m_logger;
+        FftUtils *m_fftUtils;
+
+        std::vector<std::complex<double>> m_code;
+        std::vector<std::complex<double>> m_rawData;
         double freqList[29];
         int m_freqBins;
-        std::complex<double> m_rawData[4096];
         double m_duration_ms;
+
+        double m_snr;
+        double m_snrThreshold;
+        double m_peakFreq;
+        double m_peakVal;
+        double m_peakIndex;
     };
 }
 
