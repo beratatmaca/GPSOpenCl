@@ -15,9 +15,8 @@ int main(int argc, char *argv[])
     fileHandler.readFile();
 
     GPSOpenCl::CACode caCode;
-    caCode.createCACodeTable();
 
-    GPSOpenCl::Acquisition acquisition(caCode.m_code[0], fileHandler.m_data[0]);
+    GPSOpenCl::Acquisition acquisition(caCode.m_code.at(0), fileHandler.m_data, 3.0);
     acquisition.start();
     acquisition.wait();
 
