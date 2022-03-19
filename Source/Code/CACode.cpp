@@ -2,6 +2,7 @@
 
 #include <cstdlib> // for malloc()
 #include <cmath>   // for ceil()
+#include "../Logger/Logger.h"
 
 GPSOpenCl::CACode::CACode()
 {
@@ -90,9 +91,10 @@ void GPSOpenCl::CACode::createCACodeTable()
     for (int i = 1; i <= 32; i++)
     {
         double *code = calculateCACode(i);
+        m_code.push_back(std::vector<std::complex<double>>());
         for (int j = 0; j < m_codeResampledLength; j++)
         {
-            m_code[i - 1][j] = code[codeIndexes[j]];
+            m_code[i - 1].push_back(std::complex<double>(code[codeIndexes[j] - 1], 0));
         }
         delete code;
     }

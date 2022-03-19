@@ -3,6 +3,7 @@
 
 #include <complex>
 #include <QDebug>
+#include "../Logger/Logger.h"
 
 namespace GPSOpenCl
 {
@@ -12,13 +13,14 @@ namespace GPSOpenCl
         CACode();
         ~CACode();
         void createCACodeTable();
-        double m_code[32][4096];
+        std::vector<std::vector<std::complex<double>>> m_code;
+
     private:
-        double* calculateCACode(int prn);
+        double *calculateCACode(int prn);
         double m_samplingTime;
         double m_codePeriodTime;
         int m_codeResampledLength;
-    };    
+    };
 }
 
 #endif //! INCLUDED_CA_CODE_H
