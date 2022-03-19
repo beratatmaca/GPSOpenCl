@@ -12,7 +12,10 @@ namespace GPSOpenCl
         Utils();
         ~Utils();
         static void conj(std::vector<std::complex<double>> *input);
-        static std::vector<std::complex<double>> exp(int length, double frequency, double samplingRate);
+        static std::vector<std::complex<double>> exp(int length, 
+                                                     double frequency, 
+                                                     double samplingRate, 
+                                                     double phaseOffset);
         static std::vector<double> abs(std::vector<std::complex<double>> input);
     };
 }

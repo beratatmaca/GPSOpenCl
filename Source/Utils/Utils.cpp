@@ -19,7 +19,10 @@ void GPSOpenCl::Utils::conj(std::vector<std::complex<double>> *input)
     }
 }
 
-std::vector<std::complex<double>> GPSOpenCl::Utils::exp(int length, double frequency, double samplingRate)
+std::vector<std::complex<double>> GPSOpenCl::Utils::exp(int length,
+                                                        double frequency,
+                                                        double samplingRate, 
+                                                        double phaseOffset)
 {
     std::vector<std::complex<double>> retVal(length);
     const std::complex<double> i(0, 1);
@@ -27,7 +30,7 @@ std::vector<std::complex<double>> GPSOpenCl::Utils::exp(int length, double frequ
     for (int sample = 0; sample < length; sample++)
     {
         double sampDouble = static_cast<double>(sample);
-        retVal[sample] = std::exp(i * 2.0 * pi * frequency * sampDouble * (1 / samplingRate));
+        retVal[sample] = std::exp((i * 2.0 * pi * frequency * sampDouble * (1 / samplingRate)) + phaseOffset);
     }
     return retVal;
 }

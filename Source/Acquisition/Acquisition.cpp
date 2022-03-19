@@ -54,7 +54,7 @@ std::vector<std::vector<double>> GPSOpenCl::Acquisition::correlator()
 
     for (int freqBin = 0; freqBin < m_freqBins; freqBin++)
     {
-        std::vector<std::complex<double>> doppSignal = GPSOpenCl::Utils::exp(4096, freqList[freqBin], 4096000.0);
+        std::vector<std::complex<double>> doppSignal = GPSOpenCl::Utils::exp(4096, freqList[freqBin], 4096000.0, 0.0);
         std::vector<std::complex<double>> multArr;
         for (int j = 0; j < 4096; j++)
         {
