@@ -11,8 +11,10 @@ GPSOpenCl::Tracking::Tracking(std::vector<std::complex<double>> code,
                               QObject *parent) : QThread(parent)
 {
     m_code = GPSOpenCl::CACode::calculateCACode(17);
-    m_code.insert(m_code.begin(), m_code.back());
-    m_code.push_back(m_code.front());
+    double initialCode = m_code.front();
+    double lastCode = m_code.back(); 
+    m_code.insert(m_code.begin(), lastCode);
+    m_code.push_back(initialCode);
 
     m_totalSamples = 4096;
     m_rawData = rawData;
@@ -60,10 +62,13 @@ void GPSOpenCl::Tracking::run()
     for (int i = 0; i < 100; i++)
     {
         timer.start();
+
+        m_codePhaseStep = m_codeFreq/4096000.0;
+        m_totalSamples = std::ceil((1023 - m_remCodePhase) / m_codePhaseStep);
+
         std::vector<std::complex<double>> inputSignal;
         std::copy(m_rawData.begin() + initOffset, m_rawData.begin() + initOffset + m_totalSamples, std::back_inserter(inputSignal));
-        auto s = inputSignal.size();
-        m_totalSamples = std::ceil((1023 - m_remCodePhase) / m_codePhaseStep);
+        
         earlyLatePromptGen();
         numericOscillator();
         accumulator(inputSignal);
@@ -94,7 +99,6 @@ void GPSOpenCl::Tracking::earlyLatePromptGen()
     int indexEarly = 0;
     int indexPrompt = 0;
     int indexLate = 0;
-    m_codePhaseStep = m_codeFreq / 4096000;
     for (int i = 0; i < m_totalSamples; i++)
     {
         indexEarly = static_cast<int>(std::ceil(m_remCodePhase - 0.5 + i * m_codePhaseStep));
@@ -139,7 +143,9 @@ void GPSOpenCl::Tracking::freqDiscriminator()
 
 void GPSOpenCl::Tracking::codeDiscriminator()
 {
-    m_codeError = (std::sqrt(m_Ie * m_Ie + m_Qe * m_Qe) - std::sqrt(m_Il * m_Il + m_Ql * m_Ql)) / (std::sqrt(m_Ie * m_Ie + m_Qe * m_Qe) + sqrt(m_Il * m_Il + m_Ql * m_Ql));
+    double earlyCoff = std::sqrt(m_Ie * m_Ie + m_Qe * m_Qe);
+    double lateCoff = std::sqrt(m_Il * m_Il + m_Ql * m_Ql);
+    m_codeError = (earlyCoff - lateCoff) / (earlyCoff + lateCoff); 
     m_codeNco = m_codeNcoPrev + (m_dllTau2 / m_dllTau1) * (m_codeError - m_codeErrorPrev) + m_codeError * (0.001 / m_dllTau1);
     m_codeNcoPrev = m_codeNco;
     m_codeErrorPrev = m_codeError;
