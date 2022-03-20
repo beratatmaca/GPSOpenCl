@@ -6,7 +6,7 @@
 #include <QByteArray>
 #include <complex>
 
-#define NUM_OF_SAMPLES 409600
+#define NUM_OF_SAMPLES 4096000
 
 namespace GPSOpenCl
 {
