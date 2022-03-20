@@ -20,7 +20,8 @@ GPSOpenCl::Tracking::Tracking(std::vector<std::complex<double>> code,
     m_rawData = rawData;
 
     m_remCodePhase = 0;
-    m_carrFreq = -289.0625;
+    m_carrFreqBasis = -289.0625;
+    m_carrFreq = m_carrFreqBasis;
     m_remCarrPhase = 0;
     m_carrNco = 0;
     m_carrNcoPrev = 0;
@@ -30,7 +31,8 @@ GPSOpenCl::Tracking::Tracking(std::vector<std::complex<double>> code,
     m_codeNcoPrev = 0;
     m_codeError = 0;
     m_codeErrorPrev = 0;
-    m_codeFreq = 1023000;
+    m_codeFreqBasis = 1023000;
+    m_codeFreq = m_codeFreqBasis;
 
     m_Ie = 0;
     m_Ip = 0;
@@ -42,6 +44,7 @@ GPSOpenCl::Tracking::Tracking(std::vector<std::complex<double>> code,
     m_earlyCode.resize(4096);
     m_promptCode.resize(4096);
     m_lateCode.resize(4096);
+    m_carrSig.resize(4096);
 
     m_logger = new Logger();
 
@@ -59,7 +62,7 @@ void GPSOpenCl::Tracking::run()
     // Get high resolution timer
     QElapsedTimer timer;
     int initOffset = 3777;
-    for (int i = 0; i < 100; i++)
+    for (int i = 0; i < 1000; i++)
     {
         timer.start();
 
@@ -113,8 +116,18 @@ void GPSOpenCl::Tracking::earlyLatePromptGen()
 
 void GPSOpenCl::Tracking::numericOscillator()
 {
-    m_carrSig = GPSOpenCl::Utils::exp(m_totalSamples, m_carrFreq, 4096000.0, m_remCarrPhase);
-    m_remCarrPhase = std::remainder((2.0 * M_PI * m_carrFreq * 0.001) + m_remCarrPhase, (2 * M_PI));
+    //m_carrSig = GPSOpenCl::Utils::exp(m_totalSamples, m_carrFreq, 4096000.0, m_remCarrPhase);
+
+    const std::complex<double> i(0, 1);
+    double phase = 0;
+    for (int sample = 0; sample < m_totalSamples; sample++)
+    {
+        double sampDouble = static_cast<double>(sample);
+        phase = (2 * M_PI * m_carrFreq * sampDouble / 4096000.0) + m_remCarrPhase;
+        m_carrSig[sample] = std::exp(i *phase);
+    }
+    phase = (2 * M_PI * m_carrFreq * m_totalSamples / 4096000.0) + m_remCarrPhase;
+    m_remCarrPhase = std::fmod(phase, (2 * M_PI));
 }
 
 void GPSOpenCl::Tracking::accumulator(std::vector<std::complex<double>> input)
@@ -138,7 +151,7 @@ void GPSOpenCl::Tracking::freqDiscriminator()
     m_carrNco = m_carrNcoPrev + (m_pllTau2 / m_pllTau1) * (m_carrError - m_carrErrorPrev) + m_carrError * (0.001 / m_pllTau1);
     m_carrNcoPrev = m_carrNco;
     m_carrErrorPrev = m_carrError;
-    m_carrFreq += m_carrNco;
+    m_carrFreq = m_carrFreqBasis + m_carrNco;
 }
 
 void GPSOpenCl::Tracking::codeDiscriminator()
@@ -149,7 +162,7 @@ void GPSOpenCl::Tracking::codeDiscriminator()
     m_codeNco = m_codeNcoPrev + (m_dllTau2 / m_dllTau1) * (m_codeError - m_codeErrorPrev) + m_codeError * (0.001 / m_dllTau1);
     m_codeNcoPrev = m_codeNco;
     m_codeErrorPrev = m_codeError;
-    m_codeFreq -= m_codeNco;
+    m_codeFreq = m_codeFreqBasis - m_codeNco;
 }
 
 void GPSOpenCl::Tracking::resetAccumulation()

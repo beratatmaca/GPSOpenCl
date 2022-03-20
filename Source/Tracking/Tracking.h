@@ -41,6 +41,7 @@ namespace GPSOpenCl
 
         double m_dllTau1;
         double m_dllTau2;
+        double m_codeFreqBasis;
         double m_codeFreq;
         double m_codePhaseStep;
         double m_remCodePhase;
@@ -52,6 +53,7 @@ namespace GPSOpenCl
         std::vector<std::complex<double>> m_carrSig;
         double m_pllTau1;
         double m_pllTau2;
+        double m_carrFreqBasis;
         double m_carrFreq;
         double m_remCarrPhase;
         double m_carrNco;
