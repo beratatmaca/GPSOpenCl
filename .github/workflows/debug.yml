@@ -19,17 +19,8 @@ jobs:
     steps:
     - uses: actions/checkout@v1
     - name: Install Qt
-      uses: jurplel/install-qt-action@v2
-      with:
-        version: '5.12.11'
-        host: 'linux'
-        target: 'desktop'
-        dir: '${{github.workspace}}/qt/'
-        install-deps: 'true'
+      run: sudo apt-get install build-essential && sudo apt-get install qt5-default
     - name: configure
-      env:
-        PATH: '${{github.workspace}}/qt/bin:${{env.PATH}}'
-        LD_LIBRARY_PATH: '${{github.workspace}}/qt/lib'
       run: cmake -S . -B ./build
     - name: make
       run: cd build && make
