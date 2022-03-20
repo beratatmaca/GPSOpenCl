@@ -18,8 +18,10 @@ jobs:
         shell: bash -l {0}
     steps:
     - uses: actions/checkout@v1
+    - name: Install Build Essential
+      run: sudo apt-get install build-essential
     - name: Install Qt
-      run: sudo apt-get install build-essential && sudo apt-get install qt5-default
+      run: sudo apt-get install qt5-default
     - name: configure
       run: cmake -S . -B ./build
     - name: make
