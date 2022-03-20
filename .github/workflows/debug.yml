@@ -21,7 +21,7 @@ jobs:
     - name: Install Build Essential
       run: sudo apt-get install build-essential
     - name: Install Qt
-      run: sudo apt-get install qt5-default
+      run: sudo apt install g++ qtbase5-dev libqt5svg5-dev qtmultimedia5-dev qtwebengine5-dev libhunspell-dev pkg-config libqt5concurrent5 qttools5-dev-tools
     - name: configure
       run: cmake -S . -B ./build
     - name: make
