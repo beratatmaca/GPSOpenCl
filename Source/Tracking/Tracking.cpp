@@ -99,19 +99,15 @@ void GPSOpenCl::Tracking::calcLoopCoefficients(double noiseBandWidth,
 
 void GPSOpenCl::Tracking::earlyLatePromptGen()
 {
-    int indexEarly = 0;
-    int indexPrompt = 0;
-    int indexLate = 0;
+    double phaseStep = m_remCodePhase;
     for (int i = 0; i < m_totalSamples; i++)
     {
-        indexEarly = static_cast<int>(std::ceil(m_remCodePhase - 0.5 + i * m_codePhaseStep));
-        indexPrompt = static_cast<int>(std::ceil(m_remCodePhase + i * m_codePhaseStep));
-        indexLate = static_cast<int>(std::ceil(m_remCodePhase + 0.5 + i * m_codePhaseStep));
-        m_earlyCode[i] = m_code.at(indexEarly);
-        m_promptCode[i] = m_code.at(indexPrompt);
-        m_lateCode[i] = m_code.at(indexLate);
+        phaseStep = i * m_codePhaseStep + m_remCodePhase;
+        m_earlyCode[i] = m_code.at(static_cast<int>(std::ceil(phaseStep - 0.5)));
+        m_promptCode[i] = m_code.at(static_cast<int>(std::ceil(phaseStep)));
+        m_lateCode[i] = m_code.at(static_cast<int>(std::ceil(phaseStep + 0.5)));
     }
-    m_remCodePhase = (m_totalSamples * m_codePhaseStep) - 1023.0;
+    m_remCodePhase = (phaseStep + m_codePhaseStep) - 1023.0;
 }
 
 void GPSOpenCl::Tracking::numericOscillator()
