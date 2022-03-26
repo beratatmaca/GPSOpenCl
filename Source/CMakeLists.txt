@@ -1,6 +1,7 @@
 add_executable(
     GPSOpenCl
     GPSOpenCl.cpp
+    Settings/Settings.cpp
     IOManagement/FileHandler.cpp
     Code/CACode.cpp
     Acquisition/Acquisition.cpp
