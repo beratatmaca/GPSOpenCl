@@ -62,7 +62,7 @@ void GPSOpenCl::Tracking::run()
     // Get high resolution timer
     QElapsedTimer timer;
     int initOffset = 3777;
-    for (int i = 0; i < 1000; i++)
+    for (int i = 0; i < 999; i++)
     {
         timer.start();
 
@@ -75,7 +75,7 @@ void GPSOpenCl::Tracking::run()
         earlyLatePromptGen();
         numericOscillator();
         accumulator(inputSignal);
-        m_logger->log(m_Ip);
+        Ip.push_back(m_Ip);
         freqDiscriminator();
         codeDiscriminator();
         resetAccumulation();
@@ -112,8 +112,6 @@ void GPSOpenCl::Tracking::earlyLatePromptGen()
 
 void GPSOpenCl::Tracking::numericOscillator()
 {
-    //m_carrSig = GPSOpenCl::Utils::exp(m_totalSamples, m_carrFreq, 4096000.0, m_remCarrPhase);
-
     const std::complex<double> i(0, 1);
     double phase = 0;
     for (int sample = 0; sample < m_totalSamples; sample++)

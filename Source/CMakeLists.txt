@@ -8,6 +8,7 @@ add_executable(
     Utils/FftUtils.cpp
     Logger/Logger.cpp
     Tracking/Tracking.cpp
+    Navigation/Navigation.cpp
 )
 
 target_include_directories(

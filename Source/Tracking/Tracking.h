@@ -17,6 +17,7 @@ namespace GPSOpenCl
                  QObject *parent = 0);
         ~Tracking();
         void run();
+        std::vector<double> Ip;
 
     private:
         void earlyLatePromptGen();

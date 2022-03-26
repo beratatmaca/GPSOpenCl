@@ -9,6 +9,7 @@
 #include "Utils/Utils.h"
 #include "Acquisition/Acquisition.h"
 #include "Tracking/Tracking.h"
+#include "Navigation/Navigation.h"
 
 
 int main(int argc, char *argv[])
@@ -27,6 +28,10 @@ int main(int argc, char *argv[])
     GPSOpenCl::Tracking tracking(caCode.m_code.at(0), fileHandler.m_data);
     tracking.start();
     tracking.wait();
+
+    GPSOpenCl::Navigation nav(tracking.Ip);
+    nav.start();
+    nav.wait();
 
     QTimer::singleShot(0, &app, &QCoreApplication::quit);
     return app.exec();
