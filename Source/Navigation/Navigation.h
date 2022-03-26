@@ -17,7 +17,7 @@ namespace GPSOpenCl
         void run();
     private:
         void checkPreamble();
-        std::vector<double> convolve(std::vector<double> input, std::vector<double> kernel);
+        std::vector<double> findPreamble(std::vector<double> input, std::vector<double> kernel);
         std::vector<double> m_input;
         Logger* m_logger;
     };

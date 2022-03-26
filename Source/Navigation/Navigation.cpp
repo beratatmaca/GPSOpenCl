@@ -47,32 +47,36 @@ void GPSOpenCl::Navigation::checkPreamble()
             bits.push_back(-1.0);
         }
     }
-    std::vector<double> convVec = convolve(bits, preambleUpsampled);
-    m_logger->log(convVec);
+    std::vector<double> preambleIndexes = findPreamble(bits, preambleUpsampled);
+    //qDebug() << convVec;
+    m_logger->log(preambleIndexes);
 }
 
-std::vector<double> GPSOpenCl::Navigation::convolve(std::vector<double> input, std::vector<double> kernel)
+std::vector<double> GPSOpenCl::Navigation::findPreamble(std::vector<double> input, std::vector<double> kernel)
 {
     std::reverse(kernel.begin(), kernel.end());
-
     int inputLength = input.size();
     int kernelLength = kernel.size();
+    for (int i = kernel.size(); i < inputLength; i++)
+    {
+        kernel.push_back(0);
+    }
     int outputLength = inputLength + kernelLength - 1;
-    std::vector<double> output(outputLength);
-
+    std::vector<double> output;
+    
     for (int i = 0; i < outputLength; i++)
     {
-        output[i] = 0;
+        double sum = 0;
         for (int j = 0; j < kernelLength; j++)
         {
-            if (i - j >= 0)
+            if ((i - j) >= 0)
             {
-                output[i] = output[i] + input[j] * kernel[i - j];
+                sum += input[i - j] * kernel[j];
             }
-            else
-            {
-                output[i] = output[i] + input[j] * kernel[i - j + kernelLength];
-            }
+        }
+        if (std::fabs(sum) > 153)
+        {
+            output.push_back(i - 160);
         }
     }
     return output;
