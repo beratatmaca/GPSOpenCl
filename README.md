@@ -11,7 +11,6 @@
 ```bash
 sudo apt-get update
 sudo apt-get install build-essential
-sudo apt-get install qt5-default
 sudo apt-get install libopencl-dev
 sudo apt-get install libclfft2 clfft-client libclfft-dev
 cmake -S . -B ./build
