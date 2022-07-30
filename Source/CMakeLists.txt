@@ -1,15 +1,14 @@
 add_executable(
     GPSOpenCl
-    GPSOpenCl.cpp
-    Settings/Settings.cpp
-    IOManagement/FileHandler.cpp
-    Code/CACode.cpp
-    Acquisition/Acquisition.cpp
-    Utils/Utils.cpp
-    Utils/FftUtils.cpp
-    Logger/Logger.cpp
-    Tracking/Tracking.cpp
-    Navigation/Navigation.cpp
+    Main.cpp
+    GPSOpenClGPUHandler.cpp
+    GPSOpenClGPUCompute.cpp
+    GPSOpenClCode.cpp
+    GPSOpenClSettings.cpp
+    GPSOpenClChannel.cpp
+    GPSOpenClAcquisition.cpp
+    GPSOpenClTracking.cpp
+    GPSOpenClApplication.cpp
 )
 
 target_include_directories(
@@ -21,7 +20,15 @@ target_include_directories(
 target_link_libraries(
     GPSOpenCl
     PUBLIC
-    Qt5::Core
     OpenCL::OpenCL
-    clFFT
+)
+
+target_compile_definitions(GPSOpenCl PRIVATE CL_TARGET_OPENCL_VERSION=220)
+
+
+file(
+  COPY 
+  ${CMAKE_CURRENT_SOURCE_DIR}/../Tests/Scripts/ConfigurationFile/DefaultConf.ini
+  DESTINATION 
+  ${CMAKE_CURRENT_BINARY_DIR}
 )
