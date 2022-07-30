@@ -1,0 +1,24 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: GPSOpenCl
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - given-names: Berat
+    family-names: Atmaca
+    email: beratatmaca@live.com
+identifiers:
+  - type: url
+    value: 'https://github.com/beratatmaca/GPSOpenCl'
+repository-code: 'https://github.com/beratatmaca/GPSOpenCl'
+keywords:
+  - GPS
+  - GNSS
+  - SDR
+  - Signal Processing
+  - OpenCl
+license: GPL-3.0
