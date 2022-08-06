@@ -25,7 +25,7 @@ jobs:
     - name: make
       run: cd build && make
     - name: move to Test folder and run Test
-      run: cd build/Test && ./GPSOpenClTest
+      run: cd build/Tests && ./GPSOpenClTest
     - name: Publish Unit Test Results
       uses: EnricoMi/publish-unit-test-result-action/composite@v1
       if: always()
