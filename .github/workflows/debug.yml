@@ -19,7 +19,7 @@ jobs:
     steps:
     - uses: actions/checkout@v1
     - name: Install Build Essential
-      run: sudo apt-get install build-essential libopencl-dev
+      run: sudo apt-get install build-essential ocl-icd-opencl-dev
     - name: configure
       run: cmake -S . -B ./build
     - name: make
