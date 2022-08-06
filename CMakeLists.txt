@@ -23,5 +23,4 @@ find_package(OpenCL REQUIRED)
 add_subdirectory(Source)
 add_subdirectory(Tests)
 
-
 enable_testing()
