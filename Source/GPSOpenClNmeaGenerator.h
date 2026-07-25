@@ -1,6 +1,10 @@
 #ifndef INCLUDED_GPSOPENCL_NMEAGENERATOR_H
 #define INCLUDED_GPSOPENCL_NMEAGENERATOR_H
 
+/** @file GPSOpenClNmeaGenerator.h
+ *  @brief NMEA-0183 sentence generator with checksum computation.
+ */
+
 #include "GPSOpenClChannel.h"
 #include "GPSOpenClPVTSolver.h"
 
@@ -11,42 +15,122 @@
 
 namespace GPSOpenCl
 {
+/** @brief NMEA-0183 sentence generator (GGA, RMC, GSA, GSV). */
 class NmeaGenerator
 {
   public:
     NmeaGenerator();
+
+    /** @brief Construct from generator parameters.
+     *  @param input NMEA enable flags. */
     NmeaGenerator(const NmeaGeneratorInput &input);
+
     ~NmeaGenerator();
 
+    /** @brief Check if GGA output is enabled.
+     *  @return True if enabled. */
     bool isGgaEnabled() const { return m_inputConfig.enableGga != 0; }
+
+    /** @brief Check if RMC output is enabled.
+     *  @return True if enabled. */
     bool isRmcEnabled() const { return m_inputConfig.enableRmc != 0; }
+
+    /** @brief Check if GSA output is enabled.
+     *  @return True if enabled. */
     bool isGsaEnabled() const { return m_inputConfig.enableGsa != 0; }
+
+    /** @brief Check if GSV output is enabled.
+     *  @return True if enabled. */
     bool isGsvEnabled() const { return m_inputConfig.enableGsv != 0; }
 
+    /** @brief Generate GGA sentence string.
+     *  @param solution      PVT solution.
+     *  @param numSatellites Number of satellites used.
+     *  @param utcTimeSec    UTC time (s).
+     *  @return GGA sentence. */
     static std::string generateGgga(const ReceiverPvtSolution &solution, int numSatellites, double utcTimeSec);
+
+    /** @brief Generate RMC sentence string.
+     *  @param solution   PVT solution.
+     *  @param utcTimeSec UTC time (s).
+     *  @return RMC sentence. */
     static std::string generateGprmc(const ReceiverPvtSolution &solution, double utcTimeSec);
+
+    /** @brief Generate GSA sentence string.
+     *  @param solution   PVT solution.
+     *  @param activePrns Active satellite PRNs.
+     *  @return GSA sentence. */
     static std::string generateGpgsa(const ReceiverPvtSolution &solution, const std::vector<int> &activePrns);
+
+    /** @brief Generate GSV sentence string (all sentences concatenated).
+     *  @param channels Satellite channel array.
+     *  @return GSV sentences. */
     static std::string generateGpgsv(const Channel channels[GPS_CA_SV_COUNT]);
 
-    // One complete "$...*hh\r\n" sentence per element (a full sky can need multiple GSV
-    // sentences; generateGpgsv() above concatenates these for console/log dumping, but a single
-    // NmeaGeneratorOutput.sentence[256] cannot hold all of them for a large satellite count).
+    /** @brief Generate individual GSV sentences.
+     *  @param channels Satellite channel array.
+     *  @return Vector of GSV sentences. */
     static std::vector<std::string> generateGpgsvSentences(const Channel channels[GPS_CA_SV_COUNT]);
 
+    /** @brief Generate GGA as output struct.
+     *  @param solution      PVT solution.
+     *  @param numSatellites Number of satellites used.
+     *  @param utcTimeSec    UTC time (s).
+     *  @return NMEA output struct. */
     static NmeaGeneratorOutput generateGggaOutput(const ReceiverPvtSolution &solution, int numSatellites, double utcTimeSec);
+
+    /** @brief Generate RMC as output struct.
+     *  @param solution   PVT solution.
+     *  @param utcTimeSec UTC time (s).
+     *  @return NMEA output struct. */
     static NmeaGeneratorOutput generateGprmcOutput(const ReceiverPvtSolution &solution, double utcTimeSec);
+
+    /** @brief Generate GGA as output struct from PvtSolverOutput.
+     *  @param pvtOutput     PVT output struct.
+     *  @param numSatellites Number of satellites used.
+     *  @param utcTimeSec    UTC time (s).
+     *  @return NMEA output struct. */
     static NmeaGeneratorOutput generateGggaOutput(const PvtSolverOutput &pvtOutput, int numSatellites, double utcTimeSec);
+
+    /** @brief Generate RMC as output struct from PvtSolverOutput.
+     *  @param pvtOutput  PVT output struct.
+     *  @param utcTimeSec UTC time (s).
+     *  @return NMEA output struct. */
     static NmeaGeneratorOutput generateGprmcOutput(const PvtSolverOutput &pvtOutput, double utcTimeSec);
+
+    /** @brief Generate GSA as output struct.
+     *  @param solution   PVT solution.
+     *  @param activePrns Active satellite PRNs.
+     *  @return NMEA output struct. */
     static NmeaGeneratorOutput generateGpgsaOutput(const ReceiverPvtSolution &solution, const std::vector<int> &activePrns);
+
+    /** @brief Generate GSV as output struct vector.
+     *  @param channels Satellite channel array.
+     *  @return Vector of NMEA output structs. */
     static std::vector<NmeaGeneratorOutput> generateGpgsvOutput(const Channel channels[GPS_CA_SV_COUNT]);
 
+    /** @brief Format latitude for NMEA output.
+     *  @param latDegrees Latitude (deg).
+     *  @return Formatted latitude string. */
     static std::string formatLatitude(double latDegrees);
+
+    /** @brief Format longitude for NMEA output.
+     *  @param lonDegrees Longitude (deg).
+     *  @return Formatted longitude string. */
     static std::string formatLongitude(double lonDegrees);
+
+    /** @brief Compute 8-bit XOR checksum.
+     *  @param sentenceBody Sentence body (between $ and *).
+     *  @return Checksum byte. */
     static uint8_t calculateChecksum(const std::string &sentenceBody);
+
+    /** @brief Append checksum to sentence.
+     *  @param sentenceBody Sentence body.
+     *  @return Complete sentence with *hh checksum. */
     static std::string appendChecksum(const std::string &sentenceBody);
 
   private:
-    NmeaGeneratorInput m_inputConfig;
+    NmeaGeneratorInput m_inputConfig; ///< Generator enable flags.
 };
 } // namespace GPSOpenCl
 

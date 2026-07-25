@@ -7,14 +7,14 @@ using namespace GPSOpenCl;
 
 float Tracking::loopFilterTau1(double noiseBandwidthHz)
 {
-    const double zeta = 0.70710678118654752440; // damping ratio 1/sqrt(2)
+    const double zeta = 0.70710678118654752440;
     double wn = noiseBandwidthHz * 8.0 * zeta / (4.0 * zeta * zeta + 1.0);
     return static_cast<float>(1.0 / (wn * wn));
 }
 
 float Tracking::loopFilterTau2(double noiseBandwidthHz)
 {
-    const double zeta = 0.70710678118654752440; // damping ratio 1/sqrt(2)
+    const double zeta = 0.70710678118654752440;
     double wn = noiseBandwidthHz * 8.0 * zeta / (4.0 * zeta * zeta + 1.0);
     return static_cast<float>(2.0 * zeta / wn);
 }

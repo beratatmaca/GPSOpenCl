@@ -52,7 +52,6 @@ TEST(E2ETest, GpsSdrSimPipeline)
     app.searchForSatellites(firstBlock);
     app.trackSatellites(firstBlock);
 
-    // Clean up temporary simulation binary
     std::remove(simBin.c_str());
 }
-} // namespace GPSOpenClTest
+}

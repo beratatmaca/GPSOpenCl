@@ -1,9 +1,4 @@
 #!/usr/bin/env python3
-"""
-End-to-End Testing & Profiling Harness for GPSOpenCl using gps-sdr-sim.
-Designed for LLMs, automated benchmarking agents, and developers.
-"""
-
 import argparse
 import json
 import os

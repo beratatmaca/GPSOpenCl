@@ -108,4 +108,4 @@ bool FileSource::readBlock(ComplexFloatVector &outputSamples, SourceOutput &tele
 
     return true;
 }
-} // namespace GPSOpenCl
+}

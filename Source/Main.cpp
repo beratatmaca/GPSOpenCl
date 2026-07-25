@@ -66,7 +66,7 @@ int main(int argc, char **argv)
         }
     }
 
-    // 1. Create Composite Sink Publisher (ZMQ + File telemetry stream)
+
     auto compositeSink = std::make_shared<GPSOpenCl::CompositeSink>();
     compositeSink->addSink(std::make_shared<GPSOpenCl::FileSink>("build/telemetry_wire.log"));
 #ifdef GPSOPENCL_ENABLE_ZMQ
@@ -74,7 +74,7 @@ int main(int argc, char **argv)
 #endif
     auto sink = std::static_pointer_cast<GPSOpenCl::Sink>(compositeSink);
 
-    // 2. Initialize Source
+
     std::shared_ptr<GPSOpenCl::Source> source;
     if (signalPath.find(".fifo") != std::string::npos)
     {
@@ -94,12 +94,12 @@ int main(int argc, char **argv)
     }
     source->setSink(sink);
 
-    // 3. Application instance
+
     GPSOpenCl::Application app(settings.configuration);
     app.setSink(sink);
     app.setSource(source);
 
-    // 4. Concurrency Model: Bounded Queue between Producer (Source) and Consumer (Application)
+
     struct SignalBlock
     {
         uint32_t blockIndex;
@@ -112,7 +112,7 @@ int main(int argc, char **argv)
     std::cout << "   GPS Processing Pipeline Starting (Real-Time Loop)" << std::endl;
     std::cout << "=============================================" << std::endl;
 
-    // Producer Thread
+
     std::thread producerThread([&]() {
         uint32_t blockIdx = 0;
         while (true)
@@ -134,7 +134,7 @@ int main(int argc, char **argv)
         blockQueue.finish();
     });
 
-    // Consumer Loop
+
     SignalBlock block;
     while (blockQueue.pop(block))
     {

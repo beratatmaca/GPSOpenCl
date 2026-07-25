@@ -8,7 +8,6 @@ namespace GPSOpenClTest
 {
 TEST(NmeaGeneratorTest, ChecksumCalculation)
 {
-    // $GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,*47
     std::string sentence = "GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,";
     uint8_t checksum = GPSOpenCl::NmeaGenerator::calculateChecksum(sentence);
     EXPECT_EQ(checksum, 0x47);
@@ -90,8 +89,6 @@ TEST(NmeaGeneratorTest, GenerateGpgsvOutputSplitsIntoMultipleMessages)
     std::string fullString = GPSOpenCl::NmeaGenerator::generateGpgsv(channels);
     std::vector<GPSOpenCl::NmeaGeneratorOutput> outputs = GPSOpenCl::NmeaGenerator::generateGpgsvOutput(channels);
 
-    // 5 satellites need ceil(5/4) = 2 GSV sentences; each must be its own message, never
-    // truncated or concatenated into a single fixed-size struct.
     EXPECT_EQ(outputs.size(), 2u);
 
     std::string reassembled;
@@ -106,4 +103,4 @@ TEST(NmeaGeneratorTest, GenerateGpgsvOutputSplitsIntoMultipleMessages)
     }
     EXPECT_EQ(reassembled, fullString);
 }
-} // namespace GPSOpenClTest
+}

@@ -1,6 +1,10 @@
 #ifndef INCLUDED_GPSOPENCL_STRUCTS_H
 #define INCLUDED_GPSOPENCL_STRUCTS_H
 
+/** @file GPSOpenClStructs.h
+ *  @brief Packed binary structs for inter-module data exchange.
+ */
+
 #include <cstdint>
 
 namespace GPSOpenCl
@@ -8,194 +12,200 @@ namespace GPSOpenCl
 
 #pragma pack(push, 1)
 
+/** @brief Struct wire-format version tag. */
 constexpr uint32_t STRUCT_VERSION_1 = 1;
 
-// --- Source Module Structs ---
+/** @brief Source module input parameters. */
 struct SourceInput
 {
-    uint32_t structVersion{STRUCT_VERSION_1};
-    char fifoPath[256]{};
-    uint32_t sampleFormat{0}; // 0 = ComplexFloat, 1 = Int8
-    double samplingRate{4096000.0};
+    uint32_t structVersion{STRUCT_VERSION_1}; ///< Struct version tag.
+    char fifoPath[256]{};                     ///< FIFO or file path.
+    uint32_t sampleFormat{0};                 ///< 0 = ComplexFloat, 1 = Int8.
+    double samplingRate{4096000.0};           ///< Sampling rate (Hz).
 };
 
+/** @brief Source module output telemetry. */
 struct SourceOutput
 {
-    uint32_t structVersion{STRUCT_VERSION_1};
-    uint32_t blockIndex{0};
-    double timestamp{0.0};
-    uint32_t fifoUnderrunCount{0};
-    uint32_t fifoOverrunCount{0};
+    uint32_t structVersion{STRUCT_VERSION_1}; ///< Struct version tag.
+    uint32_t blockIndex{0};                   ///< Current block index.
+    double timestamp{0.0};                    ///< Block timestamp (s).
+    uint32_t fifoUnderrunCount{0};            ///< FIFO underrun count.
+    uint32_t fifoOverrunCount{0};             ///< FIFO overrun count.
 };
 
-// --- Acquisition Module Structs ---
+/** @brief Acquisition module input parameters. */
 struct AcquisitionInput
 {
-    uint32_t structVersion{STRUCT_VERSION_1};
-    int32_t acquisitionDopplerMinimum{-4000};
-    int32_t acquisitionDopplerMaximum{4000};
-    int32_t acquisitionDopplerSearchRange{500};
-    double samplingFrequency{4096000.0};
-    int32_t numberOfSamplesPerCode{4096};
+    uint32_t structVersion{STRUCT_VERSION_1};       ///< Struct version tag.
+    int32_t acquisitionDopplerMinimum{-4000};       ///< Min Doppler search (Hz).
+    int32_t acquisitionDopplerMaximum{4000};        ///< Max Doppler search (Hz).
+    int32_t acquisitionDopplerSearchRange{500};     ///< Doppler bin step (Hz).
+    double samplingFrequency{4096000.0};            ///< Sampling rate (Hz).
+    int32_t numberOfSamplesPerCode{4096};           ///< Samples per code period.
 };
 
+/** @brief Acquisition module output results. */
 struct AcquisitionOutput
 {
-    uint32_t structVersion{STRUCT_VERSION_1};
-    int32_t prn{0};
-    int32_t peakIndex{0};
-    double peakValue{0.0};
-    double peakFrequency{0.0};
-    double meanValue{0.0};
-    double cno{0.0};
-    double peakRatio{0.0};
-    uint32_t isAcquired{0};
+    uint32_t structVersion{STRUCT_VERSION_1}; ///< Struct version tag.
+    int32_t prn{0};                           ///< Satellite PRN number.
+    int32_t peakIndex{0};                     ///< Code phase of peak (samples).
+    double peakValue{0.0};                    ///< Correlation peak magnitude.
+    double peakFrequency{0.0};               ///< Doppler at peak (Hz).
+    double meanValue{0.0};                    ///< Mean correlation level.
+    double cno{0.0};                          ///< Carrier-to-noise ratio (dB-Hz).
+    double peakRatio{0.0};                    ///< Peak-to-mean ratio.
+    uint32_t isAcquired{0};                   ///< 1 if satellite acquired.
 };
 
-// --- Tracking Module Structs ---
+/** @brief Tracking module input parameters. */
 struct TrackingInput
 {
-    uint32_t structVersion{STRUCT_VERSION_1};
-    double pllBandwidthHz{25.0};
-    double dllBandwidthHz{2.0};
-    double samplingFrequency{4096000.0};
-    int32_t numberOfSamplesPerCode{4096};
+    uint32_t structVersion{STRUCT_VERSION_1}; ///< Struct version tag.
+    double pllBandwidthHz{25.0};             ///< PLL noise bandwidth (Hz).
+    double dllBandwidthHz{2.0};              ///< DLL noise bandwidth (Hz).
+    double samplingFrequency{4096000.0};     ///< Sampling rate (Hz).
+    int32_t numberOfSamplesPerCode{4096};    ///< Samples per code period.
 };
 
+/** @brief Tracking module output results. */
 struct TrackingOutput
 {
-    uint32_t structVersion{STRUCT_VERSION_1};
-    int32_t prn{0};
-    double carrierFreqHz{0.0};
-    double codeFreqHz{0.0};
-    double carrierError{0.0};
-    double codeError{0.0};
-    double Ie{0.0};
-    double Ip{0.0};
-    double Il{0.0};
-    double Qe{0.0};
-    double Qp{0.0};
-    double Ql{0.0};
+    uint32_t structVersion{STRUCT_VERSION_1}; ///< Struct version tag.
+    int32_t prn{0};                           ///< Satellite PRN number.
+    double carrierFreqHz{0.0};               ///< Current carrier frequency (Hz).
+    double codeFreqHz{0.0};                  ///< Current code frequency (Hz).
+    double carrierError{0.0};                ///< PLL phase error (rad).
+    double codeError{0.0};                   ///< DLL code error (chips).
+    double Ie{0.0};                          ///< In-phase Early correlator.
+    double Ip{0.0};                          ///< In-phase Prompt correlator.
+    double Il{0.0};                          ///< In-phase Late correlator.
+    double Qe{0.0};                          ///< Quadrature Early correlator.
+    double Qp{0.0};                          ///< Quadrature Prompt correlator.
+    double Ql{0.0};                          ///< Quadrature Late correlator.
 };
 
-// --- Navigation Decoder Module Structs ---
+/** @brief Navigation decoder input parameters. */
 struct NavDecoderInput
 {
-    uint32_t structVersion{STRUCT_VERSION_1};
-    uint32_t subframeSearchMask{0x1F};
+    uint32_t structVersion{STRUCT_VERSION_1}; ///< Struct version tag.
+    uint32_t subframeSearchMask{0x1F};       ///< Bitmask of subframes to search.
 };
 
+/** @brief Navigation decoder output with ephemeris and clock data. */
 struct NavDecoderOutput
 {
-    uint32_t structVersion{STRUCT_VERSION_1};
-    int32_t svId{0};
-    int32_t weekNumber{0};
-    double tow{0.0};
-    int32_t subframeId{0};
-    uint32_t isValid{0};
+    uint32_t structVersion{STRUCT_VERSION_1}; ///< Struct version tag.
+    int32_t svId{0};                          ///< Satellite vehicle ID.
+    int32_t weekNumber{0};                    ///< GPS week number.
+    double tow{0.0};                          ///< Time of week (s).
+    int32_t subframeId{0};                    ///< Subframe ID (1-5).
+    uint32_t isValid{0};                      ///< 1 if decode valid.
 
-    // Clock correction parameters
-    double toc{0.0};
-    double af0{0.0};
-    double af1{0.0};
-    double af2{0.0};
+    double toc{0.0};  ///< Clock reference time (s).
+    double af0{0.0};  ///< Clock bias (s).
+    double af1{0.0};  ///< Clock drift (s/s).
+    double af2{0.0};  ///< Clock drift rate (s/s^2).
 
-    // Ephemeris orbit parameters
-    double toe{0.0};
-    double sqrtA{0.0};
-    double e{0.0};
-    double i0{0.0};
-    double omega0{0.0};
-    double omega{0.0};
-    double M0{0.0};
-    double deltaN{0.0};
-    double omegaDot{0.0};
-    double idot{0.0};
-    double Cuc{0.0};
-    double Cus{0.0};
-    double Crc{0.0};
-    double Crs{0.0};
-    double Cic{0.0};
-    double Cis{0.0};
+    double toe{0.0};      ///< Ephemeris reference time (s).
+    double sqrtA{0.0};    ///< Sqrt of semi-major axis (m^1/2).
+    double e{0.0};        ///< Orbital eccentricity.
+    double i0{0.0};       ///< Inclination at reference time (rad).
+    double omega0{0.0};   ///< Longitude of ascending node (rad).
+    double omega{0.0};    ///< Argument of perigee (rad).
+    double M0{0.0};       ///< Mean anomaly at reference time (rad).
+    double deltaN{0.0};   ///< Mean motion correction (rad/s).
+    double omegaDot{0.0}; ///< Rate of right ascension (rad/s).
+    double idot{0.0};     ///< Rate of inclination (rad/s).
+    double Cuc{0.0};      ///< Harmonic correction: cos arg of lat (rad).
+    double Cus{0.0};      ///< Harmonic correction: sin arg of lat (rad).
+    double Crc{0.0};      ///< Harmonic correction: cos orbit radius (m).
+    double Crs{0.0};      ///< Harmonic correction: sin orbit radius (m).
+    double Cic{0.0};      ///< Harmonic correction: cos inclination (rad).
+    double Cis{0.0};      ///< Harmonic correction: sin inclination (rad).
 };
 
-// --- PVT Solver Module Structs ---
+/** @brief PVT solver input parameters. */
 struct PvtSolverInput
 {
-    uint32_t structVersion{STRUCT_VERSION_1};
-    uint32_t minSatellites{4};
-    double maxPseudorangeErrMeters{100.0};
+    uint32_t structVersion{STRUCT_VERSION_1}; ///< Struct version tag.
+    uint32_t minSatellites{4};               ///< Min satellites for solution.
+    double maxPseudorangeErrMeters{100.0};   ///< Max pseudorange error (m).
 };
 
+/** @brief PVT solver output with position and DOP. */
 struct PvtSolverOutput
 {
-    uint32_t structVersion{STRUCT_VERSION_1};
-    double ecefX{0.0};
-    double ecefY{0.0};
-    double ecefZ{0.0};
-    double latitude{0.0};
-    double longitude{0.0};
-    double altitude{0.0};
-    double clockBiasMeters{0.0};
-    double clockBiasSeconds{0.0};
-    double dopGDOP{0.0};
-    double dopPDOP{0.0};
-    double dopHDOP{0.0};
-    double dopVDOP{0.0};
-    uint32_t isValid{0};
+    uint32_t structVersion{STRUCT_VERSION_1}; ///< Struct version tag.
+    double ecefX{0.0};                       ///< ECEF X position (m).
+    double ecefY{0.0};                       ///< ECEF Y position (m).
+    double ecefZ{0.0};                       ///< ECEF Z position (m).
+    double latitude{0.0};                    ///< Geodetic latitude (deg).
+    double longitude{0.0};                   ///< Geodetic longitude (deg).
+    double altitude{0.0};                    ///< Altitude above WGS-84 (m).
+    double clockBiasMeters{0.0};             ///< Receiver clock bias (m).
+    double clockBiasSeconds{0.0};            ///< Receiver clock bias (s).
+    double dopGDOP{0.0};                     ///< Geometric DOP.
+    double dopPDOP{0.0};                     ///< Position DOP.
+    double dopHDOP{0.0};                     ///< Horizontal DOP.
+    double dopVDOP{0.0};                     ///< Vertical DOP.
+    uint32_t isValid{0};                     ///< 1 if solution valid.
 };
 
-// --- Atmospheric Corrections Module Structs ---
+/** @brief Atmospheric corrections input (Klobuchar coefficients). */
 struct AtmosphericInput
 {
-    uint32_t structVersion{STRUCT_VERSION_1};
-    double alpha0{0.0};
-    double alpha1{0.0};
-    double alpha2{0.0};
-    double alpha3{0.0};
-    double beta0{0.0};
-    double beta1{0.0};
-    double beta2{0.0};
-    double beta3{0.0};
+    uint32_t structVersion{STRUCT_VERSION_1}; ///< Struct version tag.
+    double alpha0{0.0};                      ///< Klobuchar alpha0 (s).
+    double alpha1{0.0};                      ///< Klobuchar alpha1 (s/semi-circle).
+    double alpha2{0.0};                      ///< Klobuchar alpha2 (s/semi-circle^2).
+    double alpha3{0.0};                      ///< Klobuchar alpha3 (s/semi-circle^3).
+    double beta0{0.0};                       ///< Klobuchar beta0 (s).
+    double beta1{0.0};                       ///< Klobuchar beta1 (s/semi-circle).
+    double beta2{0.0};                       ///< Klobuchar beta2 (s/semi-circle^2).
+    double beta3{0.0};                       ///< Klobuchar beta3 (s/semi-circle^3).
 };
 
+/** @brief Atmospheric corrections output per satellite. */
 struct AtmosphericOutput
 {
-    uint32_t structVersion{STRUCT_VERSION_1};
-    int32_t svId{0};
-    double ionoDelayMeters{0.0};
-    double tropoDelayMeters{0.0};
-    double azimuthDeg{0.0};
-    double elevationDeg{0.0};
+    uint32_t structVersion{STRUCT_VERSION_1}; ///< Struct version tag.
+    int32_t svId{0};                          ///< Satellite vehicle ID.
+    double ionoDelayMeters{0.0};             ///< Ionospheric delay (m).
+    double tropoDelayMeters{0.0};            ///< Tropospheric delay (m).
+    double azimuthDeg{0.0};                  ///< Satellite azimuth (deg).
+    double elevationDeg{0.0};                ///< Satellite elevation (deg).
 };
 
-// --- NMEA Generator Module Structs ---
+/** @brief NMEA generator input parameters. */
 struct NmeaGeneratorInput
 {
-    uint32_t structVersion{STRUCT_VERSION_1};
-    uint32_t enableGga{1};
-    uint32_t enableRmc{1};
-    uint32_t enableGsa{1};
-    uint32_t enableGsv{1};
+    uint32_t structVersion{STRUCT_VERSION_1}; ///< Struct version tag.
+    uint32_t enableGga{1};                   ///< Enable GGA sentences.
+    uint32_t enableRmc{1};                   ///< Enable RMC sentences.
+    uint32_t enableGsa{1};                   ///< Enable GSA sentences.
+    uint32_t enableGsv{1};                   ///< Enable GSV sentences.
 };
 
+/** @brief NMEA generator output sentence. */
 struct NmeaGeneratorOutput
 {
-    uint32_t structVersion{STRUCT_VERSION_1};
-    char sentence[256]{};
+    uint32_t structVersion{STRUCT_VERSION_1}; ///< Struct version tag.
+    char sentence[256]{};                    ///< NMEA sentence string.
 };
 
-// --- Profiler Module Struct ---
+/** @brief Profiler output with per-stage timing. */
 struct ProfilerOutput
 {
-    uint32_t structVersion{STRUCT_VERSION_1};
-    uint32_t blockIndex{0};
-    double timestamp{0.0};
-    double acquisitionTimeMs{0.0};
-    double trackingTimeMs{0.0};
-    double navDecodeTimeMs{0.0};
-    double pvtSolveTimeMs{0.0};
-    double totalTimeMs{0.0};
+    uint32_t structVersion{STRUCT_VERSION_1}; ///< Struct version tag.
+    uint32_t blockIndex{0};                   ///< Processing block index.
+    double timestamp{0.0};                    ///< Block timestamp (s).
+    double acquisitionTimeMs{0.0};           ///< Acquisition stage time (ms).
+    double trackingTimeMs{0.0};              ///< Tracking stage time (ms).
+    double navDecodeTimeMs{0.0};             ///< Nav decode stage time (ms).
+    double pvtSolveTimeMs{0.0};              ///< PVT solve stage time (ms).
+    double totalTimeMs{0.0};                 ///< Total block time (ms).
 };
 
 #pragma pack(pop)

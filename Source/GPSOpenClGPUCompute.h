@@ -1,47 +1,80 @@
 #ifndef INCLUDED_GPSOPENCL_COMPUTE_H
 #define INCLUDED_GPSOPENCL_COMPUTE_H
 
+/** @file GPSOpenClGPUCompute.h
+ *  @brief FFT, complex math, and NCO compute back-end.
+ */
+
 #include "GPSOpenClCommon.h"
 #include "GPSOpenClGPUHandler.h"
 
 namespace GPSOpenCl
 {
+/** @brief GPU/CPU compute engine for FFT and signal math. */
 class Compute
 {
   public:
     Compute();
     ~Compute();
 
+    /** @brief FFT direction flag. */
     typedef enum FFTDirection
     {
-        FFTForward = 1,
-        FFTInverse = -1
+        FFTForward = 1,  ///< Forward FFT.
+        FFTInverse = -1  ///< Inverse FFT.
     } FFTDirectionType;
 
+    /** @brief Compute FFT or IFFT.
+     *  @param input     Complex input samples.
+     *  @param output    Complex output samples.
+     *  @param direction Forward or inverse.
+     *  @return 0 on success. */
     int fft(const ComplexFloatVector &input, ComplexFloatVector *output, FFTDirectionType direction);
+
+    /** @brief Element-wise complex multiplication.
+     *  @param input1 First complex vector.
+     *  @param input2 Second complex vector.
+     *  @param output Product vector.
+     *  @return 0 on success. */
     int complexMultiplier(const ComplexFloatVector &input1, const ComplexFloatVector &input2, ComplexFloatVector *output);
+
+    /** @brief Compute magnitude squared of complex vector.
+     *  @param input1 Complex input.
+     *  @param output Magnitude squared output.
+     *  @return 0 on success. */
     int absolute(const ComplexFloatVector &input1, FloatVector *output);
+
+    /** @brief Parallel reduction sum.
+     *  @param input    Float vector.
+     *  @param sumValue Output sum.
+     *  @return 0 on success. */
     int sum(const FloatVector &input, float *sumValue);
+
+    /** @brief NCO carrier multiplication.
+     *  @param input       Complex IQ samples.
+     *  @param phaseVector NCO phase ramp (rad).
+     *  @param output      Carrier-wiped output.
+     *  @return 0 on success. */
     int ncoMultiplication(const ComplexFloatVector &input, const FloatVector &phaseVector, ComplexFloatVector *output);
 
-    // Rounds down to the nearest power of two (0 stays 0), so a work-group/points-per-group size
-    // evenly divides any power-of-two buffer length instead of silently truncating.
+    /** @brief Round down to the nearest power of two.
+     *  @param value Input value (0 stays 0).
+     *  @return Nearest power of two not greater than value. */
     static unsigned int roundDownToPowerOfTwo(unsigned int value);
 
-    // Shrinks localSize (assumed already a power of two) until pointsPerGroup/localSize is at
-    // least minPointsPerItem, so a kernel's points_per_item = points_per_group/get_local_size(0)
-    // never truncates to less than the kernel's own minimum chunk size (e.g. 0, which hangs a
-    // kernel looping "while (N2 < points_per_group) N2 <<= 1" from a stuck N2=0; or 1-3 when the
-    // kernel processes points in fixed groups of 4, which silently corrupts results). See
-    // Kernels/Acquisition.cl's fft_init/fft_stage and Kernels/Tracking.cl's ncoMultiplicate.
+    /** @brief Shrink a work-group size until pointsPerGroup/localSize meets a minimum.
+     *  @param localSize        Work-group size, assumed already a power of two.
+     *  @param pointsPerGroup   Points processed per work-group.
+     *  @param minPointsPerItem Minimum points each work-item must process.
+     *  @return Clamped work-group size. */
     static unsigned int clampLocalSizeForMinPointsPerItem(unsigned int localSize, unsigned int pointsPerGroup,
                                                           unsigned int minPointsPerItem);
 
   private:
-    GpuHandler m_gpu;
-    cl_command_queue m_queue;
-    cl_int m_error;
-    std::vector<float> m_allocatedMemory;
+    GpuHandler m_gpu;                      ///< OpenCL handler.
+    cl_command_queue m_queue;               ///< OpenCL command queue.
+    cl_int m_error;                         ///< Last OpenCL error.
+    std::vector<float> m_allocatedMemory;   ///< Scratch memory buffer.
 };
 } // namespace GPSOpenCl
 

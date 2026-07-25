@@ -124,4 +124,4 @@ TEST_F(CaCodeTest, Test4)
         offset += m_settings.configuration.rawDataSettings.numberOfSamplesPerCode;
     }
 }
-} // namespace GPSOpenClTest
+}

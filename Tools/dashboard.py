@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""
-GPSOpenCl Plotly/Dash Interactive Web Dashboard
-Bulletproof, Crash-Safe Single-Page Visual Analytics System.
-Parses all 8 telemetry struct types with strict float formatting (NaN/Inf protection) and layout bounds.
-"""
-
+# Plotly Dash dashboard: subscribes to GPS receiver telemetry over ZMQ (8 wire struct types)
 import argparse
 import math
 import os
@@ -18,9 +13,7 @@ from dash import dcc, html
 from dash.dependencies import Input, Output
 import plotly.graph_objects as go
 
-# -----------------------------------------------------------------------------
-# Float Safety & Bounds Formatting Helpers
-# -----------------------------------------------------------------------------
+# Float safety and bounds formatting helpers
 def safe_float(val, default=0.0):
     try:
         f = float(val)
@@ -37,9 +30,7 @@ def fmt_float(val, prec=2, unit="", default="--"):
     formatted = f"{f:.{prec}f}"
     return f"{formatted} {unit}".strip() if unit else formatted
 
-# -----------------------------------------------------------------------------
-# Global In-Memory Thread-Safe Telemetry Store
-# -----------------------------------------------------------------------------
+# Global in-memory thread-safe telemetry store
 GLOBAL_STATE = {
     "source": {
         "blockIndex": 0,
@@ -111,9 +102,7 @@ def add_event(level, module, message):
         if len(GLOBAL_STATE["events"]) > 100:
             GLOBAL_STATE["events"].pop(0)
 
-# -----------------------------------------------------------------------------
-# Telemetry Subscriber Background Thread (ZMQ + Binary Log Stream)
-# -----------------------------------------------------------------------------
+# Telemetry subscriber background thread (ZMQ + binary log stream)
 class TelemetrySubscriberThread(threading.Thread):
     def __init__(self, endpoint="ipc:///tmp/gpsopencl/telemetry.sock", log_file="build/telemetry_wire.log"):
         super().__init__(daemon=True)
@@ -289,9 +278,7 @@ class TelemetrySubscriberThread(threading.Thread):
         except Exception as e:
             pass
 
-# -----------------------------------------------------------------------------
-# Dash Application & Responsive Single-Page Layout
-# -----------------------------------------------------------------------------
+# Dash application and responsive single-page layout
 app = dash.Dash(__name__, title="GPSOpenCl - Comprehensive GNSS Telemetry Dashboard")
 
 app.layout = html.Div(
@@ -304,7 +291,7 @@ app.layout = html.Div(
         "boxSizing": "border-box"
     },
     children=[
-        # --- Top Header & Status Bar ---
+        # Top header and status bar
         html.Div(
             style={
                 "display": "flex",
@@ -332,7 +319,7 @@ app.layout = html.Div(
             ]
         ),
 
-        # --- Row 1: KPI Metric Cards (Strict Container Width & Text Bounds) ---
+        # Row 1: KPI metric cards
         html.Div(
             style={"display": "grid", "gridTemplateColumns": "repeat(5, 1fr)", "gap": "14px", "marginBottom": "20px"},
             children=[
@@ -374,7 +361,7 @@ app.layout = html.Div(
             ]
         ),
 
-        # --- Row 2: Skyplot, C/N0, and Doppler Shift Graphs ---
+        # Row 2: skyplot, C/N0, and Doppler graphs
         html.Div(
             style={"display": "grid", "gridTemplateColumns": "1fr 1fr 1fr", "gap": "16px", "marginBottom": "20px"},
             children=[
@@ -402,7 +389,7 @@ app.layout = html.Div(
             ]
         ),
 
-        # --- Row 3: Fine Tracking Discriminator Errors & Pipeline Execution Profiler ---
+        # Row 3: tracking discriminator errors and profiler
         html.Div(
             style={"display": "grid", "gridTemplateColumns": "1fr 1fr", "gap": "16px", "marginBottom": "20px"},
             children=[
@@ -423,7 +410,7 @@ app.layout = html.Div(
             ]
         ),
 
-        # --- Row 4: Decoded Satellite Ephemeris Details Table ---
+        # Row 4: decoded satellite ephemeris table
         html.Div(
             style={"backgroundColor": "#1e293b", "padding": "16px", "borderRadius": "12px", "border": "1px solid #334155", "marginBottom": "20px", "overflow": "hidden"},
             children=[
@@ -432,7 +419,7 @@ app.layout = html.Div(
             ]
         ),
 
-        # --- Row 5: Real-Time Software Events Feed & Raw NMEA Stream ---
+        # Row 5: software events feed and NMEA stream
         html.Div(
             style={"display": "grid", "gridTemplateColumns": "1fr 1fr", "gap": "16px", "marginBottom": "20px"},
             children=[
@@ -488,9 +475,7 @@ app.layout = html.Div(
     ]
 )
 
-# -----------------------------------------------------------------------------
-# Dash Callback Function (Single State Lock Read & Consistent UI Update)
-# -----------------------------------------------------------------------------
+# Dash callback: single state-lock read, consistent UI update
 @app.callback(
     [
         Output("card-sat-count", "children"),
@@ -520,7 +505,7 @@ def update_dashboard(n):
             events = list(GLOBAL_STATE["events"])
             last_t = GLOBAL_STATE["last_update"]
 
-        # 1. KPI Cards with Strict Float Formatting
+        # 1. KPI cards
         acq_count = sum(1 for s in sats if s.get("acquired"))
         sat_count_str = f"{acq_count} / {len(sats)}"
 
@@ -591,7 +576,7 @@ def update_dashboard(n):
             height=300
         )
 
-        # 5. Tracking Error Graph (Carrier & Code Discriminators)
+        # 5. Tracking error graph (carrier & code)
         carr_errs = [safe_float(s["carrierError"], 0.0) for s in sats]
         code_errs = [safe_float(s["codeError"], 0.0) for s in sats]
 
@@ -630,7 +615,7 @@ def update_dashboard(n):
             height=280
         )
 
-        # 7. Decoded Ephemeris & Atmospheric Delays Table
+        # 7. Ephemeris and atmospheric delays table
         table_rows = []
         for s in sats:
             if s.get("acquired"):
@@ -689,9 +674,7 @@ def update_dashboard(n):
         empty_fig.update_layout(paper_bgcolor="#1e293b", plot_bgcolor="#0b1329", font={"color": "#94a3b8"})
         return "0 / 32", "System Recovering...", "--", "--", "--", empty_fig, empty_fig, empty_fig, empty_fig, empty_fig, html.Div("Re-synchronizing stream..."), f"Notice: {e}", "Re-synchronizing...", f"Updated: {time.strftime('%H:%M:%S')}"
 
-# -----------------------------------------------------------------------------
-# Main Entry Point
-# -----------------------------------------------------------------------------
+# Main entry point
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="GPSOpenCl All-Telemetry Dashboard")
     parser.add_argument("--port", type=int, default=8050, help="Web server port")

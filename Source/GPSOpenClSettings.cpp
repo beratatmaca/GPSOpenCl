@@ -6,10 +6,10 @@
 
 using namespace GPSOpenCl;
 
-/**
- * @brief Construct a new Settings::Settings object
- *
- */
+
+
+
+
 Settings::Settings()
 {
     m_confFileName = "DefaultConf.ini";
@@ -21,18 +21,18 @@ Settings::Settings()
     configuration.acquisitionSettings.acquisitionDopplerSearchRange = 500;
 }
 
-/**
- * @brief Destroy the Settings::Settings object
- *
- */
+
+
+
+
 Settings::~Settings()
 {
 }
 
-/**
- * @brief
- *
- */
+
+
+
+
 void Settings::captureSettings()
 {
     std::ifstream confFile;
@@ -73,11 +73,11 @@ void Settings::captureSettings()
     updateConfigurationStruct();
 }
 
-/**
- * @brief
- *
- * @param line
- */
+
+
+
+
+
 void Settings::fillMap(std::string line)
 {
     std::string::size_type keyPos = 0;
@@ -109,10 +109,10 @@ void Settings::fillMap(std::string line)
     }
 }
 
-/**
- * @brief
- *
- */
+
+
+
+
 void Settings::updateConfigurationStruct()
 {
     if (m_configurationMap["DataSource"] != "")
@@ -159,13 +159,13 @@ void Settings::updateConfigurationStruct()
     }
 }
 
-/**
- * @brief
- *
- * @param str
- * @param whitespace
- * @return std::string
- */
+
+
+
+
+
+
+
 std::string Settings::trim(const std::string &str, const std::string &whitespace = " \t")
 {
     const auto strBegin = str.find_first_not_of(whitespace);

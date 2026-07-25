@@ -95,7 +95,7 @@ bool NavigationDecoder::decodeSubframe(const std::vector<uint32_t> &words30bit, 
 
 bool NavigationDecoder::findPreamble(const std::vector<bool> &bits, size_t &preambleIndex, bool &inverted)
 {
-    // GPS L1 C/A Preamble byte: 0x8B (10001011) or inverted 0x74 (01110100)
+
     const uint8_t PREAMBLE_NORM = 0x8B;
     const uint8_t PREAMBLE_INV = 0x74;
 
@@ -142,7 +142,7 @@ int32_t NavigationDecoder::extractSignedBits(uint32_t val, int startBitFromMSB, 
 
 uint32_t NavigationDecoder::extractUnsignedBits(uint32_t val, int startBitFromMSB, int numBits)
 {
-    // startBitFromMSB is 1-indexed from MSB (bit 30 is LSB, bit 1 is MSB)
+
     int shiftRight = 30 - (startBitFromMSB + numBits - 1);
     if (shiftRight < 0) shiftRight = 0;
     uint32_t mask = (1u << numBits) - 1;
@@ -151,11 +151,11 @@ uint32_t NavigationDecoder::extractUnsignedBits(uint32_t val, int startBitFromMS
 
 bool NavigationDecoder::checkParity(uint32_t word30bit, bool prevD29, bool prevD30)
 {
-    // IS-GPS-200 30-bit word parity algorithm
+
     bool d[25];
     for (int i = 1; i <= 24; i++)
     {
-        // bit 1 is MSB (bit index 29 in 0-indexed integer)
+
         d[i] = ((word30bit >> (30 - i)) & 1) != 0;
     }
 
@@ -181,7 +181,7 @@ std::vector<bool> NavigationDecoder::promptToBits(const ComplexFloatVector &prom
     std::vector<bool> bits;
     bits.reserve(promptHistory.size() / 20);
 
-    // 1 bit = 20 ms (20 integration blocks of 1 ms)
+
     for (size_t i = 0; i + 20 <= promptHistory.size(); i += 20)
     {
         float sumRe = 0.0f;
@@ -198,16 +198,16 @@ bool NavigationDecoder::decodeSubframe(const std::vector<uint32_t> &words30bit, 
 {
     if (words30bit.size() < 10) return false;
 
-    // Word 2: HOW Word
+
     uint32_t howWord = words30bit[1];
     uint32_t towCount = extractUnsignedBits(howWord, 1, 17);
     ephem.subframeId = extractUnsignedBits(howWord, 20, 3);
-    ephem.tow = towCount * 6.0; // TOW in seconds
+    ephem.tow = towCount * 6.0;
 
     if (ephem.subframeId < 1 || ephem.subframeId > 5 ||
         !((m_inputConfig.subframeSearchMask >> (ephem.subframeId - 1)) & 0x1u))
     {
-        // Subframe not selected by the configured search mask; skip decoding it.
+
         ephem.isValid = false;
         return false;
     }
@@ -223,8 +223,8 @@ bool NavigationDecoder::decodeSubframe(const std::vector<uint32_t> &words30bit, 
 
     if (ephem.subframeId == 1)
     {
-        // IS-GPS-200 subframe 1: word 3 bits 1-10 = WN; word 8 bits 9-24 = toc; word 9 bits 1-8 = af2,
-        // bits 9-24 = af1; word 10 bits 1-22 = af0.
+
+
         ephem.weekNumber = extractUnsignedBits(w3, 1, 10);
         ephem.toc = extractUnsignedBits(w8, 9, 16) * std::pow(2.0, 4);
         ephem.af2 = extractSignedBits(w9, 1, 8) * std::pow(2.0, -55);
@@ -234,9 +234,9 @@ bool NavigationDecoder::decodeSubframe(const std::vector<uint32_t> &words30bit, 
     }
     else if (ephem.subframeId == 2)
     {
-        // word3 bits1-8=IODE(unused), 9-24=Crs; word4 bits1-16=deltaN, 17-24=M0 MSB; word5 bits1-24=M0 LSB;
-        // word6 bits1-16=Cuc, 17-24=e MSB; word7 bits1-24=e LSB; word8 bits1-16=Cus, 17-24=sqrtA MSB;
-        // word9 bits1-24=sqrtA LSB; word10 bits1-16=toe.
+
+
+
         ephem.Crs = extractSignedBits(w3, 9, 16) * std::pow(2.0, -5);
         ephem.deltaN = extractSignedBits(w4, 1, 16) * std::pow(2.0, -43) * M_PI;
         int32_t m0Raw = (extractSignedBits(w4, 17, 8) << 24) | extractUnsignedBits(w5, 1, 24);
@@ -252,9 +252,9 @@ bool NavigationDecoder::decodeSubframe(const std::vector<uint32_t> &words30bit, 
     }
     else if (ephem.subframeId == 3)
     {
-        // word3 bits1-16=Cic, 17-24=omega0 MSB; word4 bits1-24=omega0 LSB; word5 bits1-16=Cis, 17-24=i0 MSB;
-        // word6 bits1-24=i0 LSB; word7 bits1-16=Crc, 17-24=omega MSB; word8 bits1-24=omega LSB;
-        // word9 bits1-24=omegaDot; word10 bits1-8=IODE2(unused), 9-22=idot.
+
+
+
         ephem.Cic = extractSignedBits(w3, 1, 16) * std::pow(2.0, -29);
         int32_t omega0Raw = (extractSignedBits(w3, 17, 8) << 24) | extractUnsignedBits(w4, 1, 24);
         ephem.omega0 = omega0Raw * std::pow(2.0, -31) * M_PI;
@@ -299,7 +299,7 @@ bool NavigationDecoder::processPromptSignal(int svId, const ComplexFloatVector &
     size_t preambleIdx = bitOffset + relPreambleIdx;
     if (preambleIdx + 300 > allBits.size())
     {
-        // Not enough data yet for a full subframe; wait for more without losing our place.
+
         return false;
     }
 
@@ -308,8 +308,8 @@ bool NavigationDecoder::processPromptSignal(int svId, const ComplexFloatVector &
         return inverted ? !v : v;
     };
 
-    // D29*/D30* of the word immediately preceding this subframe's first word, needed both to check
-    // word 1's parity and to know whether word 1's data bits must be polarity-inverted.
+
+
     bool prevD29 = false;
     bool prevD30 = false;
     if (preambleIdx >= 2)
@@ -330,18 +330,18 @@ bool NavigationDecoder::processPromptSignal(int svId, const ComplexFloatVector &
 
         if (!checkParity(raw, prevD29, prevD30))
         {
-            // Resynchronize past just this false preamble candidate, not the whole subframe.
+
             bitOffset = preambleIdx + 1;
             return false;
         }
 
-        // IS-GPS-200 D30* rule: if the previous word's last bit is 1, this word's 24 data bits
-        // (bits 1-24) are transmitted inverted and must be complemented before use. Parity bits
-        // 25-30 are never inverted.
+
+
+
         uint32_t dataWord = raw;
         if (prevD30)
         {
-            const uint32_t dataBitsMask = 0x3FFFFFC0u; // word bits 1-24 (value bits 6..29)
+            const uint32_t dataBitsMask = 0x3FFFFFC0u;
             dataWord = raw ^ dataBitsMask;
         }
         words[w] = dataWord;
@@ -350,8 +350,8 @@ bool NavigationDecoder::processPromptSignal(int svId, const ComplexFloatVector &
         prevD30 = (raw & 1u) != 0;
     }
 
-    subframeStartSample = preambleIdx * 20; // 20 prompt samples per nav bit
-    bitOffset = preambleIdx + 300;          // advance past this whole subframe
+    subframeStartSample = preambleIdx * 20;
+    bitOffset = preambleIdx + 300;
 
     bool decoded = decodeSubframe(words, ephem);
     if (decoded && m_sink)

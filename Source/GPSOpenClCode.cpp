@@ -11,27 +11,27 @@ Code::Code()
     m_samplingFrequencyHz = 0.0f;
 }
 
-/**
- * @brief Construct a new GPSOpenCl::Code::Code object
- *
- */
+
+
+
+
 Code::Code(Settings::Configuration conf)
 {
     setConfiguration(conf);
 }
 
-/**
- * @brief Destroy the GPSOpenCl::Code::Code object
- *
- */
+
+
+
+
 Code::~Code()
 {
 }
 
-/**
- * @brief
- *
- */
+
+
+
+
 void Code::calculateCACode()
 {
     char G1[GPS_CA_CODE_LENGTH];
@@ -86,12 +86,12 @@ void Code::calculateCACode()
     }
 }
 
-/**
- * @brief
- *
- * @param m_sampleLength
- * @param samplingFrequencyHz
- */
+
+
+
+
+
+
 void Code::createLookupTable(Compute *gpu)
 {
     m_upsampledCaCode.clear();
@@ -144,10 +144,10 @@ void Code::setConfiguration(Settings::Configuration conf)
     initialize();
 }
 
-/**
- * @brief
- *
- */
+
+
+
+
 void Code::initialize()
 {
     calculateCACode();

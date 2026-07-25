@@ -71,9 +71,9 @@ SatelliteOrbit PVTSolver::computeSatelliteOrbit(const GpsEphemeris &ephem, doubl
     SatelliteOrbit orbit;
     orbit.svId = ephem.svId;
 
-    const double mu = 3.986005e14;         // Earth's universal gravitational parameter (m^3/s^2)
-    const double omegaE = 7.2921151467e-5; // Earth's rotation rate (rad/s)
-    const double F = -4.442807633e-10;     // Relativistic constant (s/m^(1/2))
+    const double mu = 3.986005e14;
+    const double omegaE = 7.2921151467e-5;
+    const double F = -4.442807633e-10;
 
     double A = ephem.sqrtA * ephem.sqrtA;
     double n0 = std::sqrt(mu / (A * A * A));
@@ -85,7 +85,7 @@ SatelliteOrbit PVTSolver::computeSatelliteOrbit(const GpsEphemeris &ephem, doubl
     double n = n0 + ephem.deltaN;
     double Mk = ephem.M0 + n * tk;
 
-    // Kepler's equation solution via Newton-Raphson
+
     double Ek = Mk;
     for (int iter = 0; iter < 10; iter++)
     {
@@ -94,27 +94,27 @@ SatelliteOrbit PVTSolver::computeSatelliteOrbit(const GpsEphemeris &ephem, doubl
         Ek -= diff / derivative;
     }
 
-    // Relativistic correction
+
     orbit.relCorr = F * ephem.e * ephem.sqrtA * std::sin(Ek);
 
-    // Clock bias correction
+
     double dtT = t - ephem.toc;
     if (dtT > 302400.0) dtT -= 604800.0;
     if (dtT < -302400.0) dtT += 604800.0;
 
     orbit.clockBias = ephem.af0 + ephem.af1 * dtT + ephem.af2 * dtT * dtT + orbit.relCorr;
 
-    // True anomaly
+
     double sinEk = std::sin(Ek);
     double cosEk = std::cos(Ek);
     double sinVk = (std::sqrt(1.0 - ephem.e * ephem.e) * sinEk) / (1.0 - ephem.e * cosEk);
     double cosVk = (cosEk - ephem.e) / (1.0 - ephem.e * cosEk);
     double vk = std::atan2(sinVk, cosVk);
 
-    // Argument of latitude
+
     double phiK = vk + ephem.omega;
 
-    // Second harmonic perturbations
+
     double sin2Phi = std::sin(2.0 * phiK);
     double cos2Phi = std::cos(2.0 * phiK);
 
@@ -126,14 +126,14 @@ SatelliteOrbit PVTSolver::computeSatelliteOrbit(const GpsEphemeris &ephem, doubl
     double rk = A * (1.0 - ephem.e * cosEk) + deltaR;
     double ik = ephem.i0 + deltaI + ephem.idot * tk;
 
-    // Positions in orbital plane
+
     double xkPrime = rk * std::cos(uk);
     double ykPrime = rk * std::sin(uk);
 
-    // Corrected longitude of ascending node
+
     double omegaK = ephem.omega0 + (ephem.omegaDot - omegaE) * tk - omegaE * ephem.toe;
 
-    // Earth-Centered, Earth-Fixed (ECEF) coordinates
+
     orbit.position.x = xkPrime * std::cos(omegaK) - ykPrime * std::cos(ik) * std::sin(omegaK);
     orbit.position.y = xkPrime * std::sin(omegaK) + ykPrime * std::cos(ik) * std::cos(omegaK);
     orbit.position.z = ykPrime * std::sin(ik);
@@ -144,8 +144,8 @@ SatelliteOrbit PVTSolver::computeSatelliteOrbit(const GpsEphemeris &ephem, doubl
 GeodeticPosition PVTSolver::ecefToWgs84(const EcefPosition &ecef)
 {
     GeodeticPosition geo;
-    const double a = 6378137.0;           // WGS84 semi-major axis (m)
-    const double f = 1.0 / 298.257223563; // WGS84 flattening
+    const double a = 6378137.0;
+    const double f = 1.0 / 298.257223563;
     const double b = a * (1.0 - f);
     const double e2 = (a * a - b * b) / (a * a);
     const double ep2 = (a * a - b * b) / (b * b);
@@ -183,8 +183,8 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
         return false;
     }
 
-    const double c = 299792458.0;          // Speed of light (m/s)
-    const double omegaE = 7.2921151467e-5; // Earth rotation rate (rad/s)
+    const double c = 299792458.0;
+    const double omegaE = 7.2921151467e-5;
 
     std::vector<SatelliteOrbit> orbits(numSats);
     std::vector<double> correctedRanges(numSats);
@@ -192,27 +192,27 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
     for (size_t i = 0; i < numSats; i++)
     {
         orbits[i] = computeSatelliteOrbit(ephemerides[i], transmitTimesSeconds[i]);
-        // Correct pseudorange for satellite clock bias
+
         correctedRanges[i] = measuredPseudoranges[i] + c * orbits[i].clockBias;
     }
 
-    // Initial state vector guess starting near Earth surface [x, y, z, dt_u*c]
+
     double state[4] = {4180483.4, 851798.0, 4725999.8, 0.0};
 
-    // Iterative Weighted Least Squares (WLS) solution
+
     for (int iter = 0; iter < 15; iter++)
     {
         std::vector<std::vector<double>> H(numSats, std::vector<double>(4, 0.0));
         std::vector<double> deltaRho(numSats, 0.0);
 
-        // Tropospheric delay depends on the receiver's current position estimate and each
-        // satellite's elevation, both of which change as the solution converges, so (unlike the
-        // position-independent satellite clock bias correction above) it's recomputed every
-        // iteration from the current state estimate rather than once up front. This has no
-        // broadcast ionospheric parameters to work with (subframes 4/5 are not decoded), so
-        // ionospheric delay is NOT corrected here; residuals can still carry tens of meters of
-        // uncorrected ionospheric error at low elevation, which is why the outlier gate below
-        // stays a coarse "reject gross errors" check rather than a precise residual test.
+
+
+
+
+
+
+
+
         EcefPosition rxEcefEstimate{state[0], state[1], state[2]};
         double rxAltitudeEstimate = ecefToWgs84(rxEcefEstimate).altitude;
 
@@ -223,7 +223,7 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
             double dz = orbits[i].position.z - state[2];
             double range = std::sqrt(dx * dx + dy * dy + dz * dz);
 
-            // Sagnac effect correction due to Earth's rotation during flight time
+
             double travelTime = range / c;
             double sagnacX = orbits[i].position.x + omegaE * travelTime * orbits[i].position.y;
             double sagnacY = orbits[i].position.y - omegaE * travelTime * orbits[i].position.x;
@@ -246,7 +246,7 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
             H[i][3] = 1.0;
         }
 
-        // Calculate Normal Equations: (H^T * H) * deltaX = H^T * deltaRho
+
         double HtH[4][4] = {{0}};
         double HtY[4] = {0};
 
@@ -262,7 +262,7 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
             }
         }
 
-        // Solve 4x4 linear system via Gauss-Jordan elimination
+
         double A[4][8] = {{0}};
         for (int r = 0; r < 4; r++)
         {
@@ -307,14 +307,14 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
                 double absResidual = std::fabs(deltaRho[i]);
                 if (absResidual > maxAbsResidual) maxAbsResidual = absResidual;
             }
-            // Note: with exactly numSats == minSatellites the system is exactly determined (as many
-            // equations as unknowns), so WLS drives every residual to ~0 regardless of measurement
-            // quality -- this gate only has redundancy to actually catch a bad measurement once
-            // numSats exceeds minSatellites (see PVTSolverTest.MaxPseudorangeErrGateRejectsOutlierWithRedundantSatellites).
+
+
+
+
             if (maxAbsResidual > m_inputConfig.maxPseudorangeErrMeters)
             {
-                // At least one satellite's residual exceeds the configured outlier gate; reject
-                // rather than silently reporting a fix built on a corrupted/multipath measurement.
+
+
                 return false;
             }
 
@@ -325,7 +325,7 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
             solution.clockBiasSeconds = state[3] / c;
             solution.geodeticPosition = ecefToWgs84(solution.ecefPosition);
 
-            // Compute Dilution of Precision (DOP) metrics from (H^T * H)^(-1)
+
             double invHtH[4][4];
             for (int r = 0; r < 4; r++)
                 for (int col = 0; col < 4; col++)
@@ -358,8 +358,8 @@ bool PVTSolver::solvePosition(const std::vector<NavDecoderOutput> &outputs,
 
     ReceiverPvtSolution sol{};
     bool res = solvePosition(ephemerides, measuredPseudoranges, transmitTimesSeconds, sol);
-    // solvePosition always sets sol.isValid on entry, success or failure, so this always leaves
-    // outputSolution in a well-defined state rather than stale/uninitialized on failure.
+
+
     outputSolution = solutionToOutput(sol);
     return res;
 }

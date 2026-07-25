@@ -80,10 +80,6 @@ TEST_F(TrackingTest, TrackingLoop)
 
 TEST(TrackingLoopFilterTest, DefaultBandwidthsMatchReferenceDesign)
 {
-    // Default PLL bandwidth (25 Hz) and DLL bandwidth (2 Hz) from GPSOpenClStructs.h's
-    // TrackingInput must reproduce the previously hand-tuned loop filter constants. The old
-    // literals were themselves rounded to ~4 significant figures, so tolerances are loose
-    // enough to accommodate that rounding, not the formula's own (much higher) precision.
     EXPECT_NEAR(GPSOpenCl::Tracking::loopFilterTau1(25.0), 0.0004494f, 1e-6f);
     EXPECT_NEAR(GPSOpenCl::Tracking::loopFilterTau2(25.0), 0.02998f, 5e-5f);
     EXPECT_NEAR(GPSOpenCl::Tracking::loopFilterTau1(2.0), 0.07022f, 1e-4f);
@@ -92,8 +88,7 @@ TEST(TrackingLoopFilterTest, DefaultBandwidthsMatchReferenceDesign)
 
 TEST(TrackingLoopFilterTest, WiderBandwidthYieldsSmallerTimeConstants)
 {
-    // A wider noise bandwidth should react faster, i.e. smaller time constants.
     EXPECT_LT(GPSOpenCl::Tracking::loopFilterTau1(50.0), GPSOpenCl::Tracking::loopFilterTau1(25.0));
     EXPECT_LT(GPSOpenCl::Tracking::loopFilterTau2(50.0), GPSOpenCl::Tracking::loopFilterTau2(25.0));
 }
-} // namespace GPSOpenClTest
+}

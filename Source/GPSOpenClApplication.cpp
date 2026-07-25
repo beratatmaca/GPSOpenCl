@@ -96,7 +96,7 @@ bool Application::computeNavigationSolution(ReceiverPvtSolution &solution)
     std::vector<int> activePrns;
 
     const double c = 299792458.0;
-    const double nominalTransitTimeSec = 0.075; // typical GPS signal transit time (Earth-to-receiver)
+    const double nominalTransitTimeSec = 0.075;
 
     for (int i = 0; i < GPS_CA_SV_COUNT; i++)
     {
@@ -105,9 +105,9 @@ bool Application::computeNavigationSolution(ReceiverPvtSolution &solution)
             continue;
         }
 
-        // No fabricated fallback: a satellite only contributes once its real navigation message has
-        // been fully decoded (subframes 1, 2 and 3 all seen), so every measurement here comes from
-        // the actual tracked signal.
+
+
+
         bool complete = m_channels[i].updateNavigation(m_navDecoder);
         if (!complete)
         {
@@ -121,7 +121,7 @@ bool Application::computeNavigationSolution(ReceiverPvtSolution &solution)
             continue;
         }
 
-        // TOW in the HOW word marks the start of the NEXT subframe, so this subframe began 6s earlier.
+
         double subframeStartTow = m_channels[i].getLastSubframeTow() - 6.0;
         double elapsedSeconds = static_cast<double>(promptCount - subframeStartSample) * GPS_CA_CODE_PERIOD_SEC;
         double transmitTime = subframeStartTow + elapsedSeconds;
@@ -139,9 +139,9 @@ bool Application::computeNavigationSolution(ReceiverPvtSolution &solution)
         return false;
     }
 
-    // Bootstrap a common receiver time reference from the latest-arriving real signal plus a nominal
-    // transit time (this is a batch/file-based pipeline with no free-running receiver clock yet), then
-    // derive each pseudorange as the implied light-time from its real decoded transmit time.
+
+
+
     double receiverTime = *std::max_element(transmitTimes.begin(), transmitTimes.end()) + nominalTransitTimeSec;
 
     std::vector<double> measuredPseudoranges(transmitTimes.size());
@@ -294,7 +294,7 @@ void Application::exportTelemetryJson(const std::string &filepath, const Receive
         float peakVal = 0.0f, peakFreq = 0.0f, meanVal = 0.0f, cn0 = 0.0f, peakRatio = 0.0f;
         m_channels[i].getAcquisitionResults(&peakIndex, &peakVal, &peakFreq, &meanVal, &cn0, &peakRatio);
 
-        // Compute Azimuth and Elevation for skyplot
+
         double az = (m_channels[i].m_svId * 11.25);
         double el = 15.0 + ((m_channels[i].m_svId * 7) % 70);
 

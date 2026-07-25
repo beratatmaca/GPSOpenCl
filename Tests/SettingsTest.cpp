@@ -30,4 +30,4 @@ TEST_F(SettingsTest, ReadIniFile)
     EXPECT_EQ(m_settings.configuration.acquisitionSettings.acquisitionDopplerMaximum, 4000);
     EXPECT_EQ(m_settings.configuration.acquisitionSettings.acquisitionDopplerSearchRange, 500);
 }
-} // namespace GPSOpenClTest
+}

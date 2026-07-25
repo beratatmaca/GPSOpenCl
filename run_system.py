@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-"""
-GPSOpenCl Master Real-Time System Launcher
-Compiles, initializes, and links both executables (gps-sdr-sim-rt & GPSOpenCl) in continuous streaming mode over Linux FIFOs,
-launches the Plotly/Dash Visual Analytics Dashboard, and opens it in the web browser.
-"""
-
 import argparse
 import os
 import signal
@@ -25,7 +19,6 @@ DASHBOARD_SCRIPT = os.path.join(PROJECT_ROOT, "Tools", "dashboard.py")
 processes = []
 
 def cleanup(signum=None, frame=None):
-    """Gracefully terminate all spawned background executables and clean up IPC FIFOs."""
     print("\n\n=========================================================")
     print("      Shutting down GPSOpenCl Real-Time Pipeline...     ")
     print("=========================================================")
@@ -47,7 +40,6 @@ def cleanup(signum=None, frame=None):
     sys.exit(0)
 
 def ensure_build():
-    """Ensure CMake project is configured and compiled with ZMQ support enabled."""
     if os.path.exists(RECEIVER_BIN) and os.path.exists(SIMULATOR_BIN):
         return
 
@@ -95,8 +87,7 @@ def main():
             os.remove(fifo)
         os.mkfifo(fifo)
 
-    # 3. Launch Executable 1 — Real-Time Signal Generator (gps-sdr-sim-rt)
-    # Continuous streaming without duration limit (-d 86400 = 24 hours continuous)
+    # Launch real-time signal generator, streaming continuously over the FIFO
     print(f"[1/3] Starting real-time RF signal generator stream over FIFO ({FIFO_DATA_PATH})...")
     sim_cmd = [
         SIMULATOR_BIN,

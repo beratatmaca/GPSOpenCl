@@ -116,4 +116,4 @@ bool GpsSdrSimSource::readBlock(ComplexFloatVector &outputSamples, SourceOutput 
 
     return true;
 }
-} // namespace GPSOpenCl
+}

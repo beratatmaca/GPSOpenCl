@@ -8,12 +8,12 @@ namespace GPSOpenClTest
 TEST(AtmosphericCorrectionsTest, AzimuthElevationZenith)
 {
     GPSOpenCl::EcefPosition rxEcef;
-    rxEcef.x = 6378137.0; // Equator prime meridian
+    rxEcef.x = 6378137.0;
     rxEcef.y = 0.0;
     rxEcef.z = 0.0;
 
     GPSOpenCl::EcefPosition satEcef;
-    satEcef.x = 26560000.0; // Directly above receiver at zenith
+    satEcef.x = 26560000.0;
     satEcef.y = 0.0;
     satEcef.z = 0.0;
 
@@ -25,7 +25,6 @@ TEST(AtmosphericCorrectionsTest, AzimuthElevationZenith)
 
 TEST(AtmosphericCorrectionsTest, SaastamoinenSeaLevelZenith)
 {
-    // Zenith tropospheric delay at sea level is ~2.3 meters
     double delayMeters = GPSOpenCl::AtmosphericCorrections::saastamoinenTroposphericDelay(0.0, 90.0);
 
     EXPECT_NEAR(delayMeters, 2.3, 0.2);
@@ -52,8 +51,7 @@ TEST(AtmosphericCorrectionsTest, KlobucharDelayRange)
     double delayMeters = GPSOpenCl::AtmosphericCorrections::klobucharIonosphericDelay(
         rxPos, 45.0, 120.0, 45000.0, params);
 
-    // Ionospheric slant delay should be in range 2m to 25m
     EXPECT_GT(delayMeters, 1.0);
     EXPECT_LT(delayMeters, 30.0);
 }
-} // namespace GPSOpenClTest
+}

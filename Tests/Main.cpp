@@ -1,13 +1,5 @@
 #include <gtest/gtest.h>
 
-/**
- * @brief GTest main function
- * 
- * @param argc 
- * @param argv 
- * @return int 
- */
-
 int main(int argc, char **argv)
 {
    ::testing::GTEST_FLAG(output) = "xml:TestResult.xml";

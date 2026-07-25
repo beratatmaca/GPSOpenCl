@@ -52,4 +52,4 @@ ProfilerOutput Profiler::finishBlock()
 
     return m_currentOutput;
 }
-} // namespace GPSOpenCl
+}

@@ -1,8 +1,4 @@
 #!/usr/bin/env python3
-"""
-GPSOpenCl Terminal Visualizer
-Pure ZMQ & binary file stream subscriber for real-time telemetry rendering in the terminal.
-"""
 
 import argparse
 import os

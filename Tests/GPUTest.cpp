@@ -211,29 +211,20 @@ TEST(GPUComputeClampTest, RoundDownToPowerOfTwo)
     EXPECT_EQ(GPSOpenCl::Compute::roundDownToPowerOfTwo(0), 0u);
     EXPECT_EQ(GPSOpenCl::Compute::roundDownToPowerOfTwo(1), 1u);
     EXPECT_EQ(GPSOpenCl::Compute::roundDownToPowerOfTwo(4096), 4096u);
-    // 6144 is the classic non-power-of-two case seen with a real 48KB local-memory device
-    // (49152 bytes / (2*sizeof(float)) = 6144).
     EXPECT_EQ(GPSOpenCl::Compute::roundDownToPowerOfTwo(6144), 4096u);
     EXPECT_EQ(GPSOpenCl::Compute::roundDownToPowerOfTwo(8191), 4096u);
 }
 
 TEST(GPUComputeClampTest, ClampLocalSizeNeverTruncatesPointsPerItemBelowMinimum)
 {
-    // The exact scenario that hung on POCL: local_size (2048) starts larger than points_per_group
-    // (256) with a minimum of 4 points/item -- must shrink to <= 64 (256/4).
     EXPECT_EQ(GPSOpenCl::Compute::clampLocalSizeForMinPointsPerItem(2048, 256, 4), 64u);
-    // Already small enough: no change.
     EXPECT_EQ(GPSOpenCl::Compute::clampLocalSizeForMinPointsPerItem(16, 256, 4), 16u);
-    // Minimum of 1 point/item (complexMultiplier/absolute): only needs local_size <= pointsPerGroup.
     EXPECT_EQ(GPSOpenCl::Compute::clampLocalSizeForMinPointsPerItem(2048, 256, 1), 256u);
-    // Never underflows to 0 even for a tiny pointsPerGroup.
     EXPECT_EQ(GPSOpenCl::Compute::clampLocalSizeForMinPointsPerItem(1024, 1, 4), 1u);
 }
 
 TEST_F(GPUTest, SumEmptyInputContributesZero)
 {
-    // A non-empty sum first, so any stale-buffer regression (the GPU path skipping its own
-    // zero-fill for an empty input and reading leftover data from this call) would be caught.
     GPSOpenCl::FloatVector warmup(64, 2.0f);
     float warmupSum = 0.0f;
     m_gpuCompute.sum(warmup, &warmupSum);
@@ -245,4 +236,4 @@ TEST_F(GPUTest, SumEmptyInputContributesZero)
 
     EXPECT_FLOAT_EQ(sumValue, 0.0f);
 }
-} // namespace GPSOpenClTest
+}

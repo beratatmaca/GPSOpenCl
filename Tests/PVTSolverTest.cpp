@@ -9,7 +9,7 @@ namespace GPSOpenClTest
 TEST(PVTSolverTest, EcefToWgs84Equator)
 {
     GPSOpenCl::EcefPosition ecef;
-    ecef.x = 6378137.0; // Point on equator on prime meridian
+    ecef.x = 6378137.0;
     ecef.y = 0.0;
     ecef.z = 0.0;
 
@@ -26,11 +26,11 @@ TEST(PVTSolverTest, OrbitCalculation)
     ephem.svId = 1;
     ephem.toe = 1000.0;
     ephem.toc = 1000.0;
-    ephem.sqrtA = 5153.6; // ~26560 km orbital radius
+    ephem.sqrtA = 5153.6;
     ephem.e = 0.01;
     ephem.M0 = 0.0;
     ephem.deltaN = 0.0;
-    ephem.i0 = 0.96; // ~55 degrees
+    ephem.i0 = 0.96;
     ephem.idot = 0.0;
     ephem.omega0 = 0.0;
     ephem.omegaDot = 0.0;
@@ -50,7 +50,6 @@ TEST(PVTSolverTest, OrbitCalculation)
 
 TEST(PVTSolverTest, SolvePositionSynthesized)
 {
-    // Receiver position at latitude 40 N, longitude 30 E, altitude 100 m
     GPSOpenCl::EcefPosition rxEcef;
     rxEcef.x = 4239828.0;
     rxEcef.y = 2447866.0;
@@ -94,9 +93,6 @@ TEST(PVTSolverTest, SolvePositionSynthesized)
         dz = orbit.position.z - rxEcef.z;
         measuredRanges[i] = std::sqrt(dx * dx + dy * dy + dz * dz);
 
-        // Real receivers measure geometric range plus tropospheric delay; inject the same delay
-        // the solver now corrects for, so this test validates that correction recovers the true
-        // position instead of just checking pure, atmosphere-free geometry.
         double azDeg = 0.0, elDeg = 0.0;
         GPSOpenCl::AtmosphericCorrections::computeAzimuthElevation(rxEcef, orbit.position, azDeg, elDeg);
         double rxAltitude = GPSOpenCl::PVTSolver::ecefToWgs84(rxEcef).altitude;
@@ -117,13 +113,13 @@ TEST(PVTSolverTest, SolvePositionSynthesized)
 
 TEST(PVTSolverTest, StructOverloadResetsOutputOnFailure)
 {
-    std::vector<GPSOpenCl::NavDecoderOutput> outputs(2); // fewer than the default minSatellites (4)
+    std::vector<GPSOpenCl::NavDecoderOutput> outputs(2);
     std::vector<double> measuredRanges(2, 20000000.0);
     std::vector<double> transmitTimes(2, 0.0);
 
     GPSOpenCl::PVTSolver solver;
     GPSOpenCl::PvtSolverOutput outputSolution{};
-    outputSolution.isValid = 1; // simulate a stale fix from a previous, successful call
+    outputSolution.isValid = 1;
     outputSolution.latitude = 12.34;
 
     bool success = solver.solvePosition(outputs, measuredRanges, transmitTimes, outputSolution);
@@ -141,7 +137,7 @@ TEST(PVTSolverTest, MinSatellitesGateRejectsBelowThreshold)
     input.maxPseudorangeErrMeters = 100.0;
 
     GPSOpenCl::PVTSolver solver(input);
-    std::vector<GPSOpenCl::GpsEphemeris> ephemerides(4); // fewer than the configured minSatellites
+    std::vector<GPSOpenCl::GpsEphemeris> ephemerides(4);
     std::vector<double> measuredRanges(4, 20000000.0);
     std::vector<double> transmitTimes(4, 0.0);
     GPSOpenCl::ReceiverPvtSolution solution;
@@ -154,8 +150,6 @@ TEST(PVTSolverTest, MinSatellitesGateRejectsBelowThreshold)
 
 TEST(PVTSolverTest, MaxPseudorangeErrGateRejectsOutlierWithRedundantSatellites)
 {
-    // RAIM-style residual checks need redundancy: with exactly 4 satellites the system is exactly
-    // determined and a bad measurement is absorbed with ~zero residual, so this needs a 5th satellite.
     GPSOpenCl::EcefPosition rxEcef;
     rxEcef.x = 4239828.0;
     rxEcef.y = 2447866.0;
@@ -200,9 +194,6 @@ TEST(PVTSolverTest, MaxPseudorangeErrGateRejectsOutlierWithRedundantSatellites)
         dz = orbit.position.z - rxEcef.z;
         measuredRanges[i] = std::sqrt(dx * dx + dy * dy + dz * dz);
 
-        // Inject realistic tropospheric delay (no corruption) so the "clean" baseline below also
-        // proves normal, uncorrected-by-the-caller atmospheric delay does not by itself trip the
-        // outlier gate now that solvePosition corrects for it internally.
         double azDeg = 0.0, elDeg = 0.0;
         GPSOpenCl::AtmosphericCorrections::computeAzimuthElevation(rxEcef, orbit.position, azDeg, elDeg);
         double rxAltitude = GPSOpenCl::PVTSolver::ecefToWgs84(rxEcef).altitude;
@@ -215,11 +206,10 @@ TEST(PVTSolverTest, MaxPseudorangeErrGateRejectsOutlierWithRedundantSatellites)
     GPSOpenCl::ReceiverPvtSolution cleanSolution;
     EXPECT_TRUE(solver.solvePosition(ephemerides, measuredRanges, transmitTimes, cleanSolution));
 
-    // Corrupt one measurement far beyond the default 100 m outlier gate.
     measuredRanges[2] += 10000.0;
     GPSOpenCl::ReceiverPvtSolution corruptedSolution;
     bool success = solver.solvePosition(ephemerides, measuredRanges, transmitTimes, corruptedSolution);
 
     EXPECT_FALSE(success);
 }
-} // namespace GPSOpenClTest
+}

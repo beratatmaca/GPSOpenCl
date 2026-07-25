@@ -46,4 +46,4 @@ void ZmqSink::publish(const std::string &identifier, const void *data, size_t si
     (void)size;
 #endif
 }
-} // namespace GPSOpenCl
+}

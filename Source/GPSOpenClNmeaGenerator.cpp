@@ -138,7 +138,7 @@ std::string NmeaGenerator::generateGprmc(const ReceiverPvtSolution &solution, do
 
 std::string NmeaGenerator::generateGpgsa(const ReceiverPvtSolution &solution, const std::vector<int> &activePrns)
 {
-    int fixMode = solution.isValid ? 3 : 1; // 3 = 3D fix, 1 = No fix
+    int fixMode = solution.isValid ? 3 : 1;
     double pdop = solution.isValid ? solution.dopPDOP : 99.9;
     double hdop = solution.isValid ? solution.dopHDOP : 99.9;
     double vdop = solution.isValid ? solution.dopVDOP : 99.9;
@@ -203,7 +203,7 @@ std::vector<std::string> NmeaGenerator::generateGpgsvSentences(const Channel cha
             if (idx < totalSats)
             {
                 char buf[32];
-                // Nominal elevation 45 deg, azimuth 120 deg, SNR cn0
+
                 std::snprintf(buf, sizeof(buf), ",%02d,45,120,%02d", acquiredSats[idx].prn, acquiredSats[idx].snr);
                 oss << buf;
             }

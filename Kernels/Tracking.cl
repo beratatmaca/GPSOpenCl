@@ -1,3 +1,12 @@
+/**
+ * @brief Mixes each complex sample with a numerically controlled oscillator (NCO) replica
+ * given a per-sample carrier phase, rotating the input in place.
+ *
+ * @param g_data Complex input/output data (interleaved Re, Im), rotated in place.
+ * @param phasePoints Per-sample carrier phase (radians).
+ * @param l_data Unused local memory buffer, kept for work-group dispatch symmetry.
+ * @param points_per_group Points processed per work-group.
+ */
 __kernel void ncoMultiplicate(__global float2 *g_data,
                               __global float *phasePoints,
                               __local float2 *l_data, uint points_per_group) {

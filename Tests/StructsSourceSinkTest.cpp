@@ -43,7 +43,7 @@ class TestSubscriberSink : public Sink
     int publishedCount = 0;
     std::string lastIdentifier;
 
-    void publish(const std::string &identifier, const void * /*data*/, size_t /*size*/) override
+    void publish(const std::string &identifier, const void *, size_t) override
     {
         publishedCount++;
         lastIdentifier = identifier;

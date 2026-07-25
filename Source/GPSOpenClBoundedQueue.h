@@ -1,18 +1,29 @@
 #ifndef INCLUDED_GPSOPENCL_BOUNDEDQUEUE_H
 #define INCLUDED_GPSOPENCL_BOUNDEDQUEUE_H
 
+/** @file GPSOpenClBoundedQueue.h
+ *  @brief Thread-safe bounded producer-consumer queue.
+ */
+
 #include <condition_variable>
 #include <mutex>
 #include <queue>
 
 namespace GPSOpenCl
 {
+/** @brief Thread-safe bounded blocking queue.
+ *  @tparam T Element type. */
 template <typename T>
 class BoundedQueue
 {
   public:
+    /** @brief Construct with max capacity.
+     *  @param maxCapacity Maximum queue size. */
     explicit BoundedQueue(size_t maxCapacity = 16) : m_maxCapacity(maxCapacity), m_finished(false) {}
 
+    /** @brief Push an item, blocking if full.
+     *  @param item Item to push.
+     *  @return False if queue is finished. */
     bool push(T item)
     {
         std::unique_lock<std::mutex> lock(m_mutex);
@@ -23,6 +34,9 @@ class BoundedQueue
         return true;
     }
 
+    /** @brief Pop an item, blocking if empty.
+     *  @param item Output item.
+     *  @return False if queue is empty and finished. */
     bool pop(T &item)
     {
         std::unique_lock<std::mutex> lock(m_mutex);
@@ -34,6 +48,7 @@ class BoundedQueue
         return true;
     }
 
+    /** @brief Signal that no more items will be pushed. */
     void finish()
     {
         std::unique_lock<std::mutex> lock(m_mutex);
@@ -43,12 +58,12 @@ class BoundedQueue
     }
 
   private:
-    size_t m_maxCapacity;
-    std::queue<T> m_queue;
-    std::mutex m_mutex;
-    std::condition_variable m_cvPush;
-    std::condition_variable m_cvPop;
-    bool m_finished;
+    size_t m_maxCapacity;                ///< Maximum queue size.
+    std::queue<T> m_queue;               ///< Internal queue.
+    std::mutex m_mutex;                  ///< Queue mutex.
+    std::condition_variable m_cvPush;    ///< Push condition variable.
+    std::condition_variable m_cvPop;     ///< Pop condition variable.
+    bool m_finished;                     ///< Finished flag.
 };
 } // namespace GPSOpenCl
 

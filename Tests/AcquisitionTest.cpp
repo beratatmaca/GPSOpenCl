@@ -102,4 +102,4 @@ TEST_F(AcquisitionTest, AcquisitionMetrics)
         TestUtils::compareRealResults(calculatedCn0, cnO, 0.01);
     }
 }
-} // namespace GPSOpenClTest
+}

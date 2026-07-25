@@ -1,6 +1,10 @@
 #ifndef INCLUDED_GPSOPENCL_TRACKING_H
 #define INCLUDED_GPSOPENCL_TRACKING_H
 
+/** @file GPSOpenClTracking.h
+ *  @brief PLL/DLL satellite tracking with Early/Prompt/Late correlators.
+ */
+
 #include <memory>
 
 #include "GPSOpenClCode.h"
@@ -11,72 +15,116 @@
 
 namespace GPSOpenCl
 {
+/** @brief Code and carrier tracking engine (2nd-order PLL + DLL). */
 class Tracking
 {
   public:
+    /** @brief Construct from full configuration.
+     *  @param conf Application configuration. */
     Tracking(Settings::Configuration conf);
+
+    /** @brief Construct from tracking parameters.
+     *  @param input Tracking settings. */
     Tracking(const TrackingInput &input);
+
     ~Tracking();
 
+    /** @brief Set initial Doppler and code phase from acquisition.
+     *  @param initDopplerHz      Acquired Doppler shift (Hz).
+     *  @param initCodePhaseChips Acquired code phase (chips). */
     void initTrackingState(float initDopplerHz, float initCodePhaseChips);
+
+    /** @brief Process one code period of samples.
+     *  @param input  IQ samples.
+     *  @param prn    Satellite PRN.
+     *  @param output Carrier-wiped output. */
     void doWork(const ComplexFloatVector &input, int prn, ComplexFloatVector *output);
+
+    /** @brief Get current tracking results for a PRN.
+     *  @param prn Satellite PRN.
+     *  @return Tracking output struct. */
     TrackingOutput getTrackingOutput(int prn) const;
+
+    /** @brief Multiply input samples by NCO carrier replica.
+     *  @param input     IQ samples.
+     *  @param frequency NCO frequency (Hz).
+     *  @param output    Carrier-wiped output. */
     void ncoMultiplicate(const ComplexFloatVector &input, float frequency, ComplexFloatVector *output);
 
+    /** @brief Set telemetry sink.
+     *  @param sink Sink implementation. */
     void setSink(std::shared_ptr<Sink> sink) { m_sink = sink; }
 
-    // 2nd-order loop filter time constants (tau1, tau2) for a given noise bandwidth, damping
-    // ratio 1/sqrt(2) and unity loop gain (Kaplan/Borre standard PLL/DLL loop filter design).
+    /** @brief Compute PLL loop filter tau1 time constant.
+     *  @param noiseBandwidthHz Loop noise bandwidth (Hz).
+     *  @return Tau1 value (s). */
     static float loopFilterTau1(double noiseBandwidthHz);
+
+    /** @brief Compute PLL loop filter tau2 time constant.
+     *  @param noiseBandwidthHz Loop noise bandwidth (Hz).
+     *  @return Tau2 value (s). */
     static float loopFilterTau2(double noiseBandwidthHz);
 
   private:
+    /** @brief Generate Early/Prompt/Late code replicas.
+     *  @param prn Satellite PRN. */
     void earlyLatePromptGen(int prn);
+
+    /** @brief Generate NCO phase ramp. */
     void numericOscillator();
+
+    /** @brief Accumulate correlator outputs.
+     *  @param input Carrier-wiped IQ samples. */
     void accumulator(const ComplexFloatVector &input);
+
+    /** @brief Compute PLL frequency discriminator. */
     void freqDiscriminator();
+
+    /** @brief Compute DLL code discriminator. */
     void codeDiscriminator();
+
+    /** @brief Reset correlator accumulators to zero. */
     void resetAccumulation();
 
-    Code m_code;
-    Compute *m_gpu;
-    Settings::Configuration m_configuration;
-    TrackingInput m_inputConfig;
-    std::shared_ptr<Sink> m_sink{nullptr};
+    Code m_code;                              ///< C/A code generator.
+    Compute *m_gpu;                           ///< GPU/CPU compute back-end.
+    Settings::Configuration m_configuration;  ///< Application configuration.
+    TrackingInput m_inputConfig;              ///< Tracking parameters.
+    std::shared_ptr<Sink> m_sink{nullptr};    ///< Telemetry sink.
 
-    int m_totalSamples;
+    int m_totalSamples;                       ///< Samples per code period.
 
-    ComplexFloatVector m_carrSig;
-    float m_pllTau1;
-    float m_pllTau2;
-    float m_carrFreqBasis;
-    float m_carrFreq;
-    float m_remCarrPhase;
-    float m_carrNco;
-    float m_carrNcoPrev;
-    float m_carrError;
-    float m_carrErrorPrev;
+    ComplexFloatVector m_carrSig;             ///< Carrier-wiped signal buffer.
+    float m_pllTau1;                          ///< PLL loop filter tau1 (s).
+    float m_pllTau2;                          ///< PLL loop filter tau2 (s).
+    float m_carrFreqBasis;                    ///< Nominal carrier frequency (Hz).
+    float m_carrFreq;                         ///< Current carrier frequency (Hz).
+    float m_remCarrPhase;                     ///< Residual carrier phase (rad).
+    float m_carrNco;                          ///< Carrier NCO output (Hz).
+    float m_carrNcoPrev;                      ///< Previous carrier NCO output (Hz).
+    float m_carrError;                        ///< PLL phase error (rad).
+    float m_carrErrorPrev;                    ///< Previous PLL phase error (rad).
 
-    FloatVector m_earlyCode;
-    FloatVector m_promptCode;
-    FloatVector m_lateCode;
-    float m_dllTau1;
-    float m_dllTau2;
-    float m_codeFreqBasis;
-    float m_codeFreq;
-    float m_codePhaseStep;
-    float m_remCodePhase;
-    float m_codeNco;
-    float m_codeNcoPrev;
-    float m_codeError;
-    float m_codeErrorPrev;
+    FloatVector m_earlyCode;                  ///< Early code replica.
+    FloatVector m_promptCode;                 ///< Prompt code replica.
+    FloatVector m_lateCode;                   ///< Late code replica.
+    float m_dllTau1;                          ///< DLL loop filter tau1 (s).
+    float m_dllTau2;                          ///< DLL loop filter tau2 (s).
+    float m_codeFreqBasis;                    ///< Nominal code frequency (Hz).
+    float m_codeFreq;                         ///< Current code frequency (Hz).
+    float m_codePhaseStep;                    ///< Code phase step per sample.
+    float m_remCodePhase;                     ///< Residual code phase (chips).
+    float m_codeNco;                          ///< Code NCO output (Hz).
+    float m_codeNcoPrev;                      ///< Previous code NCO output (Hz).
+    float m_codeError;                        ///< DLL code error (chips).
+    float m_codeErrorPrev;                    ///< Previous DLL code error (chips).
 
-    float m_Ie;
-    float m_Ip;
-    float m_Il;
-    float m_Qe;
-    float m_Qp;
-    float m_Ql;
+    float m_Ie;                               ///< In-phase Early accumulation.
+    float m_Ip;                               ///< In-phase Prompt accumulation.
+    float m_Il;                               ///< In-phase Late accumulation.
+    float m_Qe;                               ///< Quadrature Early accumulation.
+    float m_Qp;                               ///< Quadrature Prompt accumulation.
+    float m_Ql;                               ///< Quadrature Late accumulation.
 };
 } // namespace GPSOpenCl
 #endif //! INCLUDED_GPSOPENCL_TRACKING_H

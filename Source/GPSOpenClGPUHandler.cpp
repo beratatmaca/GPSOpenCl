@@ -4,18 +4,18 @@
 
 using namespace GPSOpenCl;
 
-/**
- * @brief Construct a new GpuHandler::GpuHandler object
- *
- */
+
+
+
+
 GpuHandler::GpuHandler() : m_context(nullptr), m_device(nullptr), m_localMemorySize(0), m_platform(nullptr), m_error(0)
 {
 }
 
-/**
- * @brief Destroy the GpuHandler::GpuHandler object
- *
- */
+
+
+
+
 GpuHandler::~GpuHandler()
 {
     for (auto kernel : m_acquisitionKernelList)
@@ -52,11 +52,11 @@ GpuHandler::~GpuHandler()
     }
 }
 
-/**
- * @brief
- *
- * @return int
- */
+
+
+
+
+
 int GpuHandler::createDevice()
 {
     cl_platform_id *platforms;
@@ -80,7 +80,7 @@ int GpuHandler::createDevice()
     m_error = clGetDeviceIDs(m_platform, CL_DEVICE_TYPE_GPU, 1, &m_device, &numOfDevices);
     if (m_error == CL_DEVICE_NOT_FOUND || m_error < 0 || numOfDevices == 0)
     {
-        // Fall back to an OpenCL CPU device (e.g. POCL) before giving up on OpenCL entirely.
+
         m_error = clGetDeviceIDs(m_platform, CL_DEVICE_TYPE_CPU, 1, &m_device, &numOfDevices);
     }
 
@@ -99,11 +99,11 @@ int GpuHandler::createDevice()
     return m_error;
 }
 
-/**
- * @brief
- *
- * @return int
- */
+
+
+
+
+
 int GpuHandler::buildProgram()
 {
     FILE *program_handle = NULL;
@@ -138,7 +138,7 @@ int GpuHandler::buildProgram()
             return -1;
         }
 
-        // Read Program File
+
         fseek(program_handle, 0, SEEK_END);
         program_size = ftell(program_handle);
         rewind(program_handle);
@@ -147,7 +147,7 @@ int GpuHandler::buildProgram()
         fread(program_buffer, sizeof(char), program_size, program_handle);
         fclose(program_handle);
 
-        // Create program file
+
         auto program = clCreateProgramWithSource(m_context, 1, (const char **)&program_buffer, &program_size, &m_error);
 
         m_programList.push_back(program);
@@ -161,11 +161,11 @@ int GpuHandler::buildProgram()
 
         free(program_buffer);
 
-        /* Build program */
+
         m_error = clBuildProgram(m_programList[i], 0, NULL, NULL, NULL, NULL);
         if (m_error < 0)
         {
-            /* Find size of log and print to std output */
+
             clGetProgramBuildInfo(m_programList[i], m_device, CL_PROGRAM_BUILD_LOG, 0, NULL, &log_size);
             program_log = (char *)malloc(log_size + 1);
             program_log[log_size] = '\0';
@@ -179,20 +179,20 @@ int GpuHandler::buildProgram()
     return m_error;
 }
 
-/**
- * @brief
- *
- */
+
+
+
+
 void GpuHandler::getLastErrorAsString()
 {
     std::cout << m_error << std::endl;
 }
 
-/**
- * @brief
- *
- * @return int
- */
+
+
+
+
+
 int GpuHandler::initKernels()
 {
     for (int i = 0; i < AcquisitionKernelCount; i++)
@@ -230,11 +230,11 @@ int GpuHandler::initKernels()
     return m_error;
 }
 
-/**
- * @brief
- *
- * @return int
- */
+
+
+
+
+
 int GpuHandler::determineLocalMemorySize(void)
 {
     m_error = clGetDeviceInfo(m_device, CL_DEVICE_LOCAL_MEM_SIZE, sizeof(m_localMemorySize), &m_localMemorySize, NULL);

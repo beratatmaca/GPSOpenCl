@@ -1,6 +1,10 @@
 #ifndef INCLUDED_GPSOPENCL_PVTSOLVER_H
 #define INCLUDED_GPSOPENCL_PVTSOLVER_H
 
+/** @file GPSOpenClPVTSolver.h
+ *  @brief WLS position solver with Keplerian orbit computation.
+ */
+
 #include "GPSOpenClCommon.h"
 #include "GPSOpenClNavigationDecoder.h"
 
@@ -10,67 +14,108 @@
 
 namespace GPSOpenCl
 {
+/** @brief ECEF position in meters (WGS-84). */
 struct EcefPosition
 {
-    double x; // meters
-    double y; // meters
-    double z; // meters
+    double x; ///< X coordinate (m).
+    double y; ///< Y coordinate (m).
+    double z; ///< Z coordinate (m).
 };
 
+/** @brief Geodetic position (WGS-84). */
 struct GeodeticPosition
 {
-    double latitude;  // degrees (-90 to +90)
-    double longitude; // degrees (-180 to +180)
-    double altitude;  // meters above WGS84 ellipsoid
+    double latitude;  ///< Latitude (deg, -90 to +90).
+    double longitude; ///< Longitude (deg, -180 to +180).
+    double altitude;  ///< Altitude above WGS-84 ellipsoid (m).
 };
 
+/** @brief Satellite ECEF position and clock correction. */
 struct SatelliteOrbit
 {
-    int svId;
-    EcefPosition position;
-    double clockBias; // seconds
-    double relCorr;   // seconds
+    int svId;              ///< Satellite vehicle ID.
+    EcefPosition position; ///< ECEF position (m).
+    double clockBias;      ///< Clock bias (s).
+    double relCorr;        ///< Relativistic correction (s).
 };
 
+/** @brief Receiver position solution with DOP values. */
 struct ReceiverPvtSolution
 {
-    EcefPosition ecefPosition;
-    GeodeticPosition geodeticPosition;
-    double clockBiasMeters;
-    double clockBiasSeconds;
-    double dopGDOP;
-    double dopPDOP;
-    double dopHDOP;
-    double dopVDOP;
-    bool isValid;
+    EcefPosition ecefPosition;       ///< ECEF position (m).
+    GeodeticPosition geodeticPosition; ///< Geodetic lat/lon/alt.
+    double clockBiasMeters;          ///< Receiver clock bias (m).
+    double clockBiasSeconds;         ///< Receiver clock bias (s).
+    double dopGDOP;                  ///< Geometric DOP.
+    double dopPDOP;                  ///< Position DOP.
+    double dopHDOP;                  ///< Horizontal DOP.
+    double dopVDOP;                  ///< Vertical DOP.
+    bool isValid;                    ///< True if solution valid.
 };
 
+/** @brief Position-Velocity-Time solver. */
 class PVTSolver
 {
   public:
     PVTSolver();
+
+    /** @brief Construct from solver parameters.
+     *  @param input Solver settings. */
     PVTSolver(const PvtSolverInput &input);
+
     ~PVTSolver();
 
+    /** @brief Compute satellite ECEF position at transmit time.
+     *  @param ephem              Decoded ephemeris.
+     *  @param transmitTimeSeconds GPS transmit time (s).
+     *  @return Satellite orbit and clock correction. */
     static SatelliteOrbit computeSatelliteOrbit(const GpsEphemeris &ephem, double transmitTimeSeconds);
+
+    /** @brief Compute satellite ECEF position from NavDecoderOutput.
+     *  @param navOut             Nav decoder output struct.
+     *  @param transmitTimeSeconds GPS transmit time (s).
+     *  @return Satellite orbit and clock correction. */
     static SatelliteOrbit computeSatelliteOrbit(const NavDecoderOutput &navOut, double transmitTimeSeconds);
+
+    /** @brief Convert ECEF to WGS-84 geodetic coordinates.
+     *  @param ecef ECEF position (m).
+     *  @return Geodetic lat/lon/alt. */
     static GeodeticPosition ecefToWgs84(const EcefPosition &ecef);
 
+    /** @brief Convert ReceiverPvtSolution to PvtSolverOutput.
+     *  @param sol Solution struct.
+     *  @return Output struct. */
     static PvtSolverOutput solutionToOutput(const ReceiverPvtSolution &sol);
+
+    /** @brief Convert PvtSolverOutput to ReceiverPvtSolution.
+     *  @param out Output struct.
+     *  @return Solution struct. */
     static ReceiverPvtSolution outputToSolution(const PvtSolverOutput &out);
 
+    /** @brief Solve receiver position using Weighted Least Squares.
+     *  @param ephemerides          Satellite ephemeris data.
+     *  @param measuredPseudoranges Pseudorange measurements (m).
+     *  @param transmitTimesSeconds Signal transmit times (s).
+     *  @param solution             Output position solution.
+     *  @return True if solution converged. */
     bool solvePosition(const std::vector<GpsEphemeris> &ephemerides,
                        const std::vector<double> &measuredPseudoranges,
                        const std::vector<double> &transmitTimesSeconds,
                        ReceiverPvtSolution &solution);
 
+    /** @brief Solve receiver position from NavDecoderOutput structs.
+     *  @param outputs              Nav decoder outputs.
+     *  @param measuredPseudoranges Pseudorange measurements (m).
+     *  @param transmitTimesSeconds Signal transmit times (s).
+     *  @param outputSolution       Output struct.
+     *  @return True if solution converged. */
     bool solvePosition(const std::vector<NavDecoderOutput> &outputs,
                        const std::vector<double> &measuredPseudoranges,
                        const std::vector<double> &transmitTimesSeconds,
                        PvtSolverOutput &outputSolution);
 
   private:
-    PvtSolverInput m_inputConfig;
+    PvtSolverInput m_inputConfig; ///< Solver parameters.
 };
 } // namespace GPSOpenCl
 
