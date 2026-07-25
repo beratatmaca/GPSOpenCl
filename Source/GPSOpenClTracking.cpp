@@ -1,5 +1,7 @@
 #include "GPSOpenClTracking.h"
 
+#include "GPSOpenClLockDetector.h"
+
 #include <algorithm>
 #include <cmath>
 
@@ -48,7 +50,10 @@ Tracking::Tracking(Settings::Configuration conf)
       m_Il(0.0f),
       m_Qe(0.0f),
       m_Qp(0.0f),
-      m_Ql(0.0f)
+      m_Ql(0.0f),
+      m_carrierLockEma(0.0f),
+      m_codeLockEma(0.0f),
+      m_lastChannelState(0)
 {
     m_gpu = new Compute();
 
@@ -95,7 +100,10 @@ Tracking::Tracking(const TrackingInput &input)
       m_Il(0.0f),
       m_Qe(0.0f),
       m_Qp(0.0f),
-      m_Ql(0.0f)
+      m_Ql(0.0f),
+      m_carrierLockEma(0.0f),
+      m_codeLockEma(0.0f),
+      m_lastChannelState(0)
 {
     m_configuration.trackingInput = input;
     m_configuration.rawDataSettings.samplingFrequency = static_cast<float>(input.samplingFrequency);
@@ -149,16 +157,22 @@ void Tracking::initTrackingState(float initDopplerHz, float initCodePhaseChips)
     m_codeError = 0.0f;
     m_codeErrorPrev = 0.0f;
 
+    m_carrierLockEma = 0.0f;
+    m_codeLockEma = 0.0f;
+
     resetAccumulation();
 }
 
-void Tracking::doWork(const ComplexFloatVector &input, int prn, ComplexFloatVector *output)
+void Tracking::doWork(const ComplexFloatVector &input, int prn, ComplexFloatVector *output, uint32_t channelState)
 {
+    m_lastChannelState = channelState;
+
     earlyLatePromptGen(prn);
     numericOscillator();
     accumulator(input);
     freqDiscriminator();
     codeDiscriminator();
+    updateLockIndicators();
 
     if (output)
     {
@@ -189,6 +203,9 @@ TrackingOutput Tracking::getTrackingOutput(int prn) const
     out.Qe = static_cast<double>(m_Qe);
     out.Qp = static_cast<double>(m_Qp);
     out.Ql = static_cast<double>(m_Ql);
+    out.channelState = m_lastChannelState;
+    out.carrierLockIndicator = static_cast<double>(m_carrierLockEma);
+    out.codeLockRatio = static_cast<double>(m_codeLockEma);
     return out;
 }
 
@@ -326,6 +343,17 @@ void Tracking::codeDiscriminator()
     {
         m_codePhaseStep = m_codeFreq / m_configuration.rawDataSettings.samplingFrequency;
     }
+}
+
+void Tracking::updateLockIndicators()
+{
+    double alpha = m_inputConfig.lockIndicatorEmaAlpha;
+
+    double instantCarrierLock = LockDetector::carrierLockIndicator(m_Ip, m_Qp);
+    double instantCodeLock = LockDetector::codeLockRatio(m_Ie, m_Ip, m_Il);
+
+    m_carrierLockEma = static_cast<float>(alpha * instantCarrierLock + (1.0 - alpha) * m_carrierLockEma);
+    m_codeLockEma = static_cast<float>(alpha * instantCodeLock + (1.0 - alpha) * m_codeLockEma);
 }
 
 void Tracking::resetAccumulation()

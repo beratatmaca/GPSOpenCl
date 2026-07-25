@@ -23,6 +23,7 @@ add_executable(
     ${CMAKE_SOURCE_DIR}/Source/GPSOpenClSettings.cpp
     ${CMAKE_SOURCE_DIR}/Source/GPSOpenClAcquisition.cpp
     ${CMAKE_SOURCE_DIR}/Source/GPSOpenClTracking.cpp
+    ${CMAKE_SOURCE_DIR}/Source/GPSOpenClLockDetector.cpp
     ${CMAKE_SOURCE_DIR}/Source/GPSOpenClChannel.cpp
     ${CMAKE_SOURCE_DIR}/Source/GPSOpenClApplication.cpp
     ${CMAKE_SOURCE_DIR}/Source/GPSOpenClNavigationDecoder.cpp
@@ -44,6 +45,8 @@ add_executable(
     NmeaGeneratorTest.cpp
     AtmosphericCorrectionsTest.cpp
     StructsSourceSinkTest.cpp
+    LockDetectorTest.cpp
+    ChannelTest.cpp
     E2ETest.cpp
 )
 

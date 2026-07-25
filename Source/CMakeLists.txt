@@ -8,6 +8,7 @@ add_executable(
     GPSOpenClChannel.cpp
     GPSOpenClAcquisition.cpp
     GPSOpenClTracking.cpp
+    GPSOpenClLockDetector.cpp
     GPSOpenClApplication.cpp
     GPSOpenClNavigationDecoder.cpp
     GPSOpenClPVTSolver.cpp

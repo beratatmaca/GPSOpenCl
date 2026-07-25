@@ -15,6 +15,14 @@
 
 namespace GPSOpenCl
 {
+/** @brief Per-channel acquisition/tracking lifecycle state. */
+enum class ChannelState : uint32_t
+{
+    Acquiring = 0,  ///< No tracking loop running; eligible for acquisition search.
+    Confirming = 1, ///< Tracking loop running, lock not yet confirmed.
+    Tracking = 2    ///< Confirmed lock; feeds nav decode and PVT.
+};
+
 /** @brief Per-satellite acquisition, tracking, and navigation channel. */
 class Channel
 {
@@ -70,6 +78,39 @@ class Channel
      *  @param sink Sink implementation. */
     void setSink(std::shared_ptr<Sink> sink);
 
+    /** @brief Get current channel state.
+     *  @return Channel state. */
+    ChannelState getState() const { return m_state; }
+
+    /** @brief Check if tracking is confirmed and PVT-eligible.
+     *  @return True if state is Tracking. */
+    bool isTrackingConfirmed() const { return m_state == ChannelState::Tracking; }
+
+    /** @brief Check if the tracking loop is running.
+     *  @return True if state is Confirming or Tracking. */
+    bool isTrackingLoopActive() const
+    {
+        return m_state == ChannelState::Confirming || m_state == ChannelState::Tracking;
+    }
+
+    /** @brief Check if channel is eligible for a new acquisition attempt.
+     *  @return True if state is Acquiring. */
+    bool isEligibleForAcquisition() const { return m_state == ChannelState::Acquiring; }
+
+    /** @brief Compute the next lifecycle state from current state and lock quality (pure, no side effects).
+     *  @param current               Current channel state.
+     *  @param goodBlock             True if this block satisfies carrier and code lock criteria.
+     *  @param confirmProgress       Confirm leaky-bucket progress (in/out).
+     *  @param lossProgress          Loss leaky-bucket progress (in/out).
+     *  @param blocksInConfirming    Blocks spent in Confirming since last acquisition (in/out).
+     *  @param confirmDebounceBlocks Good-block progress needed to confirm tracking.
+     *  @param confirmTimeoutBlocks  Blocks before abandoning an unconfirmed acquisition.
+     *  @param lossDebounceBlocks    Bad-block progress needed to declare lock lost.
+     *  @return Next channel state. */
+    static ChannelState computeNextState(ChannelState current, bool goodBlock, int &confirmProgress,
+                                         int &lossProgress, int &blocksInConfirming, int confirmDebounceBlocks,
+                                         int confirmTimeoutBlocks, int lossDebounceBlocks);
+
     /** @brief Decode next subframe and merge into ephemeris.
      *  @param decoder Navigation decoder instance.
      *  @return True if all subframes 1-3 decoded. */
@@ -92,6 +133,12 @@ class Channel
     size_t getLastSubframeStartSample() const { return m_lastSubframeStartSample; }
 
   private:
+    /** @brief Reset navigation decode state without reinitializing the tracking loop. */
+    void resetNavigationState();
+
+    /** @brief Evaluate lock quality and drive channel state transitions. */
+    void evaluateLockState();
+
     int m_acquisitionPeakIndex;           ///< Peak code phase (samples).
     float m_acquisitionPeakValue;         ///< Peak correlation magnitude.
     float m_acquisitionPeakFrequency;     ///< Doppler at peak (Hz).
@@ -110,6 +157,16 @@ class Channel
     GpsEphemeris m_accumulatedEphemeris;  ///< Accumulated ephemeris data.
     double m_lastSubframeTow;             ///< Last subframe TOW (s).
     size_t m_lastSubframeStartSample;     ///< Last subframe start sample.
+
+    ChannelState m_state;                 ///< Current lifecycle state.
+    int m_confirmProgress;                ///< Leaky-bucket progress toward confirming lock.
+    int m_lossProgress;                   ///< Leaky-bucket progress toward declaring lock lost.
+    int m_blocksInConfirming;             ///< Blocks spent in Confirming since last acquisition.
+    float m_carrierLockThreshold;         ///< Min carrier lock indicator to count as locked.
+    float m_codeLockRatioTolerance;       ///< Max |codeLockRatio - 1.0| to count as locked.
+    int m_confirmDebounceBlocks;          ///< Good blocks needed to confirm tracking.
+    int m_confirmTimeoutBlocks;           ///< Blocks before abandoning an unconfirmed acquisition.
+    int m_lossDebounceBlocks;             ///< Bad blocks needed to declare lock lost.
 };
 } // namespace GPSOpenCl
 

@@ -47,6 +47,11 @@ void Application::searchForSatellites(const ComplexFloatVector &input)
 {
     for (int i = 0; i < GPS_CA_SV_COUNT; i++)
     {
+        if (!m_channels[i].isEligibleForAcquisition())
+        {
+            continue;
+        }
+
         m_acquisition->correlate(input, m_gpu, m_code, &m_channels[i]);
         m_channels[i].checkAcquisition();
 
@@ -54,14 +59,19 @@ void Application::searchForSatellites(const ComplexFloatVector &input)
         float peakValue = 0.0f, peakFreq = 0.0f, meanValue = 0.0f, cn0 = 0.0f, peakRatio = 0.0f;
         m_channels[i].getAcquisitionResults(&peakIndex, &peakValue, &peakFreq, &meanValue, &cn0, &peakRatio);
 
+        float dopplerHz = -peakFreq;
+
         const float acquisitionCn0ThresholdDbHz = 43.0f;
         if (cn0 >= acquisitionCn0ThresholdDbHz)
         {
             m_channels[i].setAcquired(true);
-            float numSamplesFloat = static_cast<float>(m_configuration.rawDataSettings.numberOfSamplesPerCode);
-            float codePhaseChips = (numSamplesFloat > 0.0f) ? (static_cast<float>(peakIndex) / numSamplesFloat) * GPS_CA_CODE_LENGTH : 0.0f;
-            m_channels[i].initTracking(m_configuration, peakFreq, codePhaseChips);
-            std::cout << "--> SV ID " << m_channels[i].m_svId << " ACQUIRED! (C/N0: " << cn0 << " dB-Hz, Doppler: " << peakFreq << " Hz)" << std::endl;
+            int numberOfSamplesPerCode = m_configuration.rawDataSettings.numberOfSamplesPerCode;
+            float numSamplesFloat = static_cast<float>(numberOfSamplesPerCode);
+            int reflectedPeakIndex = (numberOfSamplesPerCode > 0)
+                ? ((numberOfSamplesPerCode - peakIndex) % numberOfSamplesPerCode) : 0;
+            float codePhaseChips = (numSamplesFloat > 0.0f) ? (static_cast<float>(reflectedPeakIndex) / numSamplesFloat) * GPS_CA_CODE_LENGTH : 0.0f;
+            m_channels[i].initTracking(m_configuration, dopplerHz, codePhaseChips);
+            std::cout << "--> SV ID " << m_channels[i].m_svId << " ACQUIRED! (C/N0: " << cn0 << " dB-Hz, Doppler: " << dopplerHz << " Hz)" << std::endl;
         }
 
         if (m_sink)
@@ -71,7 +81,7 @@ void Application::searchForSatellites(const ComplexFloatVector &input)
             acqOut.prn = m_channels[i].m_svId;
             acqOut.peakIndex = peakIndex;
             acqOut.peakValue = static_cast<double>(peakValue);
-            acqOut.peakFrequency = static_cast<double>(peakFreq);
+            acqOut.peakFrequency = static_cast<double>(dopplerHz);
             acqOut.meanValue = static_cast<double>(meanValue);
             acqOut.cno = static_cast<double>(cn0);
             acqOut.peakRatio = static_cast<double>(peakRatio);
@@ -85,7 +95,7 @@ void Application::trackSatellites(const ComplexFloatVector &input)
 {
     for (int i = 0; i < GPS_CA_SV_COUNT; i++)
     {
-        if (m_channels[i].isAcquired())
+        if (m_channels[i].isTrackingLoopActive())
         {
             m_channels[i].trackBlock(input);
         }
@@ -103,7 +113,7 @@ bool Application::computeNavigationSolution(ReceiverPvtSolution &solution)
 
     for (int i = 0; i < GPS_CA_SV_COUNT; i++)
     {
-        if (!m_channels[i].isAcquired())
+        if (!m_channels[i].isTrackingConfirmed())
         {
             continue;
         }
@@ -249,7 +259,8 @@ void Application::setSource(std::shared_ptr<Source> source)
 void Application::processBlock(const ComplexFloatVector &input, uint32_t blockIndex)
 {
     m_profiler.startBlock(blockIndex, static_cast<double>(blockIndex) * 0.001);
-    if (blockIndex == 0)
+    int32_t reacquisitionIntervalBlocks = m_configuration.acquisitionInput.reacquisitionIntervalBlocks;
+    if (blockIndex == 0 || (reacquisitionIntervalBlocks > 0 && blockIndex % reacquisitionIntervalBlocks == 0))
     {
         Profiler::ScopedTimer acqTimer(m_profiler, "acquisition");
         searchForSatellites(input);
@@ -310,7 +321,7 @@ void Application::exportTelemetryJson(const std::string &filepath, const Receive
         file << "      \"prn\": " << m_channels[i].m_svId << ",\n";
         file << "      \"acquired\": " << (m_channels[i].isAcquired() ? "true" : "false") << ",\n";
         file << "      \"cn0\": " << cn0 << ",\n";
-        file << "      \"doppler\": " << peakFreq << ",\n";
+        file << "      \"doppler\": " << -peakFreq << ",\n";
         file << "      \"azimuth\": " << az << ",\n";
         file << "      \"elevation\": " << el << "\n";
         file << "    }" << (i < GPS_CA_SV_COUNT - 1 ? "," : "") << "\n";

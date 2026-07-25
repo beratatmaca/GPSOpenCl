@@ -35,10 +35,11 @@ class Tracking
     void initTrackingState(float initDopplerHz, float initCodePhaseChips);
 
     /** @brief Process one code period of samples.
-     *  @param input  IQ samples.
-     *  @param prn    Satellite PRN.
-     *  @param output Carrier-wiped output. */
-    void doWork(const ComplexFloatVector &input, int prn, ComplexFloatVector *output);
+     *  @param input        IQ samples.
+     *  @param prn          Satellite PRN.
+     *  @param output       Carrier-wiped output.
+     *  @param channelState Owning channel's state, for telemetry. */
+    void doWork(const ComplexFloatVector &input, int prn, ComplexFloatVector *output, uint32_t channelState = 0);
 
     /** @brief Get current tracking results for a PRN.
      *  @param prn Satellite PRN.
@@ -54,6 +55,14 @@ class Tracking
     /** @brief Set telemetry sink.
      *  @param sink Sink implementation. */
     void setSink(std::shared_ptr<Sink> sink) { m_sink = sink; }
+
+    /** @brief Get smoothed carrier lock indicator.
+     *  @return Value near +1 when phase-locked, near 0 when unlocked. */
+    float getCarrierLockIndicator() const { return m_carrierLockEma; }
+
+    /** @brief Get smoothed code lock ratio.
+     *  @return Value near 1.0 when code phase is correctly aligned. */
+    float getCodeLockRatio() const { return m_codeLockEma; }
 
     /** @brief Compute PLL loop filter tau1 time constant.
      *  @param noiseBandwidthHz Loop noise bandwidth (Hz).
@@ -85,6 +94,9 @@ class Tracking
 
     /** @brief Reset correlator accumulators to zero. */
     void resetAccumulation();
+
+    /** @brief Update smoothed carrier and code lock indicators. */
+    void updateLockIndicators();
 
     Code m_code;                              ///< C/A code generator.
     Compute *m_gpu;                           ///< GPU/CPU compute back-end.
@@ -125,6 +137,10 @@ class Tracking
     float m_Qe;                               ///< Quadrature Early accumulation.
     float m_Qp;                               ///< Quadrature Prompt accumulation.
     float m_Ql;                               ///< Quadrature Late accumulation.
+
+    float m_carrierLockEma;                   ///< Smoothed carrier lock indicator.
+    float m_codeLockEma;                      ///< Smoothed code lock ratio.
+    uint32_t m_lastChannelState;              ///< Owning channel's state, for telemetry.
 };
 } // namespace GPSOpenCl
 #endif //! INCLUDED_GPSOPENCL_TRACKING_H

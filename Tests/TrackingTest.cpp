@@ -78,6 +78,44 @@ TEST_F(TrackingTest, TrackingLoop)
     EXPECT_EQ(outputVec.size(), 1u);
 }
 
+TEST_F(TrackingTest, LockIndicatorsConvergeWithRepeatedInput)
+{
+    GPSOpenCl::ComplexFloatVector inputSignal;
+
+    TestUtils::readFromFileComplex("../../Tests/Scripts/inputSignal.txt", &inputSignal);
+    if (inputSignal.empty())
+    {
+        TestUtils::readFromFileComplex("Scripts/inputSignal.txt", &inputSignal);
+    }
+
+    int codeLength = m_settings.configuration.rawDataSettings.numberOfSamplesPerCode;
+    if (inputSignal.size() < static_cast<size_t>(codeLength))
+    {
+        inputSignal.resize(codeLength, std::complex<float>(1.0f, 0.0f));
+    }
+
+    auto start = inputSignal.begin();
+    auto end = inputSignal.begin() + codeLength;
+    GPSOpenCl::ComplexFloatVector inputSignalClipped(start, end);
+
+    for (int i = 0; i < 100; i++)
+    {
+        GPSOpenCl::ComplexFloatVector outputVec;
+        m_tracking->doWork(inputSignalClipped, 1, &outputVec);
+    }
+
+    float carrierLockBefore = m_tracking->getCarrierLockIndicator();
+    float codeLockBefore = m_tracking->getCodeLockRatio();
+
+    GPSOpenCl::ComplexFloatVector outputVec;
+    m_tracking->doWork(inputSignalClipped, 1, &outputVec);
+
+    EXPECT_NEAR(m_tracking->getCarrierLockIndicator(), carrierLockBefore, 0.05f);
+    EXPECT_NEAR(m_tracking->getCodeLockRatio(), codeLockBefore, 0.05f);
+    EXPECT_GE(m_tracking->getCarrierLockIndicator(), -1.0f);
+    EXPECT_LE(m_tracking->getCarrierLockIndicator(), 1.0f);
+}
+
 TEST(TrackingLoopFilterTest, DefaultBandwidthsMatchReferenceDesign)
 {
     EXPECT_NEAR(GPSOpenCl::Tracking::loopFilterTau1(25.0), 0.0004494f, 1e-6f);

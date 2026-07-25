@@ -1,6 +1,7 @@
 #include "GPSOpenClChannel.h"
 #include "GPSOpenClCommon.h"
 
+#include <algorithm>
 #include <cmath>
 #include <iostream>
 
@@ -21,7 +22,16 @@ Channel::Channel()
       m_seenSubframeMask(0),
       m_accumulatedEphemeris(),
       m_lastSubframeTow(0.0),
-      m_lastSubframeStartSample(0)
+      m_lastSubframeStartSample(0),
+      m_state(ChannelState::Acquiring),
+      m_confirmProgress(0),
+      m_lossProgress(0),
+      m_blocksInConfirming(0),
+      m_carrierLockThreshold(0.5f),
+      m_codeLockRatioTolerance(0.3f),
+      m_confirmDebounceBlocks(50),
+      m_confirmTimeoutBlocks(200),
+      m_lossDebounceBlocks(100)
 {
 }
 
@@ -99,8 +109,23 @@ void Channel::initTracking(const Settings::Configuration &conf, float dopplerHz,
         m_tracking->setSink(m_sink);
     }
     m_tracking->initTrackingState(dopplerHz, codePhaseChips);
-    m_promptHistory.clear();
+    resetNavigationState();
 
+    m_carrierLockThreshold = static_cast<float>(conf.trackingInput.carrierLockThreshold);
+    m_codeLockRatioTolerance = static_cast<float>(conf.trackingInput.codeLockRatioTolerance);
+    m_confirmDebounceBlocks = conf.trackingInput.confirmDebounceBlocks;
+    m_confirmTimeoutBlocks = conf.trackingInput.confirmTimeoutBlocks;
+    m_lossDebounceBlocks = conf.trackingInput.lossDebounceBlocks;
+
+    m_state = ChannelState::Confirming;
+    m_confirmProgress = 0;
+    m_lossProgress = 0;
+    m_blocksInConfirming = 0;
+}
+
+void Channel::resetNavigationState()
+{
+    m_promptHistory.clear();
     m_navBitOffset = 0;
     m_seenSubframeMask = 0;
     m_accumulatedEphemeris = GpsEphemeris();
@@ -112,7 +137,72 @@ void Channel::trackBlock(const ComplexFloatVector &input)
 {
     if (m_tracking && m_isAcquired)
     {
-        m_tracking->doWork(input, m_svId, &m_promptHistory);
+        ComplexFloatVector *promptOutput = (m_state == ChannelState::Tracking) ? &m_promptHistory : nullptr;
+        m_tracking->doWork(input, m_svId, promptOutput, static_cast<uint32_t>(m_state));
+        evaluateLockState();
+    }
+}
+
+ChannelState Channel::computeNextState(ChannelState current, bool goodBlock, int &confirmProgress, int &lossProgress,
+                                       int &blocksInConfirming, int confirmDebounceBlocks, int confirmTimeoutBlocks,
+                                       int lossDebounceBlocks)
+{
+    if (current == ChannelState::Confirming)
+    {
+        confirmProgress = goodBlock ? confirmProgress + 1 : std::max(0, confirmProgress - 1);
+        blocksInConfirming++;
+
+        if (confirmProgress >= confirmDebounceBlocks)
+        {
+            lossProgress = 0;
+            return ChannelState::Tracking;
+        }
+        if (blocksInConfirming >= confirmTimeoutBlocks)
+        {
+            return ChannelState::Acquiring;
+        }
+        return ChannelState::Confirming;
+    }
+
+    if (current == ChannelState::Tracking)
+    {
+        lossProgress = goodBlock ? std::max(0, lossProgress - 1) : lossProgress + 1;
+
+        if (lossProgress >= lossDebounceBlocks)
+        {
+            return ChannelState::Acquiring;
+        }
+        return ChannelState::Tracking;
+    }
+
+    return current;
+}
+
+void Channel::evaluateLockState()
+{
+    bool good = m_tracking->getCarrierLockIndicator() >= m_carrierLockThreshold &&
+                std::fabs(m_tracking->getCodeLockRatio() - 1.0f) <= m_codeLockRatioTolerance;
+
+    ChannelState previous = m_state;
+    m_state = computeNextState(m_state, good, m_confirmProgress, m_lossProgress, m_blocksInConfirming,
+                               m_confirmDebounceBlocks, m_confirmTimeoutBlocks, m_lossDebounceBlocks);
+
+    if (previous == ChannelState::Confirming && m_state == ChannelState::Acquiring)
+    {
+        m_isAcquired = false;
+        resetNavigationState();
+        std::cout << "SV ID " << m_svId << " confirmation TIMED OUT (lock: carrier=" << m_tracking->getCarrierLockIndicator()
+                  << " code=" << m_tracking->getCodeLockRatio() << "), back to acquiring" << std::endl;
+    }
+    else if (previous == ChannelState::Tracking && m_state == ChannelState::Acquiring)
+    {
+        m_isAcquired = false;
+        resetNavigationState();
+        std::cout << "SV ID " << m_svId << " LOST LOCK, back to acquiring" << std::endl;
+    }
+    else if (previous == ChannelState::Confirming && m_state == ChannelState::Tracking)
+    {
+        std::cout << "SV ID " << m_svId << " tracking CONFIRMED" << std::endl;
     }
 }
 

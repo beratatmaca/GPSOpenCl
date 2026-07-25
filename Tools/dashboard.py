@@ -42,6 +42,10 @@ GLOBAL_STATE = {
         prn: {
             "prn": prn,
             "acquired": False,
+            "state": 0,
+            "stateLabel": "Acquiring",
+            "carrierLockIndicator": 0.0,
+            "codeLockRatio": 0.0,
             "cn0": 0.0,
             "doppler": 0.0,
             "peakRatio": 0.0,
@@ -201,18 +205,22 @@ class TelemetrySubscriberThread(threading.Thread):
                         if not was_acq and sv["acquired"]:
                             add_event("INFO", "ACQUISITION", f"SV PRN {prn:02d} acquired! (C/N0: {fmt_float(sv['cn0'], 1)} dB-Hz, Doppler: {fmt_float(sv['doppler'], 1)} Hz)")
 
-                elif topic == "TrackingOutput" and len(data) >= 88:
-                    fields = struct.unpack("<Iidddddddddd", data[:88])
+                elif topic == "TrackingOutput" and len(data) >= 108:
+                    fields = struct.unpack("<IiddddddddddIdd", data[:108])
                     prn = fields[1]
                     if 1 <= prn <= 32:
                         sv = GLOBAL_STATE["satellites"][prn]
-                        sv["acquired"] = True
                         sv["carrierFreqHz"] = safe_float(fields[2])
                         sv["codeFreqHz"] = safe_float(fields[3])
                         sv["carrierError"] = safe_float(fields[4])
                         sv["codeError"] = safe_float(fields[5])
                         sv["Ie"], sv["Ip"], sv["Il"] = safe_float(fields[6]), safe_float(fields[7]), safe_float(fields[8])
                         sv["Qe"], sv["Qp"], sv["Ql"] = safe_float(fields[9]), safe_float(fields[10]), safe_float(fields[11])
+                        sv["state"] = fields[12]
+                        sv["stateLabel"] = {0: "Acquiring", 1: "Confirming", 2: "Tracking"}.get(fields[12], "Unknown")
+                        sv["carrierLockIndicator"] = safe_float(fields[13])
+                        sv["codeLockRatio"] = safe_float(fields[14])
+                        sv["acquired"] = fields[12] >= 2
 
                 elif topic == "NavDecoderOutput" and len(data) >= 188:
                     fields = struct.unpack("<IiidII20d", data[:188])
@@ -627,6 +635,7 @@ def update_dashboard(n):
                 mask_str = f"SBF {bin(s.get('subframeMask', 0))[2:].zfill(5)}"
                 table_rows.append(html.Tr([
                     html.Td(f"PRN {s['prn']:02d}", style={"padding": "6px 8px", "fontWeight": "600", "color": "#38bdf8"}),
+                    html.Td(s.get("stateLabel", "Acquiring"), style={"padding": "6px 8px", "color": "#10b981"}),
                     html.Td(fmt_float(s['cn0'], 1, "dB-Hz"), style={"padding": "6px 8px"}),
                     html.Td(fmt_float(s['doppler'], 1, "Hz"), style={"padding": "6px 8px"}),
                     html.Td(mask_str, style={"padding": "6px 8px", "fontFamily": "monospace", "color": "#10b981"}),
@@ -641,6 +650,7 @@ def update_dashboard(n):
             children=[
                 html.Thead(html.Tr([
                     html.Th("PRN", style={"textAlign": "left", "padding": "6px 8px", "color": "#94a3b8"}),
+                    html.Th("State", style={"textAlign": "left", "padding": "6px 8px", "color": "#94a3b8"}),
                     html.Th("C/N0", style={"textAlign": "left", "padding": "6px 8px", "color": "#94a3b8"}),
                     html.Th("Doppler", style={"textAlign": "left", "padding": "6px 8px", "color": "#94a3b8"}),
                     html.Th("Subframes", style={"textAlign": "left", "padding": "6px 8px", "color": "#94a3b8"}),
@@ -649,7 +659,7 @@ def update_dashboard(n):
                     html.Th("Tropo Delay", style={"textAlign": "left", "padding": "6px 8px", "color": "#94a3b8"}),
                     html.Th("Az / El", style={"textAlign": "left", "padding": "6px 8px", "color": "#94a3b8"})
                 ])),
-                html.Tbody(table_rows if table_rows else [html.Tr(html.Td("Acquiring satellite channels...", colSpan=8, style={"padding": "12px", "color": "#94a3b8"}))])
+                html.Tbody(table_rows if table_rows else [html.Tr(html.Td("Acquiring satellite channels...", colSpan=9, style={"padding": "12px", "color": "#94a3b8"}))])
             ]
         )
 

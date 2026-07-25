@@ -43,6 +43,7 @@ struct AcquisitionInput
     int32_t acquisitionDopplerSearchRange{500};     ///< Doppler bin step (Hz).
     double samplingFrequency{4096000.0};            ///< Sampling rate (Hz).
     int32_t numberOfSamplesPerCode{4096};           ///< Samples per code period.
+    int32_t reacquisitionIntervalBlocks{1000};      ///< Blocks between re-acquisition attempts.
 };
 
 /** @brief Acquisition module output results. */
@@ -67,6 +68,12 @@ struct TrackingInput
     double dllBandwidthHz{2.0};              ///< DLL noise bandwidth (Hz).
     double samplingFrequency{4096000.0};     ///< Sampling rate (Hz).
     int32_t numberOfSamplesPerCode{4096};    ///< Samples per code period.
+    double carrierLockThreshold{0.5};        ///< Min carrier lock indicator to count as locked.
+    double codeLockRatioTolerance{0.3};      ///< Max |codeLockRatio - 1.0| to count as locked.
+    double lockIndicatorEmaAlpha{0.1};       ///< EMA smoothing factor for lock indicators.
+    int32_t confirmDebounceBlocks{50};       ///< Good blocks needed to confirm tracking.
+    int32_t confirmTimeoutBlocks{200};       ///< Blocks before abandoning an unconfirmed acquisition.
+    int32_t lossDebounceBlocks{100};         ///< Bad blocks needed to declare lock lost.
 };
 
 /** @brief Tracking module output results. */
@@ -84,6 +91,9 @@ struct TrackingOutput
     double Qe{0.0};                          ///< Quadrature Early correlator.
     double Qp{0.0};                          ///< Quadrature Prompt correlator.
     double Ql{0.0};                          ///< Quadrature Late correlator.
+    uint32_t channelState{0};                ///< Channel state (0=Acquiring, 1=Confirming, 2=Tracking).
+    double carrierLockIndicator{0.0};        ///< Smoothed carrier lock indicator.
+    double codeLockRatio{0.0};               ///< Smoothed code lock ratio.
 };
 
 /** @brief Navigation decoder input parameters. */

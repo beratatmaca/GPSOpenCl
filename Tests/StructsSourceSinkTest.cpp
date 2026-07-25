@@ -20,6 +20,9 @@ TEST(StructsTest, WireFormatAndPacking)
 
     TrackingOutput trackOut{};
     EXPECT_EQ(trackOut.structVersion, STRUCT_VERSION_1);
+    EXPECT_EQ(trackOut.channelState, 0u);
+    EXPECT_EQ(trackOut.carrierLockIndicator, 0.0);
+    EXPECT_EQ(trackOut.codeLockRatio, 0.0);
 
     NavDecoderOutput navOut{};
     EXPECT_EQ(navOut.structVersion, STRUCT_VERSION_1);
