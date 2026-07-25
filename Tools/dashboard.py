@@ -369,21 +369,21 @@ app.layout = html.Div(
                     style={"backgroundColor": "#1e293b", "padding": "16px", "borderRadius": "12px", "border": "1px solid #334155", "overflow": "hidden"},
                     children=[
                         html.H3("Satellite Skyplot (Azimuth & Elevation)", style={"margin": "0 0 12px 0", "fontSize": "15px", "color": "#f8fafc"}),
-                        dcc.Graph(id="skyplot-graph", config={"displayModeBar": False})
+                        dcc.Graph(id="skyplot-graph", config={"displayModeBar": False}, style={"height": "300px"})
                     ]
                 ),
                 html.Div(
                     style={"backgroundColor": "#1e293b", "padding": "16px", "borderRadius": "12px", "border": "1px solid #334155", "overflow": "hidden"},
                     children=[
                         html.H3("Carrier-to-Noise Ratio (C/N0 dB-Hz)", style={"margin": "0 0 12px 0", "fontSize": "15px", "color": "#f8fafc"}),
-                        dcc.Graph(id="cn0-graph", config={"displayModeBar": False})
+                        dcc.Graph(id="cn0-graph", config={"displayModeBar": False}, style={"height": "300px"})
                     ]
                 ),
                 html.Div(
                     style={"backgroundColor": "#1e293b", "padding": "16px", "borderRadius": "12px", "border": "1px solid #334155", "overflow": "hidden"},
                     children=[
                         html.H3("Carrier Doppler Shift (Hz)", style={"margin": "0 0 12px 0", "fontSize": "15px", "color": "#f8fafc"}),
-                        dcc.Graph(id="doppler-graph", config={"displayModeBar": False})
+                        dcc.Graph(id="doppler-graph", config={"displayModeBar": False}, style={"height": "300px"})
                     ]
                 )
             ]
@@ -397,14 +397,14 @@ app.layout = html.Div(
                     style={"backgroundColor": "#1e293b", "padding": "16px", "borderRadius": "12px", "border": "1px solid #334155", "overflow": "hidden"},
                     children=[
                         html.H3("PLL Carrier & DLL Code Discriminator Errors", style={"margin": "0 0 12px 0", "fontSize": "15px", "color": "#f8fafc"}),
-                        dcc.Graph(id="tracking-error-graph", config={"displayModeBar": False})
+                        dcc.Graph(id="tracking-error-graph", config={"displayModeBar": False}, style={"height": "280px"})
                     ]
                 ),
                 html.Div(
                     style={"backgroundColor": "#1e293b", "padding": "16px", "borderRadius": "12px", "border": "1px solid #334155", "overflow": "hidden"},
                     children=[
                         html.H3("Pipeline Per-Stage Processing Latency (ms)", style={"margin": "0 0 12px 0", "fontSize": "15px", "color": "#f8fafc"}),
-                        dcc.Graph(id="profiler-graph", config={"displayModeBar": False})
+                        dcc.Graph(id="profiler-graph", config={"displayModeBar": False}, style={"height": "280px"})
                     ]
                 )
             ]
@@ -544,7 +544,8 @@ def update_dashboard(n):
             paper_bgcolor="#1e293b",
             margin=dict(l=25, r=25, t=15, b=15),
             font=dict(color="#f8fafc", size=10),
-            height=300
+            height=300,
+            autosize=False
         )
 
         # 3. C/N0 Bar Chart
@@ -560,7 +561,8 @@ def update_dashboard(n):
             font=dict(color="#f8fafc", size=10),
             xaxis=dict(gridcolor="#1e293b"),
             yaxis=dict(title="C/N0 (dB-Hz)", range=[0, 60], gridcolor="#1e293b"),
-            height=300
+            height=300,
+            autosize=False
         )
 
         # 4. Carrier Doppler Graph
@@ -573,7 +575,8 @@ def update_dashboard(n):
             font=dict(color="#f8fafc", size=10),
             xaxis=dict(gridcolor="#1e293b"),
             yaxis=dict(title="Doppler Shift (Hz)", gridcolor="#1e293b"),
-            height=300
+            height=300,
+            autosize=False
         )
 
         # 5. Tracking error graph (carrier & code)
@@ -591,7 +594,8 @@ def update_dashboard(n):
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
             xaxis=dict(gridcolor="#1e293b"),
             yaxis=dict(gridcolor="#1e293b"),
-            height=280
+            height=280,
+            autosize=False
         )
 
         # 6. Profiler Stage Latency Graph
@@ -612,7 +616,8 @@ def update_dashboard(n):
             font=dict(color="#f8fafc", size=10),
             xaxis=dict(gridcolor="#1e293b"),
             yaxis=dict(title="Execution Time (ms)", gridcolor="#1e293b"),
-            height=280
+            height=280,
+            autosize=False
         )
 
         # 7. Ephemeris and atmospheric delays table

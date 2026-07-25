@@ -54,7 +54,8 @@ void Application::searchForSatellites(const ComplexFloatVector &input)
         float peakValue = 0.0f, peakFreq = 0.0f, meanValue = 0.0f, cn0 = 0.0f, peakRatio = 0.0f;
         m_channels[i].getAcquisitionResults(&peakIndex, &peakValue, &peakFreq, &meanValue, &cn0, &peakRatio);
 
-        if (cn0 >= 35.0f || peakRatio >= 1.5f)
+        const float acquisitionCn0ThresholdDbHz = 43.0f;
+        if (cn0 >= acquisitionCn0ThresholdDbHz)
         {
             m_channels[i].setAcquired(true);
             float numSamplesFloat = static_cast<float>(m_configuration.rawDataSettings.numberOfSamplesPerCode);
