@@ -16,7 +16,12 @@ Channel::Channel()
       m_acquisitionPeakRatio(0.0f),
       m_acquisitionProcessingGain(10.0 * std::log10(GPS_CA_CODE_FREQUENCY_HZ / GPS_CA_CODE_LENGTH)),
       m_isAcquired(false),
-      m_tracking(nullptr)
+      m_tracking(nullptr),
+      m_navBitOffset(0),
+      m_seenSubframeMask(0),
+      m_accumulatedEphemeris(),
+      m_lastSubframeTow(0.0),
+      m_lastSubframeStartSample(0)
 {
 }
 
@@ -85,6 +90,12 @@ void Channel::initTracking(const Settings::Configuration &conf, float dopplerHz,
     }
     m_tracking->initTrackingState(dopplerHz, codePhaseChips);
     m_promptHistory.clear();
+
+    m_navBitOffset = 0;
+    m_seenSubframeMask = 0;
+    m_accumulatedEphemeris = GpsEphemeris();
+    m_lastSubframeTow = 0.0;
+    m_lastSubframeStartSample = 0;
 }
 
 void Channel::trackBlock(const ComplexFloatVector &input)
@@ -95,4 +106,65 @@ void Channel::trackBlock(const ComplexFloatVector &input)
         std::cout << "SV ID " << m_svId << " Tracking block processed. Bit count: "
                   << m_promptHistory.size() << std::endl;
     }
+}
+
+bool Channel::updateNavigation(NavigationDecoder &decoder)
+{
+    GpsEphemeris ephem = GpsEphemeris();
+    size_t subframeStartSample = 0;
+    if (!decoder.processPromptSignal(m_svId, m_promptHistory, m_navBitOffset, ephem, subframeStartSample))
+    {
+        return hasCompleteEphemeris();
+    }
+
+    m_accumulatedEphemeris.svId = ephem.svId;
+    m_accumulatedEphemeris.tow = ephem.tow;
+    m_accumulatedEphemeris.subframeId = ephem.subframeId;
+
+    switch (ephem.subframeId)
+    {
+        case 1:
+            m_accumulatedEphemeris.weekNumber = ephem.weekNumber;
+            m_accumulatedEphemeris.toc = ephem.toc;
+            m_accumulatedEphemeris.af0 = ephem.af0;
+            m_accumulatedEphemeris.af1 = ephem.af1;
+            m_accumulatedEphemeris.af2 = ephem.af2;
+            m_seenSubframeMask |= 0x1;
+            break;
+        case 2:
+            m_accumulatedEphemeris.toe = ephem.toe;
+            m_accumulatedEphemeris.sqrtA = ephem.sqrtA;
+            m_accumulatedEphemeris.e = ephem.e;
+            m_accumulatedEphemeris.M0 = ephem.M0;
+            m_accumulatedEphemeris.deltaN = ephem.deltaN;
+            m_accumulatedEphemeris.Cuc = ephem.Cuc;
+            m_accumulatedEphemeris.Cus = ephem.Cus;
+            m_accumulatedEphemeris.Crs = ephem.Crs;
+            m_seenSubframeMask |= 0x2;
+            break;
+        case 3:
+            m_accumulatedEphemeris.i0 = ephem.i0;
+            m_accumulatedEphemeris.idot = ephem.idot;
+            m_accumulatedEphemeris.omega0 = ephem.omega0;
+            m_accumulatedEphemeris.omegaDot = ephem.omegaDot;
+            m_accumulatedEphemeris.omega = ephem.omega;
+            m_accumulatedEphemeris.Cic = ephem.Cic;
+            m_accumulatedEphemeris.Cis = ephem.Cis;
+            m_accumulatedEphemeris.Crc = ephem.Crc;
+            m_seenSubframeMask |= 0x4;
+            break;
+        default:
+            break;
+    }
+
+    m_lastSubframeTow = ephem.tow;
+    m_lastSubframeStartSample = subframeStartSample;
+    m_accumulatedEphemeris.isValid = hasCompleteEphemeris();
+
+    return hasCompleteEphemeris();
+}
+
+bool Channel::hasCompleteEphemeris() const
+{
+    return (m_seenSubframeMask & 0x7) == 0x7;
 }

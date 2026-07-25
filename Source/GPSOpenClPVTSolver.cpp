@@ -119,12 +119,12 @@ GeodeticPosition PVTSolver::ecefToWgs84(const EcefPosition &ecef)
 
 bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
                               const std::vector<double> &measuredPseudoranges,
-                              double transmitTimeSeconds,
+                              const std::vector<double> &transmitTimesSeconds,
                               ReceiverPvtSolution &solution)
 {
     solution.isValid = false;
     size_t numSats = ephemerides.size();
-    if (numSats < 4 || measuredPseudoranges.size() < numSats)
+    if (numSats < 4 || measuredPseudoranges.size() < numSats || transmitTimesSeconds.size() < numSats)
     {
         return false;
     }
@@ -137,7 +137,7 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
 
     for (size_t i = 0; i < numSats; i++)
     {
-        orbits[i] = computeSatelliteOrbit(ephemerides[i], transmitTimeSeconds);
+        orbits[i] = computeSatelliteOrbit(ephemerides[i], transmitTimesSeconds[i]);
         // Correct pseudorange for satellite clock bias
         correctedRanges[i] = measuredPseudoranges[i] + c * orbits[i].clockBias;
     }

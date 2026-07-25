@@ -135,84 +135,135 @@ bool NavigationDecoder::decodeSubframe(const std::vector<uint32_t> &words30bit, 
 
     if (ephem.subframeId == 1)
     {
-        ephem.weekNumber = extractUnsignedBits(w3, 3, 10);
-        ephem.toc = extractUnsignedBits(w8, 22, 16) * std::pow(2.0, 4);
-        ephem.af2 = extractSignedBits(w10, 3, 8) * std::pow(2.0, -55);
-        ephem.af1 = extractSignedBits(w10, 11, 16) * std::pow(2.0, -43);
-        int32_t af0_raw = (extractSignedBits(w10, 27, 2) << 20) | extractUnsignedBits(w9, 3, 20);
-        ephem.af0 = af0_raw * std::pow(2.0, -31);
+        // IS-GPS-200 subframe 1: word 3 bits 1-10 = WN; word 8 bits 9-24 = toc; word 9 bits 1-8 = af2,
+        // bits 9-24 = af1; word 10 bits 1-22 = af0.
+        ephem.weekNumber = extractUnsignedBits(w3, 1, 10);
+        ephem.toc = extractUnsignedBits(w8, 9, 16) * std::pow(2.0, 4);
+        ephem.af2 = extractSignedBits(w9, 1, 8) * std::pow(2.0, -55);
+        ephem.af1 = extractSignedBits(w9, 9, 16) * std::pow(2.0, -43);
+        ephem.af0 = extractSignedBits(w10, 1, 22) * std::pow(2.0, -31);
         ephem.isValid = true;
     }
     else if (ephem.subframeId == 2)
     {
-        ephem.Crs = extractSignedBits(w3, 3, 16) * std::pow(2.0, -5);
-        ephem.deltaN = extractSignedBits(w3, 19, 16) * std::pow(2.0, -43) * M_PI;
-        ephem.M0 = ((extractSignedBits(w4, 3, 8) << 24) | extractUnsignedBits(w5, 3, 24)) * std::pow(2.0, -31) * M_PI;
-        ephem.Cuc = extractSignedBits(w6, 3, 16) * std::pow(2.0, -29);
-        ephem.e = ((extractUnsignedBits(w6, 19, 8) << 24) | extractUnsignedBits(w7, 3, 24)) * std::pow(2.0, -33);
-        ephem.Cus = extractSignedBits(w8, 3, 16) * std::pow(2.0, -29);
-        uint32_t sqrtA_raw = (extractUnsignedBits(w8, 19, 8) << 24) | extractUnsignedBits(w9, 3, 24);
-        ephem.sqrtA = sqrtA_raw * std::pow(2.0, -19);
-        ephem.toe = extractUnsignedBits(w10, 3, 16) * std::pow(2.0, 4);
+        // word3 bits1-8=IODE(unused), 9-24=Crs; word4 bits1-16=deltaN, 17-24=M0 MSB; word5 bits1-24=M0 LSB;
+        // word6 bits1-16=Cuc, 17-24=e MSB; word7 bits1-24=e LSB; word8 bits1-16=Cus, 17-24=sqrtA MSB;
+        // word9 bits1-24=sqrtA LSB; word10 bits1-16=toe.
+        ephem.Crs = extractSignedBits(w3, 9, 16) * std::pow(2.0, -5);
+        ephem.deltaN = extractSignedBits(w4, 1, 16) * std::pow(2.0, -43) * M_PI;
+        int32_t m0Raw = (extractSignedBits(w4, 17, 8) << 24) | extractUnsignedBits(w5, 1, 24);
+        ephem.M0 = m0Raw * std::pow(2.0, -31) * M_PI;
+        ephem.Cuc = extractSignedBits(w6, 1, 16) * std::pow(2.0, -29);
+        uint32_t eRaw = (extractUnsignedBits(w6, 17, 8) << 24) | extractUnsignedBits(w7, 1, 24);
+        ephem.e = eRaw * std::pow(2.0, -33);
+        ephem.Cus = extractSignedBits(w8, 1, 16) * std::pow(2.0, -29);
+        uint32_t sqrtARaw = (extractUnsignedBits(w8, 17, 8) << 24) | extractUnsignedBits(w9, 1, 24);
+        ephem.sqrtA = sqrtARaw * std::pow(2.0, -19);
+        ephem.toe = extractUnsignedBits(w10, 1, 16) * std::pow(2.0, 4);
         ephem.isValid = true;
     }
     else if (ephem.subframeId == 3)
     {
-        ephem.Cic = extractSignedBits(w3, 3, 16) * std::pow(2.0, -29);
-        uint32_t omega0_raw = (extractSignedBits(w3, 19, 8) << 24) | extractUnsignedBits(w4, 3, 24);
-        ephem.omega0 = omega0_raw * std::pow(2.0, -31) * M_PI;
-        ephem.Cis = extractSignedBits(w5, 3, 16) * std::pow(2.0, -29);
-        uint32_t i0_raw = (extractSignedBits(w5, 19, 8) << 24) | extractUnsignedBits(w6, 3, 24);
-        ephem.i0 = i0_raw * std::pow(2.0, -31) * M_PI;
-        ephem.Crc = extractSignedBits(w7, 3, 16) * std::pow(2.0, -5);
-        uint32_t omega_raw = (extractSignedBits(w7, 19, 8) << 24) | extractUnsignedBits(w8, 3, 24);
-        ephem.omega = omega_raw * std::pow(2.0, -31) * M_PI;
-        ephem.omegaDot = extractSignedBits(w9, 3, 24) * std::pow(2.0, -38) * M_PI;
-        ephem.idot = extractSignedBits(w10, 11, 14) * std::pow(2.0, -43) * M_PI;
+        // word3 bits1-16=Cic, 17-24=omega0 MSB; word4 bits1-24=omega0 LSB; word5 bits1-16=Cis, 17-24=i0 MSB;
+        // word6 bits1-24=i0 LSB; word7 bits1-16=Crc, 17-24=omega MSB; word8 bits1-24=omega LSB;
+        // word9 bits1-24=omegaDot; word10 bits1-8=IODE2(unused), 9-22=idot.
+        ephem.Cic = extractSignedBits(w3, 1, 16) * std::pow(2.0, -29);
+        int32_t omega0Raw = (extractSignedBits(w3, 17, 8) << 24) | extractUnsignedBits(w4, 1, 24);
+        ephem.omega0 = omega0Raw * std::pow(2.0, -31) * M_PI;
+        ephem.Cis = extractSignedBits(w5, 1, 16) * std::pow(2.0, -29);
+        int32_t i0Raw = (extractSignedBits(w5, 17, 8) << 24) | extractUnsignedBits(w6, 1, 24);
+        ephem.i0 = i0Raw * std::pow(2.0, -31) * M_PI;
+        ephem.Crc = extractSignedBits(w7, 1, 16) * std::pow(2.0, -5);
+        int32_t omegaRaw = (extractSignedBits(w7, 17, 8) << 24) | extractUnsignedBits(w8, 1, 24);
+        ephem.omega = omegaRaw * std::pow(2.0, -31) * M_PI;
+        ephem.omegaDot = extractSignedBits(w9, 1, 24) * std::pow(2.0, -43) * M_PI;
+        ephem.idot = extractSignedBits(w10, 9, 14) * std::pow(2.0, -43) * M_PI;
         ephem.isValid = true;
     }
 
     return ephem.isValid;
 }
 
-bool NavigationDecoder::processPromptSignal(int svId, const ComplexFloatVector &promptHistory, GpsEphemeris &ephem)
+bool NavigationDecoder::processPromptSignal(int svId, const ComplexFloatVector &promptHistory, size_t &bitOffset,
+                                            GpsEphemeris &ephem, size_t &subframeStartSample)
 {
     ephem.svId = svId;
     ephem.isValid = false;
 
-    std::vector<bool> bits = promptToBits(promptHistory);
-    if (bits.size() < 300)
+    std::vector<bool> allBits = promptToBits(promptHistory);
+    if (bitOffset > allBits.size())
+    {
+        bitOffset = 0;
+    }
+    if (allBits.size() - bitOffset < 300)
     {
         return false;
     }
 
-    size_t preambleIdx = 0;
+    std::vector<bool> searchBits(allBits.begin() + bitOffset, allBits.end());
+    size_t relPreambleIdx = 0;
     bool inverted = false;
-    if (!findPreamble(bits, preambleIdx, inverted))
+    if (!findPreamble(searchBits, relPreambleIdx, inverted))
     {
         return false;
     }
 
-    std::vector<uint32_t> words;
-    for (size_t w = 0; w < 10; w++)
+    size_t preambleIdx = bitOffset + relPreambleIdx;
+    if (preambleIdx + 300 > allBits.size())
     {
-        size_t wordStartBit = preambleIdx + w * 30;
-        if (wordStartBit + 30 > bits.size()) break;
+        // Not enough data yet for a full subframe; wait for more without losing our place.
+        return false;
+    }
 
-        uint32_t word = 0;
+    auto bitAt = [&](size_t idx) -> bool {
+        bool v = allBits[idx];
+        return inverted ? !v : v;
+    };
+
+    // D29*/D30* of the word immediately preceding this subframe's first word, needed both to check
+    // word 1's parity and to know whether word 1's data bits must be polarity-inverted.
+    bool prevD29 = false;
+    bool prevD30 = false;
+    if (preambleIdx >= 2)
+    {
+        prevD29 = bitAt(preambleIdx - 2);
+        prevD30 = bitAt(preambleIdx - 1);
+    }
+
+    std::vector<uint32_t> words(10, 0);
+    for (int w = 0; w < 10; w++)
+    {
+        size_t wordStartBit = preambleIdx + static_cast<size_t>(w) * 30;
+        uint32_t raw = 0;
         for (int b = 0; b < 30; b++)
         {
-            bool bitVal = bits[wordStartBit + b];
-            if (inverted) bitVal = !bitVal;
-            word = (word << 1) | (bitVal ? 1 : 0);
+            raw = (raw << 1) | (bitAt(wordStartBit + b) ? 1u : 0u);
         }
-        words.push_back(word);
+
+        if (!checkParity(raw, prevD29, prevD30))
+        {
+            // Resynchronize past just this false preamble candidate, not the whole subframe.
+            bitOffset = preambleIdx + 1;
+            return false;
+        }
+
+        // IS-GPS-200 D30* rule: if the previous word's last bit is 1, this word's 24 data bits
+        // (bits 1-24) are transmitted inverted and must be complemented before use. Parity bits
+        // 25-30 are never inverted.
+        uint32_t dataWord = raw;
+        if (prevD30)
+        {
+            const uint32_t dataBitsMask = 0x3FFFFFC0u; // word bits 1-24 (value bits 6..29)
+            dataWord = raw ^ dataBitsMask;
+        }
+        words[w] = dataWord;
+
+        prevD29 = ((raw >> 1) & 1u) != 0;
+        prevD30 = (raw & 1u) != 0;
     }
 
-    if (words.size() >= 10)
-    {
-        return decodeSubframe(words, ephem);
-    }
+    subframeStartSample = preambleIdx * 20; // 20 prompt samples per nav bit
+    bitOffset = preambleIdx + 300;          // advance past this whole subframe
 
-    return false;
+    return decodeSubframe(words, ephem);
 }

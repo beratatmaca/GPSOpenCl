@@ -8,6 +8,15 @@ If no OpenCL-compatible GPU platform or vendor driver is detected on the host sy
 
 ---
 
+## Roadmap
+
+This README describes the project as it exists today. GPSOpenCl is moving toward a hardware-deployable, real-time architecture built on an abstract `Source`/`Sink` contract, single-source-of-truth binary structs, a ZMQ publisher, and a dedicated profiler module.
+
+- See [`CLAUDE.md`](CLAUDE.md) for the current vs. target architecture.
+- See [`DEVELOPMENT_PLAN.md`](DEVELOPMENT_PLAN.md) for the phased rollout plan.
+
+---
+
 ## Key Features & Architecture
 
 ```

@@ -126,9 +126,9 @@ void Tracking::earlyLatePromptGen(int prn)
     {
         phaseStep = i * m_codePhaseStep + m_remCodePhase;
 
-        int rawEarly = static_cast<int>(std::floor(phaseStep + 0.5));
+        int rawEarly = static_cast<int>(std::floor(phaseStep - 0.5 + 1023.0));
         int rawPrompt = static_cast<int>(std::floor(phaseStep));
-        int rawLate = static_cast<int>(std::floor(phaseStep - 0.5 + 1023.0));
+        int rawLate = static_cast<int>(std::floor(phaseStep + 0.5));
 
         int earlyIndex = ((rawEarly % GPS_CA_CODE_LENGTH) + GPS_CA_CODE_LENGTH) % GPS_CA_CODE_LENGTH;
         int promptIndex = ((rawPrompt % GPS_CA_CODE_LENGTH) + GPS_CA_CODE_LENGTH) % GPS_CA_CODE_LENGTH;

@@ -5,6 +5,7 @@
 #include <string>
 
 #include "GPSOpenClCommon.h"
+#include "GPSOpenClStructs.h"
 
 namespace GPSOpenCl
 {
@@ -34,6 +35,13 @@ class Settings
     {
         RawDataSettings rawDataSettings;
         AcquisitionSettings acquisitionSettings;
+        SourceInput sourceInput;
+        AcquisitionInput acquisitionInput;
+        TrackingInput trackingInput;
+        NavDecoderInput navDecoderInput;
+        PvtSolverInput pvtSolverInput;
+        AtmosphericInput atmosphericInput;
+        NmeaGeneratorInput nmeaGeneratorInput;
     } configuration;
 
   private:

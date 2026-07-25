@@ -54,7 +54,7 @@ class PVTSolver
 
     bool solvePosition(const std::vector<GpsEphemeris> &ephemerides,
                        const std::vector<double> &measuredPseudoranges,
-                       double transmitTimeSeconds,
+                       const std::vector<double> &transmitTimesSeconds,
                        ReceiverPvtSolution &solution);
 };
 } // namespace GPSOpenCl

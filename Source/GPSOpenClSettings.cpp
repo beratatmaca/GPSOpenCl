@@ -118,6 +118,8 @@ void Settings::updateConfigurationStruct()
     if (m_configurationMap["DataSource"] != "")
     {
         configuration.rawDataSettings.dataSource = m_configurationMap["DataSource"];
+        snprintf(configuration.sourceInput.fifoPath, sizeof(configuration.sourceInput.fifoPath), "%s",
+                 m_configurationMap["DataSource"].c_str());
     }
 
     if (m_configurationMap["SamplingFrequency"] != "")
@@ -125,24 +127,35 @@ void Settings::updateConfigurationStruct()
         configuration.rawDataSettings.samplingFrequency = std::stof(m_configurationMap["SamplingFrequency"]);
         configuration.rawDataSettings.numberOfSamplesPerCode = static_cast<int>(std::round(
             configuration.rawDataSettings.samplingFrequency / (GPS_CA_CODE_FREQUENCY_HZ / GPS_CA_CODE_LENGTH)));
+        configuration.sourceInput.samplingRate = configuration.rawDataSettings.samplingFrequency;
+        configuration.acquisitionInput.samplingFrequency = configuration.rawDataSettings.samplingFrequency;
+        configuration.acquisitionInput.numberOfSamplesPerCode = configuration.rawDataSettings.numberOfSamplesPerCode;
+        configuration.trackingInput.samplingFrequency = configuration.rawDataSettings.samplingFrequency;
+        configuration.trackingInput.numberOfSamplesPerCode = configuration.rawDataSettings.numberOfSamplesPerCode;
     }
 
     if (m_configurationMap["AcquisitionMinimumDoppler"] != "")
     {
         configuration.acquisitionSettings.acquisitionDopplerMinimum =
             std::stoi(m_configurationMap["AcquisitionMinimumDoppler"]);
+        configuration.acquisitionInput.acquisitionDopplerMinimum =
+            configuration.acquisitionSettings.acquisitionDopplerMinimum;
     }
 
     if (m_configurationMap["AcquisitionMaximumDoppler"] != "")
     {
         configuration.acquisitionSettings.acquisitionDopplerMaximum =
             std::stoi(m_configurationMap["AcquisitionMaximumDoppler"]);
+        configuration.acquisitionInput.acquisitionDopplerMaximum =
+            configuration.acquisitionSettings.acquisitionDopplerMaximum;
     }
 
     if (m_configurationMap["AcquisitionDopplerSearchRange"] != "")
     {
         configuration.acquisitionSettings.acquisitionDopplerSearchRange =
             std::stoi(m_configurationMap["AcquisitionDopplerSearchRange"]);
+        configuration.acquisitionInput.acquisitionDopplerSearchRange =
+            configuration.acquisitionSettings.acquisitionDopplerSearchRange;
     }
 }
 

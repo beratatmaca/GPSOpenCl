@@ -48,6 +48,26 @@ This is the design we are building toward.
 - Concrete source reads gps-sdr-sim in real time.
 - Source yields raw IQ samples to the pipeline.
 - Design so real hardware SDRs can plug in later.
+- Raw IQ samples never ride in a struct.
+- Samples stream as raw bytes over the FIFO.
+- `Source` parses bytes into `ComplexFloatVector` directly.
+- Only `Source`'s health telemetry goes through the Sink.
+
+### gps-sdr-sim real-time fork
+
+- Use a real-time capable fork of gps-sdr-sim.
+- Fork lives at `beratatmaca/gps-sdr-sim-rt`, on GitHub.
+- Vendored into `Tools/gps-sdr-sim`, as today.
+- Keep upstream license file. Note local changes.
+- Fork paces sample generation to real time.
+- Fork streams samples over a Linux FIFO.
+- Data FIFO path: `/tmp/gpsopencl/sim_data.fifo`.
+- No file write, and no extra library.
+- A separate control channel commands the simulator.
+- Control FIFO path: `/tmp/gpsopencl/sim_ctrl.fifo`.
+- Control channel handles start, stop, reconfigure.
+- Commands are plain text lines, not binary.
+- Example: `START`, `STOP`, `SET_POS 48.11,11.51,545`.
 
 ### Module output contract
 
@@ -71,12 +91,40 @@ Structs are simplex: one input, one output.
 - Never mix config fields into a telemetry struct.
 - Never mix telemetry fields into a config struct.
 
+### Struct wire format
+
+- Every struct starts with a version field.
+- First member is always `uint32_t structVersion`.
+- Use only fixed-width types: `int32_t`, `uint32_t`, `double`.
+- No `bool`, `size_t`, or plain `int` in structs.
+- Pack all wire structs. No compiler padding.
+- Assume little-endian only, host byte order.
+- No byte-swap code. Target hardware is little-endian.
+- Per-satellite telemetry: one message per SV.
+- Same struct type, many instances, one per SV.
+- No 32-slot arrays. No per-SV bitmasks.
+- Config (input) structs stay whole-module, not per-SV.
+
+### Bulk data exception
+
+- Struct rules apply to telemetry, not samples.
+- Raw IQ samples are not wrapped in a struct.
+- `Source` still gets one input, one output struct.
+- `SourceInput`: FIFO path, sample format, sampling rate.
+- `SourceOutput`: block index, timestamp, FIFO under/overrun counts.
+- Only `SourceOutput` (health) is published through the Sink.
+
 ### Publisher / Sink
 
 - Sink is abstract. ZMQ is one implementation.
 - For now, sink implementation is a ZMQ publisher.
 - Each struct is published with an identifier.
 - One identifier per module or struct type.
+- Socket pattern is ZMQ PUB/SUB.
+- Default endpoint: `ipc:///tmp/gpsopencl/<name>.sock`.
+- Allow `tcp://` override, for remote dashboards.
+- Message is two frames: identifier, then struct bytes.
+- If ZMQ is disabled, fall back to `NullSink` or `FileSink`.
 
 ### Profiler module
 
@@ -89,6 +137,15 @@ Structs are simplex: one input, one output.
 - Profiling must not distort the timing it measures.
 - Can be disabled at compile time or runtime.
 
+### Concurrency model
+
+- One producer thread: `Source`, reading the FIFO.
+- One consumer thread: `Application`, running the algorithms.
+- Bounded blocking queue links the two threads.
+- Queue size target: about 8 to 16 blocks.
+- Algorithm path never drops samples. It backpressures.
+- Sink/telemetry path may drop under load instead.
+
 ### Visualization
 
 - Terminal and dashboard visualizers come later.
@@ -100,13 +157,19 @@ Structs are simplex: one input, one output.
 - Whole pipeline must run on real hardware.
 - No dependency that blocks embedded or edge deployment.
 - GPU acceleration optional. CPU fallback is mandatory.
+- Primary targets: x86_64 Linux, and ARM64 Linux.
+- Concrete boards: Raspberry Pi 4/5, NVIDIA Jetson.
+- Linux only. No Windows or macOS support.
+- Future hardware `Source`s: RTL-SDR, USRP (UHD), BladeRF.
 
 ## Dependency Policy
 
 - Keep core pipeline dependencies minimal.
 - C++17 standard library is always fine.
 - OpenCL allowed, for GPU acceleration only.
-- ZMQ allowed, for source and sink transport only.
+- ZMQ allowed, only for the Sink publisher path.
+- CMake option `GPSOPENCL_ENABLE_ZMQ`, on if found.
+- Sim-to-Source IPC uses a Linux FIFO, no library.
 - No heavy frameworks inside the core pipeline.
 - Python tools (dashboard, benchmark) may use more.
 - Justify any new dependency in the PR.

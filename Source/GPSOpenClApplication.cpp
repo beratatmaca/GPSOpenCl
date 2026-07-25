@@ -1,5 +1,6 @@
 #include "GPSOpenClApplication.h"
 
+#include <algorithm>
 #include <cmath>
 #include <fstream>
 #include <iostream>
@@ -75,73 +76,65 @@ void Application::trackSatellites(const ComplexFloatVector &input)
 bool Application::computeNavigationSolution(ReceiverPvtSolution &solution)
 {
     std::vector<GpsEphemeris> ephemerides;
-    std::vector<double> measuredPseudoranges;
+    std::vector<double> transmitTimes;
     std::vector<int> activePrns;
 
     const double c = 299792458.0;
-
-    // Ground truth receiver reference position (Lat 48.1173 N, Lon 11.5167 E, Alt 545.4 m)
-    EcefPosition refRx;
-    refRx.x = 4180483.4;
-    refRx.y = 851798.0;
-    refRx.z = 4725999.8;
+    const double nominalTransitTimeSec = 0.075; // typical GPS signal transit time (Earth-to-receiver)
 
     for (int i = 0; i < GPS_CA_SV_COUNT; i++)
     {
-        if (m_channels[i].isAcquired())
+        if (!m_channels[i].isAcquired())
         {
-            GpsEphemeris ephem;
-            bool decoded = m_navDecoder.processPromptSignal(m_channels[i].m_svId, m_channels[i].getPromptHistory(), ephem);
-
-            int peakIndex = 0;
-            float peakVal = 0.0f, peakFreq = 0.0f, meanVal = 0.0f, cn0 = 0.0f, peakRatio = 0.0f;
-            m_channels[i].getAcquisitionResults(&peakIndex, &peakVal, &peakFreq, &meanVal, &cn0, &peakRatio);
-
-            if (!decoded)
-            {
-                // Fill nominal ephemeris if subframe broadcast decoding is incomplete
-                ephem.svId = m_channels[i].m_svId;
-                ephem.toe = 0.0;
-                ephem.toc = 0.0;
-                ephem.sqrtA = 5153.6;
-                ephem.e = 0.001;
-                ephem.M0 = (m_channels[i].m_svId * 0.2);
-                ephem.deltaN = 0.0;
-                ephem.i0 = 0.95;
-                ephem.idot = 0.0;
-                ephem.omega0 = (m_channels[i].m_svId * 0.19);
-                ephem.omegaDot = 0.0;
-                ephem.omega = 0.0;
-                ephem.Cuc = ephem.Cus = ephem.Crc = ephem.Crs = ephem.Cic = ephem.Cis = 0.0;
-                ephem.af0 = ephem.af1 = ephem.af2 = 0.0;
-                ephem.isValid = true;
-            }
-
-            SatelliteOrbit satOrbit = PVTSolver::computeSatelliteOrbit(ephem, 0.0);
-            double dx = satOrbit.position.x - refRx.x;
-            double dy = satOrbit.position.y - refRx.y;
-            double dz = satOrbit.position.z - refRx.z;
-            double trueRange = std::sqrt(dx * dx + dy * dy + dz * dz);
-
-            float numSamplesFloat = static_cast<float>(m_configuration.rawDataSettings.numberOfSamplesPerCode);
-            double codePhaseDelaySec = (numSamplesFloat > 0.0f) ? (static_cast<double>(peakIndex) / numSamplesFloat) * GPS_CA_CODE_PERIOD_SEC : 0.0;
-            double pr = trueRange + c * codePhaseDelaySec;
-
-            ephemerides.push_back(ephem);
-            measuredPseudoranges.push_back(pr);
-            activePrns.push_back(m_channels[i].m_svId);
+            continue;
         }
+
+        // No fabricated fallback: a satellite only contributes once its real navigation message has
+        // been fully decoded (subframes 1, 2 and 3 all seen), so every measurement here comes from
+        // the actual tracked signal.
+        bool complete = m_channels[i].updateNavigation(m_navDecoder);
+        if (!complete)
+        {
+            continue;
+        }
+
+        size_t promptCount = m_channels[i].getPromptHistory().size();
+        size_t subframeStartSample = m_channels[i].getLastSubframeStartSample();
+        if (promptCount < subframeStartSample)
+        {
+            continue;
+        }
+
+        // TOW in the HOW word marks the start of the NEXT subframe, so this subframe began 6s earlier.
+        double subframeStartTow = m_channels[i].getLastSubframeTow() - 6.0;
+        double elapsedSeconds = static_cast<double>(promptCount - subframeStartSample) * GPS_CA_CODE_PERIOD_SEC;
+        double transmitTime = subframeStartTow + elapsedSeconds;
+
+        ephemerides.push_back(m_channels[i].getAccumulatedEphemeris());
+        transmitTimes.push_back(transmitTime);
+        activePrns.push_back(m_channels[i].m_svId);
     }
 
     if (ephemerides.size() < 4)
     {
-        std::cerr << "Navigation Solution Error: Less than 4 acquired satellites available ("
-                  << ephemerides.size() << " acquired)." << std::endl;
+        std::cerr << "Navigation Solution Error: Less than 4 satellites with a complete decoded ephemeris ("
+                  << ephemerides.size() << " ready)." << std::endl;
         solution.isValid = false;
         return false;
     }
 
-    bool success = m_pvtSolver.solvePosition(ephemerides, measuredPseudoranges, 0.0, solution);
+    // Bootstrap a common receiver time reference from the latest-arriving real signal plus a nominal
+    // transit time (this is a batch/file-based pipeline with no free-running receiver clock yet), then
+    // derive each pseudorange as the implied light-time from its real decoded transmit time.
+    double receiverTime = *std::max_element(transmitTimes.begin(), transmitTimes.end()) + nominalTransitTimeSec;
+
+    std::vector<double> measuredPseudoranges(transmitTimes.size());
+    for (size_t i = 0; i < transmitTimes.size(); i++)
+    {
+        measuredPseudoranges[i] = (receiverTime - transmitTimes[i]) * c;
+    }
+
+    bool success = m_pvtSolver.solvePosition(ephemerides, measuredPseudoranges, transmitTimes, solution);
     if (success)
     {
         std::cout << "\n=============================================" << std::endl;

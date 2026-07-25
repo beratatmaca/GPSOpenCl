@@ -96,7 +96,8 @@ TEST(PVTSolverTest, SolvePositionSynthesized)
 
     GPSOpenCl::PVTSolver solver;
     GPSOpenCl::ReceiverPvtSolution solution;
-    bool success = solver.solvePosition(ephemerides, measuredRanges, 0.0, solution);
+    std::vector<double> transmitTimes(4, 0.0);
+    bool success = solver.solvePosition(ephemerides, measuredRanges, transmitTimes, solution);
 
     EXPECT_TRUE(success);
     EXPECT_TRUE(solution.isValid);

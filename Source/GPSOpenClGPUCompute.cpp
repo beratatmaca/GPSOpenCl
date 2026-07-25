@@ -425,16 +425,6 @@ int Compute::sum(const FloatVector &input, float *sumValue)
         unsigned int points_per_group = 0;
         float tmpSumValue = 0.0f;
 
-        if (m_allocatedMemory.size() < length)
-        {
-            m_allocatedMemory.resize(length);
-        }
-
-        for (unsigned int j = 0; j < length; j++)
-        {
-            m_allocatedMemory[j] = input.at(j);
-        }
-
         cl_kernel sumKernel = m_gpu.m_acquisitionKernelList[GpuHandler::Sum];
 
         m_error = clGetKernelWorkGroupInfo(sumKernel, m_gpu.m_device, CL_KERNEL_WORK_GROUP_SIZE, sizeof(local_size),
@@ -452,12 +442,29 @@ int Compute::sum(const FloatVector &input, float *sumValue)
                     points_per_group = length;
                 }
 
-                d_input = clCreateBuffer(m_gpu.m_context, CL_MEM_READ_WRITE, length * sizeof(float), NULL, &m_error);
+                // Pad up to a whole number of local_size-sized chunks so every kernel launch is exactly
+                // one work-group's worth of real (or zero-padded) data at buffer offset 0.
+                size_t paddedLength = ((static_cast<size_t>(length) + local_size - 1) / local_size) * local_size;
+                if (m_allocatedMemory.size() < paddedLength)
+                {
+                    m_allocatedMemory.resize(paddedLength);
+                }
+
+                for (unsigned int j = 0; j < length; j++)
+                {
+                    m_allocatedMemory[j] = input.at(j);
+                }
+                for (size_t j = length; j < paddedLength; j++)
+                {
+                    m_allocatedMemory[j] = 0.0f;
+                }
+
+                d_input = clCreateBuffer(m_gpu.m_context, CL_MEM_READ_WRITE, local_size * sizeof(float), NULL, &m_error);
                 d_sumValue = clCreateBuffer(m_gpu.m_context, CL_MEM_READ_WRITE, sizeof(float), NULL, &m_error);
 
                 if (m_error == CL_SUCCESS)
                 {
-                    global_size = length;
+                    global_size = local_size;
                     size_t computedSize = 0;
                     do
                     {
@@ -473,7 +480,7 @@ int Compute::sum(const FloatVector &input, float *sumValue)
 
                         computedSize += local_size;
                         *sumValue += tmpSumValue;
-                    } while (m_error == CL_SUCCESS && computedSize < global_size);
+                    } while (m_error == CL_SUCCESS && computedSize < paddedLength);
 
                     clReleaseMemObject(d_input);
                     clReleaseMemObject(d_sumValue);

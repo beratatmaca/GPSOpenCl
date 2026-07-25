@@ -2,6 +2,7 @@
 #define INCLUDED_GPSOPENCL_CHANNEL_H
 
 #include "GPSOpenClCommon.h"
+#include "GPSOpenClNavigationDecoder.h"
 #include "GPSOpenClSettings.h"
 #include "GPSOpenClTracking.h"
 
@@ -26,6 +27,16 @@ class Channel
     void trackBlock(const ComplexFloatVector &input);
     const ComplexFloatVector &getPromptHistory() const { return m_promptHistory; }
 
+    // Attempts to decode the next available subframe from this channel's tracked prompt history and
+    // merges it into the accumulated ephemeris. Returns true once subframes 1, 2 and 3 have all been
+    // seen at least once, at which point getAccumulatedEphemeris()/getLastSubframeTow()/
+    // getLastSubframeStartSample() describe a complete, real ephemeris (never fabricated).
+    bool updateNavigation(NavigationDecoder &decoder);
+    bool hasCompleteEphemeris() const;
+    const GpsEphemeris &getAccumulatedEphemeris() const { return m_accumulatedEphemeris; }
+    double getLastSubframeTow() const { return m_lastSubframeTow; }
+    size_t getLastSubframeStartSample() const { return m_lastSubframeStartSample; }
+
   private:
     int m_acquisitionPeakIndex;
     float m_acquisitionPeakValue;
@@ -38,6 +49,12 @@ class Channel
     bool m_isAcquired;
     Tracking *m_tracking;
     ComplexFloatVector m_promptHistory;
+
+    size_t m_navBitOffset;
+    uint8_t m_seenSubframeMask;
+    GpsEphemeris m_accumulatedEphemeris;
+    double m_lastSubframeTow;
+    size_t m_lastSubframeStartSample;
 };
 } // namespace GPSOpenCl
 
