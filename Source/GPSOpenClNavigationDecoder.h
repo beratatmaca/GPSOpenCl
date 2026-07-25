@@ -134,9 +134,23 @@ class NavigationDecoder
      *  @param sink Sink implementation. */
     void setSink(std::shared_ptr<Sink> sink) { m_sink = sink; }
 
+    /** @brief Check if broadcast ionospheric parameters have been decoded.
+     *  @return True if Subframe 4 Page 18 has been seen. */
+    bool hasIonosphericParams() const { return m_hasIonoParams; }
+
+    /** @brief Get decoded broadcast Klobuchar ionospheric parameters.
+     *  @return Alpha/beta coefficients (zero if never decoded). */
+    const AtmosphericInput &getIonosphericParams() const { return m_ionoParams; }
+
   private:
+    /** @brief Decode Subframe 4 Page 18 ionospheric/UTC alpha/beta coefficients if present.
+     *  @param words30bit Vector of 10 parity-checked 30-bit words. */
+    void decodeIonosphericParams(const std::vector<uint32_t> &words30bit);
+
     NavDecoderInput m_inputConfig;            ///< Decoder parameters.
     std::shared_ptr<Sink> m_sink{nullptr};    ///< Telemetry sink.
+    AtmosphericInput m_ionoParams{};          ///< Decoded broadcast Klobuchar coefficients.
+    bool m_hasIonoParams{false};              ///< True once Subframe 4 Page 18 is decoded.
 };
 } // namespace GPSOpenCl
 

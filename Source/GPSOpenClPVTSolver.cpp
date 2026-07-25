@@ -214,7 +214,7 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
 
 
         EcefPosition rxEcefEstimate{state[0], state[1], state[2]};
-        double rxAltitudeEstimate = ecefToWgs84(rxEcefEstimate).altitude;
+        GeodeticPosition rxGeodeticEstimate = ecefToWgs84(rxEcefEstimate);
 
         for (size_t i = 0; i < numSats; i++)
         {
@@ -233,12 +233,12 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
             dz = orbits[i].position.z - state[2];
             range = std::sqrt(dx * dx + dy * dy + dz * dz);
 
-            double azDeg = 0.0, elDeg = 0.0;
-            AtmosphericCorrections::computeAzimuthElevation(rxEcefEstimate, orbits[i].position, azDeg, elDeg);
-            double tropoDelayMeters = AtmosphericCorrections::saastamoinenTroposphericDelay(rxAltitudeEstimate, elDeg);
+            AtmosphericOutput atmo = AtmosphericCorrections::computeCorrections(
+                orbits[i].svId, rxGeodeticEstimate, rxEcefEstimate, orbits[i].position,
+                transmitTimesSeconds[i], m_ionoParams);
 
             double predictedPseudorange = range + state[3];
-            deltaRho[i] = (correctedRanges[i] - tropoDelayMeters) - predictedPseudorange;
+            deltaRho[i] = (correctedRanges[i] - atmo.ionoDelayMeters - atmo.tropoDelayMeters) - predictedPseudorange;
 
             H[i][0] = -dx / range;
             H[i][1] = -dy / range;

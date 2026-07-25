@@ -30,6 +30,8 @@ Application::Application(Settings::Configuration conf)
 
     m_acquisition = new Acquisition(m_configuration);
 
+    m_pvtSolver.setIonosphericParams(conf.atmosphericInput);
+
     initializeChannels();
 }
 
@@ -148,6 +150,11 @@ bool Application::computeNavigationSolution(ReceiverPvtSolution &solution)
     for (size_t i = 0; i < transmitTimes.size(); i++)
     {
         measuredPseudoranges[i] = (receiverTime - transmitTimes[i]) * c;
+    }
+
+    if (m_navDecoder.hasIonosphericParams())
+    {
+        m_pvtSolver.setIonosphericParams(m_navDecoder.getIonosphericParams());
     }
 
     bool success = m_pvtSolver.solvePosition(ephemerides, measuredPseudoranges, transmitTimes, solution);

@@ -114,8 +114,13 @@ class PVTSolver
                        const std::vector<double> &transmitTimesSeconds,
                        PvtSolverOutput &outputSolution);
 
+    /** @brief Set broadcast Klobuchar ionospheric coefficients used for atmospheric correction.
+     *  @param params Alpha/beta coefficients (e.g. from NavigationDecoder::getIonosphericParams). */
+    void setIonosphericParams(const AtmosphericInput &params) { m_ionoParams = params; }
+
   private:
-    PvtSolverInput m_inputConfig; ///< Solver parameters.
+    PvtSolverInput m_inputConfig;     ///< Solver parameters.
+    AtmosphericInput m_ionoParams{};  ///< Broadcast Klobuchar coefficients (zero until decoded).
 };
 } // namespace GPSOpenCl
 

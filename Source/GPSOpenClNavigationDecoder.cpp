@@ -268,8 +268,34 @@ bool NavigationDecoder::decodeSubframe(const std::vector<uint32_t> &words30bit, 
         ephem.idot = extractSignedBits(w10, 9, 14) * std::pow(2.0, -43) * M_PI;
         ephem.isValid = true;
     }
+    else if (ephem.subframeId == 4)
+    {
+        decodeIonosphericParams(words30bit);
+    }
 
     return ephem.isValid;
+}
+
+void NavigationDecoder::decodeIonosphericParams(const std::vector<uint32_t> &words30bit)
+{
+    uint32_t w3 = words30bit[2];
+    uint32_t dataId = extractUnsignedBits(w3, 1, 2);
+    uint32_t pageId = extractUnsignedBits(w3, 3, 6);
+    if (dataId != 1 || pageId != 56) return;
+
+    uint32_t w4 = words30bit[3];
+    uint32_t w5 = words30bit[4];
+
+    m_ionoParams.structVersion = STRUCT_VERSION_1;
+    m_ionoParams.alpha0 = extractSignedBits(w3, 9, 8) * std::pow(2.0, -30);
+    m_ionoParams.alpha1 = extractSignedBits(w3, 17, 8) * std::pow(2.0, -27);
+    m_ionoParams.alpha2 = extractSignedBits(w4, 1, 8) * std::pow(2.0, -24);
+    m_ionoParams.alpha3 = extractSignedBits(w4, 9, 8) * std::pow(2.0, -24);
+    m_ionoParams.beta0 = extractSignedBits(w4, 17, 8) * std::pow(2.0, 11);
+    m_ionoParams.beta1 = extractSignedBits(w5, 1, 8) * std::pow(2.0, 14);
+    m_ionoParams.beta2 = extractSignedBits(w5, 9, 8) * std::pow(2.0, 16);
+    m_ionoParams.beta3 = extractSignedBits(w5, 17, 8) * std::pow(2.0, 16);
+    m_hasIonoParams = true;
 }
 
 bool NavigationDecoder::processPromptSignal(int svId, const ComplexFloatVector &promptHistory, size_t &bitOffset,

@@ -45,9 +45,7 @@ AtmosphericOutput AtmosphericCorrections::computeCorrections(int svId,
     params.beta[2] = input.beta2;
     params.beta[3] = input.beta3;
 
-    double ionoDelaySec = klobucharIonosphericDelay(rxPos, elDeg, azDeg, gpsTimeSec, params);
-    const double c = 299792458.0;
-    out.ionoDelayMeters = ionoDelaySec * c;
+    out.ionoDelayMeters = klobucharIonosphericDelay(rxPos, elDeg, azDeg, gpsTimeSec, params);
     out.tropoDelayMeters = saastamoinenTroposphericDelay(rxPos.altitude, elDeg);
 
     return out;
