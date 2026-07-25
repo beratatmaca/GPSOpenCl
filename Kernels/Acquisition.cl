@@ -1,12 +1,3 @@
-#define mask_left fft_index
-#define mask_right stage
-#define shift_pos N2
-#define angle size
-#define start br.s0
-#define cosine x3.s0
-#define sine x3.s1
-#define wk x2
-
 /**
  * @brief This method functionality defined below
  * - Loads data from global memory, computes 4-point FFT, and stores the result
@@ -20,20 +11,20 @@
  *   Scarpino, M. (2012). OpenCL in action: How to accelerate graphics and
  * computation. Manning. CH 14. Signal processing and the fast Fourier transform
  *
- * @param g_data complex input of fft algorithm. It is sequenced as Re0, Im0,
- * Re1, Im1...
- * @param l_data complex output of computed fft sequence. Stored in local memory
- * @param points_per_group equals to points_per_group = local_mem_size /
- * (2*sizeof(float)). It is boundary for maximum computable fft length
- * @param size length of the FFT
- * @param dir 1 for FFT, -1 for IFFT
+ * @param g_data Complex input/output data (interleaved Re, Im).
+ * @param l_data Local memory buffer.
+ * @param points_per_group Maximum computable FFT points per workgroup.
+ * @param size Length of the FFT.
+ * @param dir 1 for FFT, -1 for IFFT.
  */
 __kernel void fft_init(__global float2 *g_data, __local float2 *l_data,
                        uint points_per_group, uint size, int dir) {
 
   uint4 br, index;
-  uint points_per_item, g_addr, l_addr, i, fft_index, stage, N2;
-  float2 x1, x2, x3, x4, sum12, diff12, sum34, diff34;
+  uint points_per_item, g_addr, l_addr, i;
+  uint mask_left, mask_right, shift_pos, angle, start, N2, fft_index, stage;
+  float2 x1, x2, x3, x4, sum12, diff12, sum34, diff34, wk;
+  float cosine, sine;
 
   points_per_item = points_per_group / get_local_size(0);
   l_addr = get_local_id(0) * points_per_item;
@@ -155,7 +146,6 @@ __kernel void fft_stage(__global float2 *g_data, uint stage,
   uint points_per_item, addr, N, ang, i;
   float c, s;
   float2 input1, input2, w;
-  /* Assign work item position */
   points_per_item = points_per_group / get_local_size(0);
   addr = (get_group_id(0) + (get_group_id(0) / stage) * stage) *
              (points_per_group / 2) +
@@ -201,6 +191,7 @@ __kernel void fft_scale(__global float2 *g_data, uint points_per_group,
 }
 
 /**
+ * @brief Element-wise complex multiplication: c = a * b
  */
 __kernel void complexMultiplier(__global float2 *a, __global float2 *b,
                                 __global float2 *c,
@@ -217,10 +208,10 @@ __kernel void complexMultiplier(__global float2 *a, __global float2 *b,
 }
 
 /**
+ * @brief Computes magnitude squared of complex numbers: c = Re^2 + Im^2
  */
 __kernel void absolute(__global float2 *a, __global float2 *c,
                        unsigned int points_per_group) {
-  //|(a + ib)| = (a^2) + (b^2)
   uint points_per_item, addr, i;
 
   points_per_item = points_per_group / get_local_size(0);
@@ -232,6 +223,7 @@ __kernel void absolute(__global float2 *a, __global float2 *c,
 }
 
 /**
+ * @brief Workgroup parallel tree reduction sum.
  */
 __kernel void sum(__global float *input, __global float *sumValue,
                   __local float *localMemory1) {
@@ -239,7 +231,6 @@ __kernel void sum(__global float *input, __global float *sumValue,
   const size_t globalId = get_global_id(0);
   const size_t localId = get_local_id(0);
 
-  // Find sum of input
   localMemory1[localId] = input[globalId];
 
   barrier(CLK_LOCAL_MEM_FENCE);
