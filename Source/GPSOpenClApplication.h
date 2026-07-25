@@ -2,11 +2,17 @@
 #define INCLUDED_GPSOPENCL_APPLICATION_H
 
 #include "GPSOpenClAcquisition.h"
+#include "GPSOpenClAtmosphericCorrections.h"
 #include "GPSOpenClChannel.h"
 #include "GPSOpenClCode.h"
 #include "GPSOpenClGPUCompute.h"
+#include "GPSOpenClNmeaGenerator.h"
+#include "GPSOpenClNavigationDecoder.h"
+#include "GPSOpenClPVTSolver.h"
 #include "GPSOpenClSettings.h"
 #include "GPSOpenClTracking.h"
+
+#include <string>
 
 namespace GPSOpenCl
 {
@@ -16,8 +22,10 @@ class Application
     Application(Settings::Configuration conf);
     ~Application();
 
-    void searchForSatellites(const ComplexFloatVector input);
-    void trackSatellites(const ComplexFloatVector input);
+    void searchForSatellites(const ComplexFloatVector &input);
+    void trackSatellites(const ComplexFloatVector &input);
+    bool computeNavigationSolution(ReceiverPvtSolution &solution);
+    void exportTelemetryJson(const std::string &filepath, const ReceiverPvtSolution &solution);
 
   private:
     void initializeChannels();
@@ -28,8 +36,10 @@ class Application
 
     Code *m_code;
     Compute *m_gpu;
+    PVTSolver m_pvtSolver;
+    NavigationDecoder m_navDecoder;
     Channel m_channels[GPS_CA_SV_COUNT];
 };
 } // namespace GPSOpenCl
 
-#endif //! INCLUDED_GPSOPENCL_ACQUISITION_H
+#endif //! INCLUDED_GPSOPENCL_APPLICATION_H

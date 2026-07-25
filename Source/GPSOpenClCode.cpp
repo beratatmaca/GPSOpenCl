@@ -1,5 +1,6 @@
 #include "GPSOpenClCode.h"
 
+#include <algorithm>
 #include <cstring>
 
 using namespace GPSOpenCl;
@@ -93,12 +94,14 @@ void Code::calculateCACode()
  */
 void Code::createLookupTable(Compute *gpu)
 {
-    int codeIndexes[m_sampleLength];
-    float codeValue = 0.0;
-    ComplexFloatVector codeFreqDomain;
-    ComplexFloatVector tmpInput;
+    m_upsampledCaCode.clear();
+    m_upsampledFreqDomainCaCode.clear();
 
-    memset(codeIndexes, 0, m_sampleLength * sizeof(int));
+    if (m_sampleLength <= 0) return;
+
+    std::vector<int> codeIndexes(m_sampleLength, 0);
+    float codeValue = 0.0;
+    ComplexFloatVector tmpInput;
 
     for (int i = 1; i <= m_sampleLength; i++)
     {
@@ -109,17 +112,15 @@ void Code::createLookupTable(Compute *gpu)
 
     for (int i = 1; i <= GPS_CA_SV_COUNT; i++)
     {
-        if (!tmpInput.empty())
-        {
-            tmpInput.clear();
-        }
+        tmpInput.clear();
 
         m_upsampledCaCode.push_back(FloatVector());
         m_upsampledFreqDomainCaCode.push_back(ComplexFloatVector());
 
         for (int j = 0; j < m_sampleLength; j++)
         {
-            codeValue = static_cast<float>(m_caCode[i - 1][codeIndexes[j] - 1]);
+            int codeIdx = std::clamp(codeIndexes[j] - 1, 0, GPS_CA_CODE_LENGTH - 1);
+            codeValue = static_cast<float>(m_caCode[i - 1][codeIdx]);
             m_upsampledCaCode[i - 1].push_back(codeValue);
 
             tmpInput.push_back(std::complex<float>(codeValue, 0.0));

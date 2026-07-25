@@ -2,6 +2,7 @@
 
 #include <fstream>
 #include <iostream>
+#include <vector>
 
 using namespace GPSOpenCl;
 
@@ -12,6 +13,12 @@ using namespace GPSOpenCl;
 Settings::Settings()
 {
     m_confFileName = "DefaultConf.ini";
+    configuration.rawDataSettings.dataSource = "capture.dat";
+    configuration.rawDataSettings.samplingFrequency = 4096000.0f;
+    configuration.rawDataSettings.numberOfSamplesPerCode = 4096;
+    configuration.acquisitionSettings.acquisitionDopplerMinimum = -4000;
+    configuration.acquisitionSettings.acquisitionDopplerMaximum = 4000;
+    configuration.acquisitionSettings.acquisitionDopplerSearchRange = 500;
 }
 
 /**
@@ -31,11 +38,28 @@ void Settings::captureSettings()
     std::ifstream confFile;
     std::string line;
 
-    confFile.open(m_confFileName);
+    std::vector<std::string> candidatePaths = {
+        m_confFileName,
+        "build/Source/" + m_confFileName,
+        "Tests/Scripts/ConfigurationFile/" + m_confFileName,
+        "../Tests/Scripts/ConfigurationFile/" + m_confFileName,
+        "../../Tests/Scripts/ConfigurationFile/" + m_confFileName
+    };
 
-    if (!confFile)
+    bool opened = false;
+    for (const auto &path : candidatePaths)
     {
-        std::cerr << "Error in opening the configuration file" << std::endl;
+        confFile.open(path);
+        if (confFile.is_open())
+        {
+            opened = true;
+            break;
+        }
+    }
+
+    if (!opened)
+    {
+        std::cerr << "Error in opening the configuration file. Using default parameters." << std::endl;
     }
     else
     {
@@ -43,9 +67,8 @@ void Settings::captureSettings()
         {
             fillMap(line);
         }
+        confFile.close();
     }
-
-    confFile.close();
 
     updateConfigurationStruct();
 }

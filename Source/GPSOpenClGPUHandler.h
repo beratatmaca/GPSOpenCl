@@ -54,7 +54,7 @@ class GpuHandler
   private:
     cl_platform_id m_platform;
     cl_int m_error;
-    std::string ProgramCharList[GPSOpenClProgramCount]{"../../Kernels/Acquisition.cl", "../../Kernels/Tracking.cl"};
+    std::string ProgramCharList[GPSOpenClProgramCount]{"Acquisition.cl", "Tracking.cl"};
 
     std::string GPSOpenClAcquisitionKernelCharList[AcquisitionKernelCount]{
         "fft_init", "fft_stage", "fft_scale", "complexMultiplier", "absolute", "sum"};

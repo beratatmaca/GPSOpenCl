@@ -18,7 +18,7 @@ class Acquisition
     Acquisition(Settings::Configuration conf);
     ~Acquisition();
 
-    void correlate(const ComplexFloatVector input, Compute *gpu, Code *code, Channel *acqChannel);
+    void correlate(const ComplexFloatVector &input, Compute *gpu, Code *code, Channel *acqChannel);
 
   private:
     void createDopplerSearchTable();

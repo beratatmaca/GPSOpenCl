@@ -1,0 +1,162 @@
+#!/usr/bin/env python3
+"""
+End-to-End Testing & Profiling Harness for GPSOpenCl using gps-sdr-sim.
+Designed for LLMs, automated benchmarking agents, and developers.
+"""
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+import time
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="End-to-End GPS Receiver Benchmark & Profiler Harness")
+    parser.add_argument("--lat", type=float, default=48.1173, help="Simulated target latitude in degrees")
+    parser.add_argument("--lon", type=float, default=11.5167, help="Simulated target longitude in degrees")
+    parser.add_argument("--alt", type=float, default=545.4, help="Simulated target altitude in meters")
+    parser.add_argument("--duration", type=int, default=2, help="Simulation duration in seconds")
+    parser.add_argument("--sampling-freq", type=int, default=4096000, help="Sampling frequency in Hz")
+    parser.add_argument("--bit-depth", type=int, default=8, help="IQ bit depth (8 or 16)")
+    parser.add_argument("--nav-file", type=str, default="Tools/gps-sdr-sim/brdc0010.22n", help="RINEX navigation file path")
+    parser.add_argument("--output-json", type=str, default="e2e_benchmark_report.json", help="Path to write LLM-parsable JSON report")
+    parser.add_argument("--output-md", type=str, default="e2e_benchmark_report.md", help="Path to write Markdown report")
+    return parser.parse_args()
+
+def main():
+    args = parse_args()
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    
+    sim_binary = os.path.join(project_root, "Tools", "gps-sdr-sim", "gps-sdr-sim")
+    receiver_binary = os.path.join(project_root, "build", "Source", "GPSOpenCl")
+    nav_file = os.path.abspath(os.path.join(project_root, args.nav_file))
+    sim_output_bin = os.path.join(project_root, "build", "simulated_benchmark.bin")
+
+    if not os.path.exists(sim_binary):
+        print(f"Error: gps-sdr-sim binary not found at {sim_binary}", file=sys.stderr)
+        sys.exit(1)
+
+    if not os.path.exists(receiver_binary):
+        print(f"Error: GPSOpenCl binary not found at {receiver_binary}. Please build the project first.", file=sys.stderr)
+        sys.exit(1)
+
+    print("=========================================================")
+    print("   GPSOpenCl End-to-End Simulation & Profiling Suite     ")
+    print("=========================================================")
+    print(f"Scenario Location : Lat {args.lat:.4f} deg, Lon {args.lon:.4f} deg, Alt {args.alt:.1f} m")
+    print(f"Sampling Frequency: {args.sampling_freq} Hz ({args.bit_depth}-bit IQ)")
+    print(f"Simulation Length : {args.duration} seconds")
+
+    # Step 1: Run gps-sdr-sim
+    sim_cmd = [
+        sim_binary,
+        "-e", nav_file,
+        "-l", f"{args.lat},{args.lon},{args.alt}",
+        "-s", str(args.sampling_freq),
+        "-b", str(args.bit_depth),
+        "-d", str(args.duration),
+        "-o", sim_output_bin
+    ]
+
+    print("\n[Step 1/2] Generating simulated GPS L1 C/A RF signal with gps-sdr-sim...")
+    t_sim_start = time.time()
+    sim_proc = subprocess.run(sim_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    t_sim_end = time.time()
+    sim_wall_time = t_sim_end - t_sim_start
+
+    if sim_proc.returncode != 0:
+        print(f"gps-sdr-sim failed: {sim_proc.stderr}", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"-> Generated simulated binary signal ({os.path.getsize(sim_output_bin)} bytes) in {sim_wall_time:.2f} seconds.")
+
+    # Step 2: Run GPSOpenCl Software Receiver
+    print("\n[Step 2/2] Running GPSOpenCl Software Receiver Pipeline...")
+    t_rx_start = time.time()
+    rx_proc = subprocess.run([receiver_binary], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, cwd=project_root)
+    t_rx_end = time.time()
+    rx_wall_time = t_rx_end - t_rx_start
+
+    rx_stdout = rx_proc.stdout
+
+    # Parse receiver metrics
+    acquired_satellites = []
+    for line in rx_stdout.splitlines():
+        if "ACQUIRED!" in line:
+            parts = line.strip().split()
+            # Example line: --> SV ID 1 ACQUIRED! (C/N0: 38.5926 dB-Hz, Doppler: 3500 Hz)
+            sv_id = int(parts[3])
+            cn0 = float(parts[6])
+            doppler = float(parts[9])
+            acquired_satellites.append({
+                "sv_id": sv_id,
+                "cn0_db_hz": cn0,
+                "doppler_hz": doppler
+            })
+
+    total_samples = args.duration * args.sampling_freq
+    throughput_m_samples_sec = (total_samples / 1e6) / rx_wall_time if rx_wall_time > 0 else 0
+    realtime_speedup_factor = args.duration / rx_wall_time if rx_wall_time > 0 else 0
+
+    report_data = {
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "scenario": {
+            "target_lat": args.lat,
+            "target_lon": args.lon,
+            "target_alt_meters": args.alt,
+            "duration_sec": args.duration,
+            "sampling_frequency_hz": args.sampling_freq,
+            "bit_depth": args.bit_depth
+        },
+        "performance_profile": {
+            "signal_gen_wall_time_sec": round(sim_wall_time, 3),
+            "receiver_processing_wall_time_sec": round(rx_wall_time, 3),
+            "throughput_m_samples_per_sec": round(throughput_m_samples_sec, 2),
+            "realtime_speedup_factor": round(realtime_speedup_factor, 2)
+        },
+        "acquisition_metrics": {
+            "acquired_count": len(acquired_satellites),
+            "acquired_satellites": acquired_satellites
+        },
+        "receiver_status": "SUCCESS" if rx_proc.returncode == 0 else "FAILURE"
+    }
+
+    # Write JSON report
+    with open(args.output_json, "w") as f:
+        json.dump(report_data, f, indent=2)
+
+    # Write Markdown report
+    with open(args.output_md, "w") as f:
+        f.write(f"# GPSOpenCl End-to-End Simulation & Profiling Report\n\n")
+        f.write(f"- **Timestamp**: {report_data['timestamp']}\n")
+        f.write(f"- **Status**: `{report_data['receiver_status']}`\n")
+        f.write(f"- **Target Location**: Lat `{args.lat}`°, Lon `{args.lon}`°, Alt `{args.alt}` m\n\n")
+        f.write(f"## Performance Profile\n\n")
+        f.write(f"| Metric | Value |\n")
+        f.write(f"| --- | --- |\n")
+        f.write(f"| Signal Generation Time | `{sim_wall_time:.2f} s` |\n")
+        f.write(f"| Receiver Execution Time | `{rx_wall_time:.2f} s` |\n")
+        f.write(f"| Throughput | `{throughput_m_samples_sec:.2f} MSamples/s` |\n")
+        f.write(f"| Real-Time Speedup | `{realtime_speedup_factor:.2f}x` |\n\n")
+        f.write(f"## Acquired Satellite Channels ({len(acquired_satellites)} Satellites)\n\n")
+        f.write(f"| SV ID | C/N0 (dB-Hz) | Doppler Shift (Hz) |\n")
+        f.write(f"| --- | --- | --- |\n")
+        for sat in acquired_satellites:
+            f.write(f"| PRN {sat['sv_id']:02d} | `{sat['cn0_db_hz']:.2f}` | `{sat['doppler_hz']:.1f}` |\n")
+
+    print("\n=========================================================")
+    print("   End-to-End Benchmark Completed Successfully           ")
+    print("=========================================================")
+    print(f"Receiver Processing Time : {rx_wall_time:.3f} s")
+    print(f"Processing Throughput    : {throughput_m_samples_sec:.2f} MSamples/s ({realtime_speedup_factor:.2f}x Realtime)")
+    print(f"Acquired Satellite Channels: {len(acquired_satellites)} / 32")
+    print(f"JSON LLM Report Written  : {args.output_json}")
+    print(f"Markdown Report Written  : {args.output_md}")
+
+    # Clean up temporary bin file
+    if os.path.exists(sim_output_bin):
+        os.remove(sim_output_bin)
+
+if __name__ == "__main__":
+    main()

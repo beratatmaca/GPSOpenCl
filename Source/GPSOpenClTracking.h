@@ -13,12 +13,14 @@ class Tracking
     Tracking(Settings::Configuration conf);
     ~Tracking();
 
-    void doWork(const ComplexFloatVector input, int prn, ComplexFloatVector *output);
-    void ncoMultiplicate(const ComplexFloatVector input, float frequency, ComplexFloatVector *output);
+    void initTrackingState(float initDopplerHz, float initCodePhaseChips);
+    void doWork(const ComplexFloatVector &input, int prn, ComplexFloatVector *output);
+    void ncoMultiplicate(const ComplexFloatVector &input, float frequency, ComplexFloatVector *output);
 
   private:
     void earlyLatePromptGen(int prn);
     void numericOscillator();
+    void accumulator(const ComplexFloatVector &input);
     void freqDiscriminator();
     void codeDiscriminator();
     void resetAccumulation();

@@ -42,20 +42,21 @@ void Acquisition::exp(int length, float frequency, float samplingRate, float pha
     for (int sample = 0; sample < length; sample++)
     {
         float sampleFloating = static_cast<float>(sample);
-        value = std::exp((IMAGINARY_UNIT * 2.0f * pi * frequency * sampleFloating * (1 / samplingRate)) + phaseOffset);
+        value = std::exp((IMAGINARY_UNIT * 2.0f * pi * frequency * sampleFloating * (1.0f / samplingRate)) + phaseOffset);
         output->push_back(value);
     }
 }
 
-void Acquisition::correlate(const ComplexFloatVector input, Compute *gpu, Code *code, Channel *acqChannel)
+void Acquisition::correlate(const ComplexFloatVector &input, Compute *gpu, Code *code, Channel *acqChannel)
 {
     float frequency = m_initialFrequency;
-    float sumVal = 0.0f;
     float maxVal = 0.0f;
-    int maxIndex = 0.0f;
+    int maxIndex = 0;
 
     for (int freqBin = 0; freqBin < m_numberOfFreqencyBins; freqBin++)
     {
+        float sumVal = 0.0f;
+
         ComplexFloatVector dopplerMultiplication;
         gpu->complexMultiplier(input, m_dopplerSearch[freqBin], &dopplerMultiplication);
 
@@ -75,8 +76,8 @@ void Acquisition::correlate(const ComplexFloatVector input, Compute *gpu, Code *
         gpu->sum(correlationAbs, &sumVal);
         sumVal /= static_cast<float>(correlationAbs.size() * m_numberOfFreqencyBins);
 
-        std::max_element(correlationAbs.begin(), correlationAbs.end());
-        maxIndex = std::max_element(correlationAbs.begin(), correlationAbs.end()) - correlationAbs.begin();
+        auto maxIt = std::max_element(correlationAbs.begin(), correlationAbs.end());
+        maxIndex = maxIt - correlationAbs.begin();
         maxVal = correlationAbs.at(maxIndex);
 
         acqChannel->insertAcquisitionMetrics(maxVal, maxIndex, frequency, sumVal);

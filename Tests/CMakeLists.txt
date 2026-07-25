@@ -24,11 +24,21 @@ add_executable(
     ${CMAKE_SOURCE_DIR}/Source/GPSOpenClAcquisition.cpp
     ${CMAKE_SOURCE_DIR}/Source/GPSOpenClTracking.cpp
     ${CMAKE_SOURCE_DIR}/Source/GPSOpenClChannel.cpp
+    ${CMAKE_SOURCE_DIR}/Source/GPSOpenClApplication.cpp
+    ${CMAKE_SOURCE_DIR}/Source/GPSOpenClNavigationDecoder.cpp
+    ${CMAKE_SOURCE_DIR}/Source/GPSOpenClPVTSolver.cpp
+    ${CMAKE_SOURCE_DIR}/Source/GPSOpenClNmeaGenerator.cpp
+    ${CMAKE_SOURCE_DIR}/Source/GPSOpenClAtmosphericCorrections.cpp
     GPUTest.cpp
     CaCodeTest.cpp
     SettingsTest.cpp
     AcquisitionTest.cpp
-    #TrackingTest.cpp
+    TrackingTest.cpp
+    NavigationDecoderTest.cpp
+    PVTSolverTest.cpp
+    NmeaGeneratorTest.cpp
+    AtmosphericCorrectionsTest.cpp
+    E2ETest.cpp
 )
 
 target_compile_definitions(GPSOpenClTest PUBLIC CTEST)
@@ -58,6 +68,27 @@ gtest_discover_tests(
 file(
   COPY 
   ${CMAKE_CURRENT_SOURCE_DIR}/Scripts/ConfigurationFile/DefaultConf.ini
+  DESTINATION 
+  ${CMAKE_CURRENT_BINARY_DIR}
+)
+
+file(
+  COPY 
+  ${CMAKE_CURRENT_SOURCE_DIR}/Scripts
+  DESTINATION 
+  ${CMAKE_CURRENT_BINARY_DIR}
+)
+
+file(
+  COPY 
+  ${CMAKE_SOURCE_DIR}/Kernels
+  DESTINATION 
+  ${CMAKE_CURRENT_BINARY_DIR}
+)
+
+file(
+  COPY 
+  ${CMAKE_SOURCE_DIR}/Tools
   DESTINATION 
   ${CMAKE_CURRENT_BINARY_DIR}
 )

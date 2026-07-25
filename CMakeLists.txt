@@ -18,9 +18,29 @@ set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DCMAKE_EXPORT_COMPILE_COMMA
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
 
-find_package(OpenCL REQUIRED)
+find_package(OpenCL QUIET)
+
+if(NOT OpenCL_FOUND)
+    include(FetchContent)
+    FetchContent_Declare(
+        opencl_headers
+        GIT_REPOSITORY https://github.com/KhronosGroup/OpenCL-Headers.git
+        GIT_TAG v2023.12.14
+    )
+    FetchContent_Declare(
+        opencl_icd_loader
+        GIT_REPOSITORY https://github.com/KhronosGroup/OpenCL-ICD-Loader.git
+        GIT_TAG v2023.12.14
+    )
+    set(OPENCL_ICD_LOADER_BUILD_TESTING OFF CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(opencl_headers opencl_icd_loader)
+
+    if(NOT TARGET OpenCL::OpenCL)
+        add_library(OpenCL::OpenCL ALIAS OpenCL)
+    endif()
+endif()
+
+enable_testing()
 
 add_subdirectory(Source)
 add_subdirectory(Tests)
-
-enable_testing()

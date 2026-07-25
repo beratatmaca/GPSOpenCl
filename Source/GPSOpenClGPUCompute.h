@@ -18,17 +18,17 @@ class Compute
         FFTInverse = -1
     } FFTDirectionType;
 
-    int fft(const ComplexFloatVector input, ComplexFloatVector *output, FFTDirectionType direction);
-    int complexMultiplier(const ComplexFloatVector input1, const ComplexFloatVector input2, ComplexFloatVector *output);
-    int absolute(const ComplexFloatVector input1, FloatVector *output);
-    int sum(const FloatVector input, float *sumValue);
-    int ncoMultiplication(const ComplexFloatVector input, const FloatVector phaseVector, ComplexFloatVector *output);
+    int fft(const ComplexFloatVector &input, ComplexFloatVector *output, FFTDirectionType direction);
+    int complexMultiplier(const ComplexFloatVector &input1, const ComplexFloatVector &input2, ComplexFloatVector *output);
+    int absolute(const ComplexFloatVector &input1, FloatVector *output);
+    int sum(const FloatVector &input, float *sumValue);
+    int ncoMultiplication(const ComplexFloatVector &input, const FloatVector &phaseVector, ComplexFloatVector *output);
 
   private:
     GpuHandler m_gpu;
     cl_command_queue m_queue;
     cl_int m_error;
-    float m_allocatedMemory[DEFAULT_MAX_ALLOCATION];
+    std::vector<float> m_allocatedMemory;
 };
 } // namespace GPSOpenCl
 

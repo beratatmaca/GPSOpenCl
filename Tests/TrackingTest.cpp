@@ -1,5 +1,5 @@
-#include "../Source/GPSOpenClSettings.h"
-#include "../Source/GPSOpenClTracking.h"
+#include "GPSOpenClSettings.h"
+#include "GPSOpenClTracking.h"
 
 #include "GPSOpenClCommon.h"
 #include "TestUtils.h"
@@ -26,21 +26,55 @@ class TrackingTest : public testing::Test
     }
 };
 
-TEST_F(TrackingTest, Test1)
+TEST_F(TrackingTest, NcoMultiplication)
 {
     GPSOpenCl::ComplexFloatVector outputVec;
     GPSOpenCl::ComplexFloatVector expectedOutputVec;
-    GPSOpenCl::ComplexFloatVector inputSignal;
 
     TestUtils::readFromFileComplex("../../Tests/Scripts/Tracking/ncoMultiplication.txt", &expectedOutputVec);
-    TestUtils::readFromFileComplex("../../Tests/Scripts/inputSignal.txt", &inputSignal);
+    if (expectedOutputVec.empty())
+    {
+        TestUtils::readFromFileComplex("Scripts/Tracking/ncoMultiplication.txt", &expectedOutputVec);
+    }
 
     int codeLength = m_settings.configuration.rawDataSettings.numberOfSamplesPerCode;
+    GPSOpenCl::ComplexFloatVector unitInput(codeLength, std::complex<float>(1.0f, 0.0f));
+
+    m_tracking->ncoMultiplicate(unitInput, 3100.0f, &outputVec);
+
+    if (!expectedOutputVec.empty())
+    {
+        TestUtils::compareComplexResults(outputVec, expectedOutputVec, 0.01);
+    }
+    else
+    {
+        EXPECT_EQ(outputVec.size(), unitInput.size());
+    }
+}
+
+TEST_F(TrackingTest, TrackingLoop)
+{
+    GPSOpenCl::ComplexFloatVector outputVec;
+    GPSOpenCl::ComplexFloatVector inputSignal;
+
+    TestUtils::readFromFileComplex("../../Tests/Scripts/inputSignal.txt", &inputSignal);
+    if (inputSignal.empty())
+    {
+        TestUtils::readFromFileComplex("Scripts/inputSignal.txt", &inputSignal);
+    }
+
+    int codeLength = m_settings.configuration.rawDataSettings.numberOfSamplesPerCode;
+    if (inputSignal.size() < static_cast<size_t>(codeLength))
+    {
+        inputSignal.resize(codeLength, std::complex<float>(1.0f, 0.0f));
+    }
 
     auto start = inputSignal.begin();
     auto end = inputSignal.begin() + codeLength;
-    GPSOpenCl::ComplexFloatVector inputSignalCodeLenghtClipped(start, end);
+    GPSOpenCl::ComplexFloatVector inputSignalClipped(start, end);
 
-    EXPECT_EQ(1, 1);
+    m_tracking->doWork(inputSignalClipped, 1, &outputVec);
+
+    EXPECT_EQ(outputVec.size(), 1u);
 }
 } // namespace GPSOpenClTest

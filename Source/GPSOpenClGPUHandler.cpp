@@ -8,7 +8,7 @@ using namespace GPSOpenCl;
  * @brief Construct a new GpuHandler::GpuHandler object
  *
  */
-GpuHandler::GpuHandler()
+GpuHandler::GpuHandler() : m_context(nullptr), m_device(nullptr), m_localMemorySize(0), m_platform(nullptr), m_error(0)
 {
 }
 
@@ -18,6 +18,38 @@ GpuHandler::GpuHandler()
  */
 GpuHandler::~GpuHandler()
 {
+    for (auto kernel : m_acquisitionKernelList)
+    {
+        if (kernel)
+        {
+            clReleaseKernel(kernel);
+        }
+    }
+    m_acquisitionKernelList.clear();
+
+    for (auto kernel : m_trackingKernelList)
+    {
+        if (kernel)
+        {
+            clReleaseKernel(kernel);
+        }
+    }
+    m_trackingKernelList.clear();
+
+    for (auto program : m_programList)
+    {
+        if (program)
+        {
+            clReleaseProgram(program);
+        }
+    }
+    m_programList.clear();
+
+    if (m_context)
+    {
+        clReleaseContext(m_context);
+        m_context = nullptr;
+    }
 }
 
 /**
@@ -28,42 +60,33 @@ GpuHandler::~GpuHandler()
 int GpuHandler::createDevice()
 {
     cl_platform_id *platforms;
-    cl_uint numOfPlatforms;
-    cl_uint numOfDevices;
+    cl_uint numOfPlatforms = 0;
+    cl_uint numOfDevices = 0;
 
     m_error = clGetPlatformIDs(1, NULL, &numOfPlatforms);
-    if (m_error < 0)
+    if (m_error < 0 || numOfPlatforms == 0)
     {
-        std::cout << "Couldn't identify a platform" << std::endl;
-        return m_error;
+        std::cout << "[INFO] No OpenCL platform driver detected. Using C++ CPU software compute mode." << std::endl;
+        return m_error < 0 ? m_error : -1;
     }
     else
     {
-        if (numOfPlatforms > 0)
-        {
-            platforms = (cl_platform_id *)malloc(sizeof(cl_platform_id) * numOfPlatforms);
-            clGetPlatformIDs(numOfPlatforms, platforms, NULL);
-            m_platform = platforms[0];
-            free(platforms);
-        }
+        platforms = (cl_platform_id *)malloc(sizeof(cl_platform_id) * numOfPlatforms);
+        clGetPlatformIDs(numOfPlatforms, platforms, NULL);
+        m_platform = platforms[0];
+        free(platforms);
     }
 
     m_error = clGetDeviceIDs(m_platform, CL_DEVICE_TYPE_GPU, 1, &m_device, &numOfDevices);
-    if (m_error == CL_DEVICE_NOT_FOUND)
+    if (m_error == CL_DEVICE_NOT_FOUND || m_error < 0)
     {
         m_error = clGetDeviceIDs(m_platform, CL_DEVICE_TYPE_CPU, 1, &m_device, NULL);
-    }
-    else
-    {
     }
 
     if (m_error < 0)
     {
-        std::cout << "Couldn't access any devices" << std::endl;
+        std::cout << "[INFO] No OpenCL GPU/CPU device detected. Using C++ CPU software compute mode." << std::endl;
         return m_error;
-    }
-    else
-    {
     }
 
     m_context = clCreateContext(NULL, 1, &m_device, NULL, NULL, &m_error);
@@ -82,22 +105,36 @@ int GpuHandler::createDevice()
  */
 int GpuHandler::buildProgram()
 {
-    FILE *program_handle;
+    FILE *program_handle = NULL;
     char *program_buffer, *program_log;
     size_t program_size, log_size;
 
     for (int i = 0; i < GPSOpenClProgramCount; i++)
     {
-        // Read program file and place content into buffer
-        program_handle = fopen(ProgramCharList[i].data(), "r");
+        std::string filename = ProgramCharList[i];
+        std::vector<std::string> candidatePaths = {
+            filename,
+            "../" + filename,
+            "../../" + filename,
+            "Kernels/" + filename,
+            "../Kernels/" + filename,
+            "../../Kernels/" + filename
+        };
+
+        program_handle = NULL;
+        for (const auto &path : candidatePaths)
+        {
+            program_handle = fopen(path.c_str(), "r");
+            if (program_handle != NULL)
+            {
+                break;
+            }
+        }
 
         if (program_handle == NULL)
         {
-            std::cout << "Couldn't find the program file" << std::endl;
+            std::cout << "Couldn't find the program file: " << filename << std::endl;
             return -1;
-        }
-        else
-        {
         }
 
         // Read Program File
@@ -120,9 +157,6 @@ int GpuHandler::buildProgram()
             free(program_buffer);
             return m_error;
         }
-        else
-        {
-        }
 
         free(program_buffer);
 
@@ -130,7 +164,6 @@ int GpuHandler::buildProgram()
         m_error = clBuildProgram(m_programList[i], 0, NULL, NULL, NULL, NULL);
         if (m_error < 0)
         {
-
             /* Find size of log and print to std output */
             clGetProgramBuildInfo(m_programList[i], m_device, CL_PROGRAM_BUILD_LOG, 0, NULL, &log_size);
             program_log = (char *)malloc(log_size + 1);
@@ -151,7 +184,6 @@ int GpuHandler::buildProgram()
  */
 void GpuHandler::getLastErrorAsString()
 {
-    // @todo convert error code to string
     std::cout << m_error << std::endl;
 }
 
@@ -209,9 +241,6 @@ int GpuHandler::determineLocalMemorySize(void)
     {
         std::cout << "Couldn't determine the local memory size" << std::endl;
         getLastErrorAsString();
-    }
-    else
-    {
     }
 
     return m_error;
