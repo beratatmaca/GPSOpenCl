@@ -21,5 +21,5 @@ double LockDetector::codeLockRatio(double Ie, double Ip, double Il)
     {
         return 0.0;
     }
-    return (std::fabs(Ie) + std::fabs(Il)) / (2.0 * absIp);
+    return (std::fabs(Ie) + std::fabs(Il)) / absIp;
 }

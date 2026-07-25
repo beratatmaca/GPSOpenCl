@@ -35,6 +35,12 @@ Tracking::Tracking(Settings::Configuration conf)
       m_carrNcoPrev(0.0f),
       m_carrError(0.0f),
       m_carrErrorPrev(0.0f),
+      m_fllGain(4.0f * static_cast<float>(conf.trackingInput.fllBandwidthHz) * static_cast<float>(GPS_CA_CODE_PERIOD_SEC)),
+      m_fllNco(0.0f),
+      m_ipPrev(0.0f),
+      m_qpPrev(0.0f),
+      m_blocksSinceInit(0),
+      m_fllPullInBlocks(conf.trackingInput.fllPullInBlocks),
       m_dllTau1(loopFilterTau1(conf.trackingInput.dllBandwidthHz)),
       m_dllTau2(loopFilterTau2(conf.trackingInput.dllBandwidthHz)),
       m_codeFreqBasis(GPS_CA_CODE_FREQUENCY_HZ),
@@ -85,6 +91,12 @@ Tracking::Tracking(const TrackingInput &input)
       m_carrNcoPrev(0.0f),
       m_carrError(0.0f),
       m_carrErrorPrev(0.0f),
+      m_fllGain(4.0f * static_cast<float>(input.fllBandwidthHz) * static_cast<float>(GPS_CA_CODE_PERIOD_SEC)),
+      m_fllNco(0.0f),
+      m_ipPrev(0.0f),
+      m_qpPrev(0.0f),
+      m_blocksSinceInit(0),
+      m_fllPullInBlocks(input.fllPullInBlocks),
       m_dllTau1(loopFilterTau1(input.dllBandwidthHz)),
       m_dllTau2(loopFilterTau2(input.dllBandwidthHz)),
       m_codeFreqBasis(GPS_CA_CODE_FREQUENCY_HZ),
@@ -145,6 +157,11 @@ void Tracking::initTrackingState(float initDopplerHz, float initCodePhaseChips)
     m_carrError = 0.0f;
     m_carrErrorPrev = 0.0f;
 
+    m_fllNco = 0.0f;
+    m_ipPrev = 0.0f;
+    m_qpPrev = 0.0f;
+    m_blocksSinceInit = 0;
+
     m_remCodePhase = initCodePhaseChips;
     m_codeFreqBasis = GPS_CA_CODE_FREQUENCY_HZ;
     m_codeFreq = GPS_CA_CODE_FREQUENCY_HZ;
@@ -170,9 +187,24 @@ void Tracking::doWork(const ComplexFloatVector &input, int prn, ComplexFloatVect
     earlyLatePromptGen(prn);
     numericOscillator();
     accumulator(input);
-    freqDiscriminator();
+
+    if (m_blocksSinceInit < m_fllPullInBlocks)
+    {
+        fllDiscriminator();
+    }
+    else
+    {
+        if (m_blocksSinceInit == m_fllPullInBlocks)
+        {
+            m_carrNco = m_fllNco;
+            m_carrNcoPrev = m_fllNco;
+            m_carrErrorPrev = 0.0f;
+        }
+        freqDiscriminator();
+    }
     codeDiscriminator();
     updateLockIndicators();
+    m_blocksSinceInit++;
 
     if (output)
     {
@@ -289,6 +321,28 @@ void Tracking::accumulator(const ComplexFloatVector &input)
         m_Il += re * m_lateCode[i];
         m_Ql += im * m_lateCode[i];
     }
+}
+
+void Tracking::fllDiscriminator()
+{
+    if (m_blocksSinceInit > 0)
+    {
+        double cross = static_cast<double>(m_ipPrev) * m_Qp - static_cast<double>(m_Ip) * m_qpPrev;
+        double dot = static_cast<double>(m_ipPrev) * m_Ip + static_cast<double>(m_qpPrev) * m_Qp;
+
+        float fllError = 0.0f;
+        if (cross != 0.0 || dot != 0.0)
+        {
+            fllError = static_cast<float>(std::atan2(cross, dot) / (2.0 * M_PI * GPS_CA_CODE_PERIOD_SEC));
+        }
+
+        m_fllNco += fllError * m_fllGain;
+    }
+
+    m_ipPrev = m_Ip;
+    m_qpPrev = m_Qp;
+
+    m_carrFreq = m_carrFreqBasis + m_fllNco;
 }
 
 void Tracking::freqDiscriminator()

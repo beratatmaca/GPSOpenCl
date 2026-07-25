@@ -98,7 +98,7 @@ TEST_F(TrackingTest, LockIndicatorsConvergeWithRepeatedInput)
     auto end = inputSignal.begin() + codeLength;
     GPSOpenCl::ComplexFloatVector inputSignalClipped(start, end);
 
-    for (int i = 0; i < 100; i++)
+    for (int i = 0; i < 300; i++)
     {
         GPSOpenCl::ComplexFloatVector outputVec;
         m_tracking->doWork(inputSignalClipped, 1, &outputVec);

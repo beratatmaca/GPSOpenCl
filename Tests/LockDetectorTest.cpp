@@ -33,14 +33,14 @@ TEST(LockDetectorTest, CarrierLockIndicatorIsZeroWhenBothZero)
 
 TEST(LockDetectorTest, CodeLockRatioIsNearOneWhenAligned)
 {
-    double ratio = GPSOpenCl::LockDetector::codeLockRatio(10.0, 10.0, 10.0);
+    double ratio = GPSOpenCl::LockDetector::codeLockRatio(5.0, 10.0, 5.0);
     EXPECT_NEAR(ratio, 1.0, 1e-9);
 }
 
 TEST(LockDetectorTest, CodeLockRatioDeviatesWhenMisaligned)
 {
-    double ratio = GPSOpenCl::LockDetector::codeLockRatio(9.0, 10.0, 1.0);
-    EXPECT_NEAR(ratio, 0.5, 1e-9);
+    double ratio = GPSOpenCl::LockDetector::codeLockRatio(1.0, 10.0, 1.0);
+    EXPECT_NEAR(ratio, 0.2, 1e-9);
     EXPECT_GT(std::fabs(ratio - 1.0), 0.3);
 }
 

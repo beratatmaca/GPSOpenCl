@@ -86,6 +86,9 @@ class Tracking
      *  @param input Carrier-wiped IQ samples. */
     void accumulator(const ComplexFloatVector &input);
 
+    /** @brief Compute FLL-assisted pull-in frequency discriminator. */
+    void fllDiscriminator();
+
     /** @brief Compute PLL frequency discriminator. */
     void freqDiscriminator();
 
@@ -116,6 +119,13 @@ class Tracking
     float m_carrNcoPrev;                      ///< Previous carrier NCO output (Hz).
     float m_carrError;                        ///< PLL phase error (rad).
     float m_carrErrorPrev;                    ///< Previous PLL phase error (rad).
+
+    float m_fllGain;                          ///< FLL 1st-order loop filter gain (per block).
+    float m_fllNco;                           ///< FLL NCO output (Hz).
+    float m_ipPrev;                           ///< Previous block's In-phase Prompt sum.
+    float m_qpPrev;                           ///< Previous block's Quadrature Prompt sum.
+    int m_blocksSinceInit;                    ///< Blocks processed since last initTrackingState().
+    int m_fllPullInBlocks;                    ///< Blocks of FLL pull-in before PLL takes over.
 
     FloatVector m_earlyCode;                  ///< Early code replica.
     FloatVector m_promptCode;                 ///< Prompt code replica.

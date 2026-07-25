@@ -137,7 +137,8 @@ TEST_F(ChannelTest, SustainedNonLockTimesOutBackToAcquiringWithoutFeedingPromptH
     int codeLength = m_settings.configuration.rawDataSettings.numberOfSamplesPerCode;
     GPSOpenCl::ComplexFloatVector zeroInput(codeLength, std::complex<float>(0.0f, 0.0f));
 
-    for (int i = 0; i < 200; i++)
+    int confirmTimeoutBlocks = m_settings.configuration.trackingInput.confirmTimeoutBlocks;
+    for (int i = 0; i < confirmTimeoutBlocks; i++)
     {
         m_channel.trackBlock(zeroInput);
         EXPECT_TRUE(m_channel.getPromptHistory().empty());
