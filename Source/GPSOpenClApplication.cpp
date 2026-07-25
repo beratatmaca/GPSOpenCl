@@ -59,6 +59,21 @@ void Application::searchForSatellites(const ComplexFloatVector &input)
             m_channels[i].initTracking(m_configuration, peakFreq, codePhaseChips);
             std::cout << "--> SV ID " << m_channels[i].m_svId << " ACQUIRED! (C/N0: " << cn0 << " dB-Hz, Doppler: " << peakFreq << " Hz)" << std::endl;
         }
+
+        if (m_sink)
+        {
+            AcquisitionOutput acqOut;
+            acqOut.structVersion = STRUCT_VERSION_1;
+            acqOut.prn = m_channels[i].m_svId;
+            acqOut.peakIndex = peakIndex;
+            acqOut.peakValue = static_cast<double>(peakValue);
+            acqOut.peakFrequency = static_cast<double>(peakFreq);
+            acqOut.meanValue = static_cast<double>(meanValue);
+            acqOut.cno = static_cast<double>(cn0);
+            acqOut.peakRatio = static_cast<double>(peakRatio);
+            acqOut.isAcquired = m_channels[i].isAcquired() ? 1 : 0;
+            m_sink->publishAcquisitionOutput(acqOut);
+        }
     }
 }
 
@@ -154,9 +169,70 @@ bool Application::computeNavigationSolution(ReceiverPvtSolution &solution)
         std::cout << NmeaGenerator::generateGpgsv(m_channels);
 
         exportTelemetryJson("telemetry_stream.json", solution);
+
+        if (m_sink)
+        {
+            PvtSolverOutput pvtOut;
+            pvtOut.structVersion = STRUCT_VERSION_1;
+            pvtOut.ecefX = solution.ecefPosition.x;
+            pvtOut.ecefY = solution.ecefPosition.y;
+            pvtOut.ecefZ = solution.ecefPosition.z;
+            pvtOut.latitude = solution.geodeticPosition.latitude;
+            pvtOut.longitude = solution.geodeticPosition.longitude;
+            pvtOut.altitude = solution.geodeticPosition.altitude;
+            pvtOut.clockBiasMeters = solution.clockBiasMeters;
+            pvtOut.clockBiasSeconds = solution.clockBiasSeconds;
+            pvtOut.dopGDOP = solution.dopGDOP;
+            pvtOut.dopPDOP = solution.dopPDOP;
+            pvtOut.dopHDOP = solution.dopHDOP;
+            pvtOut.dopVDOP = solution.dopVDOP;
+            pvtOut.isValid = solution.isValid ? 1 : 0;
+            m_sink->publishPvtSolverOutput(pvtOut);
+
+            std::string ggaStr = NmeaGenerator::generateGgga(solution, static_cast<int>(activePrns.size()), 45319.0);
+            NmeaGeneratorOutput nmeaOut;
+            nmeaOut.structVersion = STRUCT_VERSION_1;
+            snprintf(nmeaOut.sentence, sizeof(nmeaOut.sentence), "%s", ggaStr.c_str());
+            m_sink->publishNmeaGeneratorOutput(nmeaOut);
+        }
     }
 
     return success;
+}
+
+void Application::setSink(std::shared_ptr<Sink> sink)
+{
+    m_sink = sink;
+    m_profiler.setSink(sink);
+}
+
+void Application::setSource(std::shared_ptr<Source> source)
+{
+    m_source = source;
+    if (m_source && m_sink)
+    {
+        m_source->setSink(m_sink);
+    }
+}
+
+void Application::processBlock(const ComplexFloatVector &input, uint32_t blockIndex)
+{
+    m_profiler.startBlock(blockIndex, static_cast<double>(blockIndex) * 0.001);
+    if (blockIndex == 0)
+    {
+        Profiler::ScopedTimer acqTimer(m_profiler, "acquisition");
+        searchForSatellites(input);
+    }
+    {
+        Profiler::ScopedTimer trackTimer(m_profiler, "tracking");
+        trackSatellites(input);
+    }
+    {
+        Profiler::ScopedTimer pvtTimer(m_profiler, "pvtSolve");
+        ReceiverPvtSolution solution;
+        computeNavigationSolution(solution);
+    }
+    m_profiler.finishBlock();
 }
 
 void Application::exportTelemetryJson(const std::string &filepath, const ReceiverPvtSolution &solution)

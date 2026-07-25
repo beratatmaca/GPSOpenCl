@@ -1,13 +1,19 @@
 #include "GPSOpenClApplication.h"
+#include "GPSOpenClBoundedQueue.h"
 #include "GPSOpenClCommon.h"
+#include "GPSOpenClFileSink.h"
+#include "GPSOpenClFileSource.h"
+#include "GPSOpenClGpsSdrSimSource.h"
 #include "GPSOpenClNmeaGenerator.h"
 #include "GPSOpenClPVTSolver.h"
 #include "GPSOpenClSettings.h"
+#include "GPSOpenClZmqSink.h"
 #include "../Tests/TestUtils.h"
 
 #include <chrono>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <thread>
 #include <vector>
 
@@ -16,9 +22,7 @@ int main(int argc, char **argv)
     GPSOpenCl::Settings settings;
     settings.captureSettings();
 
-    GPSOpenCl::ComplexFloatVector fullInput;
     std::string signalPath = "";
-
     if (argc > 1)
     {
         signalPath = argv[1];
@@ -41,13 +45,7 @@ int main(int argc, char **argv)
         }
     }
 
-    if (!signalPath.empty() && signalPath.find(".bin") != std::string::npos)
-    {
-        std::cout << "Reading simulated binary IQ file: " << signalPath << std::endl;
-        GPSOpenClTest::TestUtils::readFromFileBinaryIQ8(signalPath.c_str(), &fullInput);
-    }
-
-    if (fullInput.empty())
+    if (signalPath.empty())
     {
         std::vector<std::string> candidatePaths = {
             "Tests/Scripts/inputSignal.txt",
@@ -59,62 +57,92 @@ int main(int argc, char **argv)
 
         for (const auto &path : candidatePaths)
         {
-            GPSOpenClTest::TestUtils::readFromFileComplex(path.c_str(), &fullInput);
-            if (!fullInput.empty())
+            std::ifstream f(path);
+            if (f.good())
             {
-                std::cout << "Loaded text input signal from: " << path << std::endl;
+                signalPath = path;
                 break;
             }
         }
     }
 
-    int blockLength = settings.configuration.rawDataSettings.numberOfSamplesPerCode;
-    if (blockLength <= 0) blockLength = 4096;
+    // 1. Create Sink Publisher
+#ifdef GPSOPENCL_ENABLE_ZMQ
+    auto sink = std::make_shared<GPSOpenCl::ZmqSink>("ipc:///tmp/gpsopencl/telemetry.sock");
+#else
+    auto sink = std::make_shared<GPSOpenCl::FileSink>("build/telemetry_wire.log");
+#endif
 
-    size_t totalSamples = fullInput.size();
-    size_t totalBlocks = totalSamples / blockLength;
-
-    std::cout << "Loaded " << totalSamples << " samples (" << totalBlocks << " full 1-ms blocks)." << std::endl;
-
-    if (totalBlocks == 0)
+    // 2. Initialize Source
+    std::shared_ptr<GPSOpenCl::Source> source;
+    if (signalPath.find(".fifo") != std::string::npos)
     {
-        std::cerr << "Not enough data samples to process." << std::endl;
-        return -1;
+        auto simSource = std::make_shared<GPSOpenCl::GpsSdrSimSource>();
+        GPSOpenCl::SourceInput srcInput = settings.configuration.sourceInput;
+        snprintf(srcInput.fifoPath, sizeof(srcInput.fifoPath), "%s", signalPath.c_str());
+        simSource->initialize(srcInput);
+        source = simSource;
+    }
+    else
+    {
+        auto fileSource = std::make_shared<GPSOpenCl::FileSource>();
+        GPSOpenCl::SourceInput srcInput = settings.configuration.sourceInput;
+        snprintf(srcInput.fifoPath, sizeof(srcInput.fifoPath), "%s", signalPath.c_str());
+        fileSource->initialize(srcInput);
+        source = fileSource;
+    }
+    source->setSink(sink);
+
+    // 3. Application instance
+    GPSOpenCl::Application app(settings.configuration);
+    app.setSink(sink);
+    app.setSource(source);
+
+    // 4. Concurrency Model: Bounded Queue between Producer (Source) and Consumer (Application)
+    struct SignalBlock
+    {
+        uint32_t blockIndex;
+        GPSOpenCl::ComplexFloatVector samples;
+    };
+
+    GPSOpenCl::BoundedQueue<SignalBlock> blockQueue(16);
+
+    std::cout << "\n=============================================" << std::endl;
+    std::cout << "   GPS Processing Pipeline Starting (Real-Time Loop)" << std::endl;
+    std::cout << "=============================================" << std::endl;
+
+    // Producer Thread
+    std::thread producerThread([&]() {
+        uint32_t blockIdx = 0;
+        while (true)
+        {
+            SignalBlock block;
+            block.blockIndex = blockIdx;
+            GPSOpenCl::SourceOutput telemetry{};
+            bool ok = source->readBlock(block.samples, telemetry);
+            if (!ok || block.samples.empty())
+            {
+                break;
+            }
+            if (!blockQueue.push(block))
+            {
+                break;
+            }
+            blockIdx++;
+        }
+        blockQueue.finish();
+    });
+
+    // Consumer Loop
+    SignalBlock block;
+    while (blockQueue.pop(block))
+    {
+        app.processBlock(block.samples, block.blockIndex);
     }
 
-    GPSOpenCl::Application app(settings.configuration);
-
-    // Block 0: Satellite Acquisition Phase
-    std::cout << "\n=============================================" << std::endl;
-    std::cout << "   GPS Acquisition Phase (Block 0 / " << totalBlocks << ")" << std::endl;
-    std::cout << "=============================================" << std::endl;
-
-    GPSOpenCl::ComplexFloatVector acqBlock(fullInput.begin(), fullInput.begin() + blockLength);
-    app.searchForSatellites(acqBlock);
-
-    // Initial Telemetry Export right after acquisition
-    GPSOpenCl::ReceiverPvtSolution solution;
-    app.computeNavigationSolution(solution);
-
-    // Blocks 0..N-1: Continuous Live Tracking Phase
-    std::cout << "\n=============================================" << std::endl;
-    std::cout << "   GPS Multi-Block Tracking & Live Streaming Phase (" << totalBlocks << " Blocks)" << std::endl;
-    std::cout << "=============================================" << std::endl;
-
-    for (size_t b = 0; b < totalBlocks; b++)
+    if (producerThread.joinable())
     {
-        auto blockStart = fullInput.begin() + (b * blockLength);
-        auto blockEnd = blockStart + blockLength;
-        GPSOpenCl::ComplexFloatVector currentBlock(blockStart, blockEnd);
-
-        app.trackSatellites(currentBlock);
-
-        // Update telemetry JSON every 50 blocks (~50 ms real time) to stream live to Plotly Dashboard
-        if (b % 50 == 0 || b == totalBlocks - 1)
-        {
-            app.computeNavigationSolution(solution);
-            std::this_thread::sleep_for(std::chrono::milliseconds(20));
-        }
+        producerThread.join();
     }
 
     std::cout << "\n=============================================" << std::endl;

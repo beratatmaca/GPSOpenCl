@@ -37,7 +37,7 @@ bool GpsSdrSimSource::initialize(const SourceInput &input)
     mkfifo(m_ctrlFifoPath.c_str(), 0666);
 
     m_dataFd = open(m_dataFifoPath.c_str(), O_RDONLY | O_NONBLOCK);
-    m_ctrlFd = open(m_ctrlFifoPath.c_str(), O_WRONLY | O_NONBLOCK);
+    m_ctrlFd = open(m_ctrlFifoPath.c_str(), O_RDWR | O_NONBLOCK);
 
     return true;
 }
@@ -46,7 +46,7 @@ bool GpsSdrSimSource::sendControlCommand(const std::string &command)
 {
     if (m_ctrlFd < 0)
     {
-        m_ctrlFd = open(m_ctrlFifoPath.c_str(), O_WRONLY | O_NONBLOCK);
+        m_ctrlFd = open(m_ctrlFifoPath.c_str(), O_RDWR | O_NONBLOCK);
     }
     if (m_ctrlFd >= 0)
     {

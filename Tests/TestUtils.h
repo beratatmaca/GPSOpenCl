@@ -24,6 +24,25 @@ class TestUtils
     static void readFromFileComplex(const char *fileName, GPSOpenCl::ComplexFloatVector *inputVec)
     {
         std::ifstream file(fileName);
+        if (!file.is_open())
+        {
+            const char *baseName = strrchr(fileName, '/');
+            std::string name = baseName ? (baseName + 1) : fileName;
+            std::vector<std::string> candidates = {
+                std::string("Tests/Scripts/") + name,
+                std::string("../Tests/Scripts/") + name,
+                std::string("../../Tests/Scripts/") + name,
+                std::string("Scripts/") + name,
+                std::string("../Scripts/") + name
+            };
+            for (const auto &cand : candidates)
+            {
+                file.close();
+                file.clear();
+                file.open(cand);
+                if (file.is_open()) break;
+            }
+        }
         if (!file.is_open()) return;
 
         std::string str;
@@ -107,6 +126,28 @@ class TestUtils
     static void readFromFileReal(const char *fileName, GPSOpenCl::FloatVector *inputVec)
     {
         std::ifstream file(fileName);
+        if (!file.is_open())
+        {
+            const char *baseName = strrchr(fileName, '/');
+            std::string name = baseName ? (baseName + 1) : fileName;
+            std::vector<std::string> candidates = {
+                std::string("Tests/Scripts/Acquisition/") + name,
+                std::string("../Tests/Scripts/Acquisition/") + name,
+                std::string("../../Tests/Scripts/Acquisition/") + name,
+                std::string("Tests/Scripts/CACode/") + name,
+                std::string("../Tests/Scripts/CACode/") + name,
+                std::string("../../Tests/Scripts/CACode/") + name,
+                std::string("Scripts/Acquisition/") + name,
+                std::string("Scripts/CACode/") + name
+            };
+            for (const auto &cand : candidates)
+            {
+                file.close();
+                file.clear();
+                file.open(cand);
+                if (file.is_open()) break;
+            }
+        }
         if (!file.is_open()) return;
 
         std::string str;

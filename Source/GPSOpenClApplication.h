@@ -9,9 +9,14 @@
 #include "GPSOpenClNmeaGenerator.h"
 #include "GPSOpenClNavigationDecoder.h"
 #include "GPSOpenClPVTSolver.h"
+#include "GPSOpenClProfiler.h"
 #include "GPSOpenClSettings.h"
+#include "GPSOpenClSink.h"
+#include "GPSOpenClSource.h"
+#include "GPSOpenClStructs.h"
 #include "GPSOpenClTracking.h"
 
+#include <memory>
 #include <string>
 
 namespace GPSOpenCl
@@ -27,6 +32,11 @@ class Application
     bool computeNavigationSolution(ReceiverPvtSolution &solution);
     void exportTelemetryJson(const std::string &filepath, const ReceiverPvtSolution &solution);
 
+    void setSink(std::shared_ptr<Sink> sink);
+    void setSource(std::shared_ptr<Source> source);
+    Profiler &getProfiler() { return m_profiler; }
+    void processBlock(const ComplexFloatVector &input, uint32_t blockIndex);
+
   private:
     void initializeChannels();
 
@@ -39,6 +49,10 @@ class Application
     PVTSolver m_pvtSolver;
     NavigationDecoder m_navDecoder;
     Channel m_channels[GPS_CA_SV_COUNT];
+
+    std::shared_ptr<Sink> m_sink{nullptr};
+    std::shared_ptr<Source> m_source{nullptr};
+    Profiler m_profiler;
 };
 } // namespace GPSOpenCl
 

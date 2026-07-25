@@ -13,6 +13,11 @@ add_executable(
     GPSOpenClPVTSolver.cpp
     GPSOpenClNmeaGenerator.cpp
     GPSOpenClAtmosphericCorrections.cpp
+    GPSOpenClFileSource.cpp
+    GPSOpenClGpsSdrSimSource.cpp
+    GPSOpenClFileSink.cpp
+    GPSOpenClZmqSink.cpp
+    GPSOpenClProfiler.cpp
 )
 
 target_include_directories(

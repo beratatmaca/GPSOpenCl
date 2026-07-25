@@ -29,6 +29,11 @@ add_executable(
     ${CMAKE_SOURCE_DIR}/Source/GPSOpenClPVTSolver.cpp
     ${CMAKE_SOURCE_DIR}/Source/GPSOpenClNmeaGenerator.cpp
     ${CMAKE_SOURCE_DIR}/Source/GPSOpenClAtmosphericCorrections.cpp
+    ${CMAKE_SOURCE_DIR}/Source/GPSOpenClFileSource.cpp
+    ${CMAKE_SOURCE_DIR}/Source/GPSOpenClGpsSdrSimSource.cpp
+    ${CMAKE_SOURCE_DIR}/Source/GPSOpenClFileSink.cpp
+    ${CMAKE_SOURCE_DIR}/Source/GPSOpenClZmqSink.cpp
+    ${CMAKE_SOURCE_DIR}/Source/GPSOpenClProfiler.cpp
     GPUTest.cpp
     CaCodeTest.cpp
     SettingsTest.cpp
@@ -38,6 +43,7 @@ add_executable(
     PVTSolverTest.cpp
     NmeaGeneratorTest.cpp
     AtmosphericCorrectionsTest.cpp
+    StructsSourceSinkTest.cpp
     E2ETest.cpp
 )
 
