@@ -65,4 +65,24 @@ TEST(NavigationDecoderTest, BitExtraction)
     uint32_t preamble = GPSOpenCl::NavigationDecoder::extractUnsignedBits(word, 1, 8);
     EXPECT_EQ(preamble, 0x8Bu);
 }
+
+TEST(NavigationDecoderTest, SubframeSearchMaskFiltersDisabledSubframe)
+{
+    std::vector<uint32_t> words(10, 0);
+    words[1] = 0x300; // HOW word: subframeId = 3 (extractUnsignedBits(howWord, 20, 3) reads bits 8-10)
+
+    GPSOpenCl::GpsEphemeris ephemAllEnabled{};
+    GPSOpenCl::NavigationDecoder allEnabled; // default mask 0x1F: all subframes searched
+    EXPECT_TRUE(allEnabled.decodeSubframe(words, ephemAllEnabled));
+    EXPECT_EQ(ephemAllEnabled.subframeId, 3);
+
+    GPSOpenCl::NavDecoderInput maskWithoutSubframe3{};
+    maskWithoutSubframe3.structVersion = GPSOpenCl::STRUCT_VERSION_1;
+    maskWithoutSubframe3.subframeSearchMask = 0x1B; // 0b11011: excludes bit index 2 (subframe 3)
+
+    GPSOpenCl::GpsEphemeris ephemMasked{};
+    GPSOpenCl::NavigationDecoder subframe3Disabled(maskWithoutSubframe3);
+    EXPECT_FALSE(subframe3Disabled.decodeSubframe(words, ephemMasked));
+    EXPECT_FALSE(ephemMasked.isValid);
+}
 } // namespace GPSOpenClTest

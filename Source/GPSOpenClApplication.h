@@ -48,6 +48,7 @@ class Application
     Compute *m_gpu;
     PVTSolver m_pvtSolver;
     NavigationDecoder m_navDecoder;
+    NmeaGenerator m_nmeaGenerator;
     Channel m_channels[GPS_CA_SV_COUNT];
 
     std::shared_ptr<Sink> m_sink{nullptr};

@@ -6,11 +6,91 @@
 using namespace GPSOpenCl;
 
 NavigationDecoder::NavigationDecoder()
+    : m_inputConfig{STRUCT_VERSION_1, 0x1F}
+{
+}
+
+NavigationDecoder::NavigationDecoder(const NavDecoderInput &input)
+    : m_inputConfig(input)
 {
 }
 
 NavigationDecoder::~NavigationDecoder()
 {
+}
+
+NavDecoderOutput NavigationDecoder::ephemerisToOutput(const GpsEphemeris &ephem)
+{
+    NavDecoderOutput out{};
+    out.structVersion = STRUCT_VERSION_1;
+    out.svId = ephem.svId;
+    out.weekNumber = ephem.weekNumber;
+    out.tow = ephem.tow;
+    out.subframeId = ephem.subframeId;
+    out.isValid = ephem.isValid ? 1 : 0;
+    out.toc = ephem.toc;
+    out.af0 = ephem.af0;
+    out.af1 = ephem.af1;
+    out.af2 = ephem.af2;
+    out.toe = ephem.toe;
+    out.sqrtA = ephem.sqrtA;
+    out.e = ephem.e;
+    out.i0 = ephem.i0;
+    out.omega0 = ephem.omega0;
+    out.omega = ephem.omega;
+    out.M0 = ephem.M0;
+    out.deltaN = ephem.deltaN;
+    out.omegaDot = ephem.omegaDot;
+    out.idot = ephem.idot;
+    out.Cuc = ephem.Cuc;
+    out.Cus = ephem.Cus;
+    out.Crc = ephem.Crc;
+    out.Crs = ephem.Crs;
+    out.Cic = ephem.Cic;
+    out.Cis = ephem.Cis;
+    return out;
+}
+
+GpsEphemeris NavigationDecoder::outputToEphemeris(const NavDecoderOutput &out)
+{
+    GpsEphemeris ephem{};
+    ephem.svId = out.svId;
+    ephem.weekNumber = out.weekNumber;
+    ephem.tow = out.tow;
+    ephem.subframeId = out.subframeId;
+    ephem.isValid = (out.isValid != 0);
+    ephem.toc = out.toc;
+    ephem.af0 = out.af0;
+    ephem.af1 = out.af1;
+    ephem.af2 = out.af2;
+    ephem.toe = out.toe;
+    ephem.sqrtA = out.sqrtA;
+    ephem.e = out.e;
+    ephem.i0 = out.i0;
+    ephem.omega0 = out.omega0;
+    ephem.omega = out.omega;
+    ephem.M0 = out.M0;
+    ephem.deltaN = out.deltaN;
+    ephem.omegaDot = out.omegaDot;
+    ephem.idot = out.idot;
+    ephem.Cuc = out.Cuc;
+    ephem.Cus = out.Cus;
+    ephem.Crc = out.Crc;
+    ephem.Crs = out.Crs;
+    ephem.Cic = out.Cic;
+    ephem.Cis = out.Cis;
+    return ephem;
+}
+
+bool NavigationDecoder::decodeSubframe(const std::vector<uint32_t> &words30bit, NavDecoderOutput &output)
+{
+    GpsEphemeris ephem{};
+    bool res = decodeSubframe(words30bit, ephem);
+    if (res)
+    {
+        output = ephemerisToOutput(ephem);
+    }
+    return res;
 }
 
 bool NavigationDecoder::findPreamble(const std::vector<bool> &bits, size_t &preambleIndex, bool &inverted)
@@ -123,6 +203,14 @@ bool NavigationDecoder::decodeSubframe(const std::vector<uint32_t> &words30bit, 
     uint32_t towCount = extractUnsignedBits(howWord, 1, 17);
     ephem.subframeId = extractUnsignedBits(howWord, 20, 3);
     ephem.tow = towCount * 6.0; // TOW in seconds
+
+    if (ephem.subframeId < 1 || ephem.subframeId > 5 ||
+        !((m_inputConfig.subframeSearchMask >> (ephem.subframeId - 1)) & 0x1u))
+    {
+        // Subframe not selected by the configured search mask; skip decoding it.
+        ephem.isValid = false;
+        return false;
+    }
 
     uint32_t w3 = words30bit[2];
     uint32_t w4 = words30bit[3];
@@ -265,5 +353,22 @@ bool NavigationDecoder::processPromptSignal(int svId, const ComplexFloatVector &
     subframeStartSample = preambleIdx * 20; // 20 prompt samples per nav bit
     bitOffset = preambleIdx + 300;          // advance past this whole subframe
 
-    return decodeSubframe(words, ephem);
+    bool decoded = decodeSubframe(words, ephem);
+    if (decoded && m_sink)
+    {
+        m_sink->publishNavDecoderOutput(ephemerisToOutput(ephem));
+    }
+    return decoded;
+}
+
+bool NavigationDecoder::processPromptSignal(int svId, const ComplexFloatVector &promptHistory, size_t &bitOffset,
+                                           NavDecoderOutput &output, size_t &subframeStartSample)
+{
+    GpsEphemeris ephem{};
+    bool res = processPromptSignal(svId, promptHistory, bitOffset, ephem, subframeStartSample);
+    if (res)
+    {
+        output = ephemerisToOutput(ephem);
+    }
+    return res;
 }

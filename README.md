@@ -90,18 +90,20 @@ cmake --build ./build
 
 ### 1. Live Interactive Web Dashboard & Simulation (Recommended)
 
-Run the master orchestrator to generate a simulated GPS signal, process it through the software receiver, and launch the web dashboard:
+Run the master real-time launcher to stream a simulated GPS signal over a Linux FIFO
+(via the `gps-sdr-sim-rt` fork), process it through the software receiver in real time,
+and launch the web dashboard:
 
 ```bash
-python3 run_live_demo.py
+python3 run_system.py
 ```
 
 Then open your browser and navigate to:
 👉 **`http://localhost:8050`**
 
-#### Customizing Coordinates & Duration:
+#### Customizing Coordinates & Port:
 ```bash
-python3 run_live_demo.py --lat 40.7128 --lon -74.0060 --alt 10.0 --duration 10
+python3 run_system.py --lat 40.7128 --lon -74.0060 --alt 10.0 --port 8060
 ```
 
 ---

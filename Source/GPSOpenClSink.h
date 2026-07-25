@@ -2,7 +2,9 @@
 #define INCLUDED_GPSOPENCL_SINK_H
 
 #include <cstddef>
+#include <memory>
 #include <string>
+#include <vector>
 #include "GPSOpenClStructs.h"
 
 namespace GPSOpenCl
@@ -62,6 +64,26 @@ class NullSink : public Sink
     {
         // No-op
     }
+};
+
+class CompositeSink : public Sink
+{
+  public:
+    void addSink(std::shared_ptr<Sink> sink)
+    {
+        if (sink) m_sinks.push_back(sink);
+    }
+
+    void publish(const std::string &identifier, const void *data, size_t size) override
+    {
+        for (auto &s : m_sinks)
+        {
+            s->publish(identifier, data, size);
+        }
+    }
+
+  private:
+    std::vector<std::shared_ptr<Sink>> m_sinks;
 };
 
 } // namespace GPSOpenCl

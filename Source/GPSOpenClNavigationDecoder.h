@@ -4,7 +4,11 @@
 #include "GPSOpenClCommon.h"
 
 #include <cstdint>
+#include <memory>
 #include <vector>
+
+#include "GPSOpenClSink.h"
+#include "GPSOpenClStructs.h"
 
 namespace GPSOpenCl
 {
@@ -40,6 +44,7 @@ class NavigationDecoder
 {
   public:
     NavigationDecoder();
+    NavigationDecoder(const NavDecoderInput &input);
     ~NavigationDecoder();
 
     static bool findPreamble(const std::vector<bool> &bits, size_t &preambleIndex, bool &inverted);
@@ -47,17 +52,24 @@ class NavigationDecoder
     static int32_t extractSignedBits(uint32_t val, int startBit, int numBits);
     static uint32_t extractUnsignedBits(uint32_t val, int startBit, int numBits);
 
+    static NavDecoderOutput ephemerisToOutput(const GpsEphemeris &ephem);
+    static GpsEphemeris outputToEphemeris(const NavDecoderOutput &out);
+
     bool decodeSubframe(const std::vector<uint32_t> &words30bit, GpsEphemeris &ephem);
+    bool decodeSubframe(const std::vector<uint32_t> &words30bit, NavDecoderOutput &output);
+
     std::vector<bool> promptToBits(const ComplexFloatVector &promptHistory);
 
-    // Searches promptHistory (from bitOffset onward) for the next subframe, verifies each word's
-    // parity, applies the IS-GPS-200 D30* data-bit inversion, and decodes it. On success, advances
-    // bitOffset past the consumed subframe (300 bits) so repeated calls with growing promptHistory
-    // progress through subsequent subframes instead of re-finding the same one. On a parity failure,
-    // advances bitOffset by 1 bit so the next call can resynchronize past the bad preamble candidate.
-    // subframeStartSample is set to the promptHistory sample index where the decoded subframe began.
     bool processPromptSignal(int svId, const ComplexFloatVector &promptHistory, size_t &bitOffset,
                              GpsEphemeris &ephem, size_t &subframeStartSample);
+    bool processPromptSignal(int svId, const ComplexFloatVector &promptHistory, size_t &bitOffset,
+                             NavDecoderOutput &output, size_t &subframeStartSample);
+
+    void setSink(std::shared_ptr<Sink> sink) { m_sink = sink; }
+
+  private:
+    NavDecoderInput m_inputConfig;
+    std::shared_ptr<Sink> m_sink{nullptr};
 };
 } // namespace GPSOpenCl
 

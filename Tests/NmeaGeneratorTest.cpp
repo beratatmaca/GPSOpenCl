@@ -1,6 +1,7 @@
 #include "GPSOpenClNmeaGenerator.h"
 
 #include "gtest/gtest.h"
+#include <cstring>
 #include <string>
 
 namespace GPSOpenClTest
@@ -58,5 +59,51 @@ TEST(NmeaGeneratorTest, GenerateGprmc)
 
     EXPECT_EQ(gprmc.substr(0, 7), "$GPRMC,");
     EXPECT_TRUE(gprmc.find(",A,4807.0380,N,01131.0020,E,0.0,0.0,250726,,,A*") != std::string::npos);
+}
+
+TEST(NmeaGeneratorTest, GenerateGpgsaOutputMatchesString)
+{
+    GPSOpenCl::ReceiverPvtSolution sol;
+    sol.isValid = true;
+    sol.dopPDOP = 1.5;
+    sol.dopHDOP = 1.0;
+    sol.dopVDOP = 1.1;
+    std::vector<int> activePrns = {1, 2, 3, 4};
+
+    std::string gpgsaStr = GPSOpenCl::NmeaGenerator::generateGpgsa(sol, activePrns);
+    GPSOpenCl::NmeaGeneratorOutput out = GPSOpenCl::NmeaGenerator::generateGpgsaOutput(sol, activePrns);
+
+    EXPECT_EQ(out.structVersion, GPSOpenCl::STRUCT_VERSION_1);
+    EXPECT_EQ(std::string(out.sentence), gpgsaStr);
+}
+
+TEST(NmeaGeneratorTest, GenerateGpgsvOutputSplitsIntoMultipleMessages)
+{
+    GPSOpenCl::Channel channels[GPSOpenCl::GPS_CA_SV_COUNT];
+    for (int i = 0; i < 5; i++)
+    {
+        channels[i].m_svId = i + 1;
+        channels[i].setAcquired(true);
+        channels[i].insertAcquisitionMetrics(10.0f, 0, 1000.0f, 1.0f);
+    }
+
+    std::string fullString = GPSOpenCl::NmeaGenerator::generateGpgsv(channels);
+    std::vector<GPSOpenCl::NmeaGeneratorOutput> outputs = GPSOpenCl::NmeaGenerator::generateGpgsvOutput(channels);
+
+    // 5 satellites need ceil(5/4) = 2 GSV sentences; each must be its own message, never
+    // truncated or concatenated into a single fixed-size struct.
+    EXPECT_EQ(outputs.size(), 2u);
+
+    std::string reassembled;
+    for (const auto &out : outputs)
+    {
+        EXPECT_EQ(out.structVersion, GPSOpenCl::STRUCT_VERSION_1);
+        std::string sentence(out.sentence);
+        EXPECT_EQ(sentence.substr(0, 7), "$GPGSV,");
+        EXPECT_EQ(sentence.substr(sentence.length() - 2), "\r\n");
+        EXPECT_LT(std::strlen(out.sentence), sizeof(out.sentence));
+        reassembled += sentence;
+    }
+    EXPECT_EQ(reassembled, fullString);
 }
 } // namespace GPSOpenClTest

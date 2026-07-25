@@ -1,16 +1,69 @@
 #include "GPSOpenClPVTSolver.h"
 
+#include "GPSOpenClAtmosphericCorrections.h"
+
 #include <cmath>
 #include <iostream>
 
 using namespace GPSOpenCl;
 
 PVTSolver::PVTSolver()
+    : m_inputConfig{STRUCT_VERSION_1, 4, 100.0}
+{
+}
+
+PVTSolver::PVTSolver(const PvtSolverInput &input)
+    : m_inputConfig(input)
 {
 }
 
 PVTSolver::~PVTSolver()
 {
+}
+
+PvtSolverOutput PVTSolver::solutionToOutput(const ReceiverPvtSolution &sol)
+{
+    PvtSolverOutput out{};
+    out.structVersion = STRUCT_VERSION_1;
+    out.ecefX = sol.ecefPosition.x;
+    out.ecefY = sol.ecefPosition.y;
+    out.ecefZ = sol.ecefPosition.z;
+    out.latitude = sol.geodeticPosition.latitude;
+    out.longitude = sol.geodeticPosition.longitude;
+    out.altitude = sol.geodeticPosition.altitude;
+    out.clockBiasMeters = sol.clockBiasMeters;
+    out.clockBiasSeconds = sol.clockBiasSeconds;
+    out.dopGDOP = sol.dopGDOP;
+    out.dopPDOP = sol.dopPDOP;
+    out.dopHDOP = sol.dopHDOP;
+    out.dopVDOP = sol.dopVDOP;
+    out.isValid = sol.isValid ? 1 : 0;
+    return out;
+}
+
+ReceiverPvtSolution PVTSolver::outputToSolution(const PvtSolverOutput &out)
+{
+    ReceiverPvtSolution sol{};
+    sol.ecefPosition.x = out.ecefX;
+    sol.ecefPosition.y = out.ecefY;
+    sol.ecefPosition.z = out.ecefZ;
+    sol.geodeticPosition.latitude = out.latitude;
+    sol.geodeticPosition.longitude = out.longitude;
+    sol.geodeticPosition.altitude = out.altitude;
+    sol.clockBiasMeters = out.clockBiasMeters;
+    sol.clockBiasSeconds = out.clockBiasSeconds;
+    sol.dopGDOP = out.dopGDOP;
+    sol.dopPDOP = out.dopPDOP;
+    sol.dopHDOP = out.dopHDOP;
+    sol.dopVDOP = out.dopVDOP;
+    sol.isValid = (out.isValid != 0);
+    return sol;
+}
+
+SatelliteOrbit PVTSolver::computeSatelliteOrbit(const NavDecoderOutput &navOut, double t)
+{
+    GpsEphemeris ephem = NavigationDecoder::outputToEphemeris(navOut);
+    return computeSatelliteOrbit(ephem, t);
 }
 
 SatelliteOrbit PVTSolver::computeSatelliteOrbit(const GpsEphemeris &ephem, double t)
@@ -124,7 +177,8 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
 {
     solution.isValid = false;
     size_t numSats = ephemerides.size();
-    if (numSats < 4 || measuredPseudoranges.size() < numSats || transmitTimesSeconds.size() < numSats)
+    if (numSats < static_cast<size_t>(m_inputConfig.minSatellites) || measuredPseudoranges.size() < numSats ||
+        transmitTimesSeconds.size() < numSats)
     {
         return false;
     }
@@ -151,6 +205,17 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
         std::vector<std::vector<double>> H(numSats, std::vector<double>(4, 0.0));
         std::vector<double> deltaRho(numSats, 0.0);
 
+        // Tropospheric delay depends on the receiver's current position estimate and each
+        // satellite's elevation, both of which change as the solution converges, so (unlike the
+        // position-independent satellite clock bias correction above) it's recomputed every
+        // iteration from the current state estimate rather than once up front. This has no
+        // broadcast ionospheric parameters to work with (subframes 4/5 are not decoded), so
+        // ionospheric delay is NOT corrected here; residuals can still carry tens of meters of
+        // uncorrected ionospheric error at low elevation, which is why the outlier gate below
+        // stays a coarse "reject gross errors" check rather than a precise residual test.
+        EcefPosition rxEcefEstimate{state[0], state[1], state[2]};
+        double rxAltitudeEstimate = ecefToWgs84(rxEcefEstimate).altitude;
+
         for (size_t i = 0; i < numSats; i++)
         {
             double dx = orbits[i].position.x - state[0];
@@ -168,8 +233,12 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
             dz = orbits[i].position.z - state[2];
             range = std::sqrt(dx * dx + dy * dy + dz * dz);
 
+            double azDeg = 0.0, elDeg = 0.0;
+            AtmosphericCorrections::computeAzimuthElevation(rxEcefEstimate, orbits[i].position, azDeg, elDeg);
+            double tropoDelayMeters = AtmosphericCorrections::saastamoinenTroposphericDelay(rxAltitudeEstimate, elDeg);
+
             double predictedPseudorange = range + state[3];
-            deltaRho[i] = correctedRanges[i] - predictedPseudorange;
+            deltaRho[i] = (correctedRanges[i] - tropoDelayMeters) - predictedPseudorange;
 
             H[i][0] = -dx / range;
             H[i][1] = -dy / range;
@@ -232,6 +301,23 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
         double stepNorm = std::sqrt(deltaX[0] * deltaX[0] + deltaX[1] * deltaX[1] + deltaX[2] * deltaX[2]);
         if (stepNorm < 1e-4)
         {
+            double maxAbsResidual = 0.0;
+            for (size_t i = 0; i < numSats; i++)
+            {
+                double absResidual = std::fabs(deltaRho[i]);
+                if (absResidual > maxAbsResidual) maxAbsResidual = absResidual;
+            }
+            // Note: with exactly numSats == minSatellites the system is exactly determined (as many
+            // equations as unknowns), so WLS drives every residual to ~0 regardless of measurement
+            // quality -- this gate only has redundancy to actually catch a bad measurement once
+            // numSats exceeds minSatellites (see PVTSolverTest.MaxPseudorangeErrGateRejectsOutlierWithRedundantSatellites).
+            if (maxAbsResidual > m_inputConfig.maxPseudorangeErrMeters)
+            {
+                // At least one satellite's residual exceeds the configured outlier gate; reject
+                // rather than silently reporting a fix built on a corrupted/multipath measurement.
+                return false;
+            }
+
             solution.ecefPosition.x = state[0];
             solution.ecefPosition.y = state[1];
             solution.ecefPosition.z = state[2];
@@ -256,4 +342,24 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
     }
 
     return false;
+}
+
+bool PVTSolver::solvePosition(const std::vector<NavDecoderOutput> &outputs,
+                              const std::vector<double> &measuredPseudoranges,
+                              const std::vector<double> &transmitTimesSeconds,
+                              PvtSolverOutput &outputSolution)
+{
+    std::vector<GpsEphemeris> ephemerides;
+    ephemerides.reserve(outputs.size());
+    for (const auto &out : outputs)
+    {
+        ephemerides.push_back(NavigationDecoder::outputToEphemeris(out));
+    }
+
+    ReceiverPvtSolution sol{};
+    bool res = solvePosition(ephemerides, measuredPseudoranges, transmitTimesSeconds, sol);
+    // solvePosition always sets sol.isValid on entry, success or failure, so this always leaves
+    // outputSolution in a well-defined state rather than stale/uninitialized on failure.
+    outputSolution = solutionToOutput(sol);
+    return res;
 }

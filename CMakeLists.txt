@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.14)
 
 project(GPSOpenCl
         VERSION 0.1
-        LANGUAGES CXX
+        LANGUAGES CXX C
         )
 
 set(CMAKE_CXX_STANDARD 17)
@@ -40,7 +40,19 @@ if(NOT OpenCL_FOUND)
     endif()
 endif()
 
+option(GPSOPENCL_ENABLE_ZMQ "Enable ZeroMQ telemetry publishing" ON)
+if(GPSOPENCL_ENABLE_ZMQ)
+    find_library(ZMQ_LIB zmq)
+    if(ZMQ_LIB)
+        message(STATUS "ZeroMQ library found: ${ZMQ_LIB}")
+    else()
+        message(STATUS "ZeroMQ library not found; disabling ZMQ feature")
+        set(GPSOPENCL_ENABLE_ZMQ OFF CACHE BOOL "" FORCE)
+    endif()
+endif()
+
 enable_testing()
 
 add_subdirectory(Source)
 add_subdirectory(Tests)
+add_subdirectory(Tools/gps-sdr-sim)

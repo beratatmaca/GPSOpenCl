@@ -82,11 +82,21 @@ void Channel::setAcquired(bool acquired)
     m_isAcquired = acquired;
 }
 
+void Channel::setSink(std::shared_ptr<Sink> sink)
+{
+    m_sink = sink;
+    if (m_tracking)
+    {
+        m_tracking->setSink(m_sink);
+    }
+}
+
 void Channel::initTracking(const Settings::Configuration &conf, float dopplerHz, float codePhaseChips)
 {
     if (!m_tracking)
     {
         m_tracking = new Tracking(conf);
+        m_tracking->setSink(m_sink);
     }
     m_tracking->initTrackingState(dopplerHz, codePhaseChips);
     m_promptHistory.clear();
@@ -103,8 +113,6 @@ void Channel::trackBlock(const ComplexFloatVector &input)
     if (m_tracking && m_isAcquired)
     {
         m_tracking->doWork(input, m_svId, &m_promptHistory);
-        std::cout << "SV ID " << m_svId << " Tracking block processed. Bit count: "
-                  << m_promptHistory.size() << std::endl;
     }
 }
 

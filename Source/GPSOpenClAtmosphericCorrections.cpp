@@ -6,11 +6,60 @@
 using namespace GPSOpenCl;
 
 AtmosphericCorrections::AtmosphericCorrections()
+    : m_inputConfig{STRUCT_VERSION_1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}
+{
+}
+
+AtmosphericCorrections::AtmosphericCorrections(const AtmosphericInput &input)
+    : m_inputConfig(input)
 {
 }
 
 AtmosphericCorrections::~AtmosphericCorrections()
 {
+}
+
+AtmosphericOutput AtmosphericCorrections::computeCorrections(int svId,
+                                                           const GeodeticPosition &rxPos,
+                                                           const EcefPosition &rxEcef,
+                                                           const EcefPosition &satEcef,
+                                                           double gpsTimeSec,
+                                                           const AtmosphericInput &input)
+{
+    AtmosphericOutput out{};
+    out.structVersion = STRUCT_VERSION_1;
+    out.svId = svId;
+
+    double azDeg = 0.0, elDeg = 0.0;
+    computeAzimuthElevation(rxEcef, satEcef, azDeg, elDeg);
+    out.azimuthDeg = azDeg;
+    out.elevationDeg = elDeg;
+
+    KlobucharParams params;
+    params.alpha[0] = input.alpha0;
+    params.alpha[1] = input.alpha1;
+    params.alpha[2] = input.alpha2;
+    params.alpha[3] = input.alpha3;
+    params.beta[0] = input.beta0;
+    params.beta[1] = input.beta1;
+    params.beta[2] = input.beta2;
+    params.beta[3] = input.beta3;
+
+    double ionoDelaySec = klobucharIonosphericDelay(rxPos, elDeg, azDeg, gpsTimeSec, params);
+    const double c = 299792458.0;
+    out.ionoDelayMeters = ionoDelaySec * c;
+    out.tropoDelayMeters = saastamoinenTroposphericDelay(rxPos.altitude, elDeg);
+
+    return out;
+}
+
+AtmosphericOutput AtmosphericCorrections::computeCorrections(int svId,
+                                                              const GeodeticPosition &rxPos,
+                                                              const EcefPosition &rxEcef,
+                                                              const EcefPosition &satEcef,
+                                                              double gpsTimeSec) const
+{
+    return computeCorrections(svId, rxPos, rxEcef, satEcef, gpsTimeSec, m_inputConfig);
 }
 
 void AtmosphericCorrections::computeAzimuthElevation(const EcefPosition &rxEcef,

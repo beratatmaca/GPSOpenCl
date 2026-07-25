@@ -4,15 +4,14 @@ OpenCL-accelerated GPS L1 C/A software receiver.
 
 ## Priorities
 
-- Accuracy and correctness come first.
-- Robustness matters more than features.
-- Profiling is required, not optional.
-- Build a genuinely good software GPS receiver.
-- Keep dependencies minimal. Justify every new one.
+- Correctness first.
+- Robustness over features.
+- Profiling is required.
+- Minimal dependencies.
 
-## Current Architecture (verified in repo)
+## Current Architecture
 
-Pipeline order: compute -> acquisition -> tracking -> nav decode -> PVT -> NMEA.
+Pipeline: compute -> acquisition -> tracking -> nav decode -> PVT -> NMEA.
 
 - `Source/GPSOpenClGPUHandler.*`: OpenCL context, device, kernels.
 - `Source/GPSOpenClGPUCompute.*`: FFT, mixing, GPU/CPU dispatch.
@@ -26,153 +25,87 @@ Pipeline order: compute -> acquisition -> tracking -> nav decode -> PVT -> NMEA.
 - `Source/GPSOpenClNmeaGenerator.*`: NMEA-0183 sentence output.
 - `Source/GPSOpenClSettings.*`: INI config parsing.
 - `Source/GPSOpenClApplication.*`: Wires all modules together.
+- `Source/GPSOpenClStructs.h`: Shared wire structs, single source of truth.
+- `Source/GPSOpenClSource.h`, `GPSOpenClFileSource.*`, `GPSOpenClGpsSdrSimSource.*`: Abstract `Source`, plus file and gps-sdr-sim FIFO implementations.
+- `Source/GPSOpenClSink.h`, `GPSOpenClFileSink.*`, `GPSOpenClZmqSink.*`: Abstract `Sink`, plus `NullSink`/`CompositeSink`, file, and ZMQ publisher implementations.
+- `Source/GPSOpenClProfiler.*`: Per-block, per-stage timing, published through the Sink.
+- `Source/GPSOpenClBoundedQueue.h`: Bounded blocking queue between producer and consumer threads.
 - `Kernels/*.cl`: OpenCL kernels for FFT and NCO.
 
-Data flow today:
+Data flow:
 
-- Reads from a file. Not real-time yet.
-- Input: binary IQ file, or text signal file.
+- `Main.cpp` reads from file or gps-sdr-sim FIFO.
+- Producer thread (Source) and consumer thread (Application) linked by bounded queue.
+- ZMQ publisher gated behind `GPSOPENCL_ENABLE_ZMQ`. FileSink and NullSink also exist.
+- Profiler publishes per-block timing through Sink.
 - Falls back to CPU if no OpenCL device.
-- No abstract `Source` class exists yet.
-- No abstract `Sink`/output class exists yet.
-- No ZMQ publisher exists yet.
-- No profiler module exists yet.
+- Struct-based wiring is incomplete. Verify call sites before assuming end-to-end connectivity.
 
-## Target Architecture (direction, not yet built)
+## Target Architecture
 
-This is the design we are building toward.
+Design direction, not yet fully built.
 
 ### Source abstraction
 
-- Abstract `Source` base class for all inputs.
-- Concrete source reads gps-sdr-sim in real time.
-- Source yields raw IQ samples to the pipeline.
-- Design so real hardware SDRs can plug in later.
-- Raw IQ samples never ride in a struct.
-- Samples stream as raw bytes over the FIFO.
-- `Source` parses bytes into `ComplexFloatVector` directly.
-- Only `Source`'s health telemetry goes through the Sink.
+- Abstract `Source` base class. Concrete source reads gps-sdr-sim FIFO.
+- Raw IQ samples stream as bytes, parsed into `ComplexFloatVector`.
+- Only Source health telemetry goes through Sink.
+- Designed for future hardware SDR plug-in (RTL-SDR, USRP, BladeRF).
 
 ### gps-sdr-sim real-time fork
 
-- Use a real-time capable fork of gps-sdr-sim.
-- Fork lives at `beratatmaca/gps-sdr-sim-rt`, on GitHub.
-- Vendored into `Tools/gps-sdr-sim`, as today.
-- Keep upstream license file. Note local changes.
-- Fork paces sample generation to real time.
-- Fork streams samples over a Linux FIFO.
-- Data FIFO path: `/tmp/gpsopencl/sim_data.fifo`.
-- No file write, and no extra library.
-- A separate control channel commands the simulator.
-- Control FIFO path: `/tmp/gpsopencl/sim_ctrl.fifo`.
-- Control channel handles start, stop, reconfigure.
-- Commands are plain text lines, not binary.
-- Example: `START`, `STOP`, `SET_POS 48.11,11.51,545`.
+- Fork at `beratatmaca/gps-sdr-sim-rt`, vendored in `Tools/gps-sdr-sim`.
+- Streams samples over Linux FIFO: `/tmp/gpsopencl/sim_data.fifo`.
+- Control FIFO: `/tmp/gpsopencl/sim_ctrl.fifo` (plain text: `START`, `STOP`, `SET_POS`).
 
 ### Module output contract
 
-- Every module outputs one fixed binary struct.
-- Struct layout must be stable and documented.
-- Output type is also an abstract class.
-- Downstream code consumes the struct, not internals.
-- All structs live in one shared header.
-- Proposed path: `Source/GPSOpenClStructs.h`.
-- That header is the single source of truth.
-- No module defines its own duplicate struct.
-- Source, Sink, and Profiler all include it.
-- Changing a struct means one file to review.
-
-Structs are simplex: one input, one output.
-
-- Each module has exactly one input struct.
-- Each module has exactly one output struct.
-- Input struct holds configuration fields only.
-- Output struct holds telemetry fields only.
-- Never mix config fields into a telemetry struct.
-- Never mix telemetry fields into a config struct.
+- Every module: one input struct (config), one output struct (telemetry).
+- All structs in `Source/GPSOpenClStructs.h`. Single source of truth.
+- Never mix config into telemetry or vice versa.
 
 ### Struct wire format
 
-- Every struct starts with a version field.
-- First member is always `uint32_t structVersion`.
-- Use only fixed-width types: `int32_t`, `uint32_t`, `double`.
-- No `bool`, `size_t`, or plain `int` in structs.
-- Pack all wire structs. No compiler padding.
-- Assume little-endian only, host byte order.
-- No byte-swap code. Target hardware is little-endian.
-- Per-satellite telemetry: one message per SV.
-- Same struct type, many instances, one per SV.
-- No 32-slot arrays. No per-SV bitmasks.
-- Config (input) structs stay whole-module, not per-SV.
-
-### Bulk data exception
-
-- Struct rules apply to telemetry, not samples.
+- First member: `uint32_t structVersion`.
+- Fixed-width types only: `int32_t`, `uint32_t`, `double`. No `bool`, `size_t`, `int`.
+- `#pragma pack(push, 1)`. Little-endian, no byte swap.
+- Per-satellite telemetry: one message per SV, no arrays.
 - Raw IQ samples are not wrapped in a struct.
-- `Source` still gets one input, one output struct.
-- `SourceInput`: FIFO path, sample format, sampling rate.
-- `SourceOutput`: block index, timestamp, FIFO under/overrun counts.
-- Only `SourceOutput` (health) is published through the Sink.
 
 ### Publisher / Sink
 
-- Sink is abstract. ZMQ is one implementation.
-- For now, sink implementation is a ZMQ publisher.
-- Each struct is published with an identifier.
-- One identifier per module or struct type.
-- Socket pattern is ZMQ PUB/SUB.
-- Default endpoint: `ipc:///tmp/gpsopencl/<name>.sock`.
-- Allow `tcp://` override, for remote dashboards.
-- Message is two frames: identifier, then struct bytes.
-- If ZMQ is disabled, fall back to `NullSink` or `FileSink`.
+- Abstract Sink. ZMQ PUB/SUB is default implementation.
+- Endpoint: `ipc:///tmp/gpsopencl/<name>.sock`. TCP override allowed.
+- Message: two frames (identifier + struct bytes).
+- Fallback: NullSink or FileSink if ZMQ disabled.
 
 ### Profiler module
 
-- Dedicated `Profiler` module, separate from algorithms.
-- Wraps each module's compute call with timing.
-- Measures per-module latency, per processing block.
-- Profiler output is also a binary struct.
-- Profiler struct publishes through the same Sink path.
-- Report throughput, and per-stage timing breakdown.
-- Profiling must not distort the timing it measures.
-- Can be disabled at compile time or runtime.
+- Per-block, per-stage timing. Publishes through Sink.
+- Must not distort the timing it measures.
+- Disableable at compile time or runtime.
 
 ### Concurrency model
 
-- One producer thread: `Source`, reading the FIFO.
-- One consumer thread: `Application`, running the algorithms.
-- Bounded blocking queue links the two threads.
-- Queue size target: about 8 to 16 blocks.
-- Algorithm path never drops samples. It backpressures.
-- Sink/telemetry path may drop under load instead.
+- Producer thread (Source) + consumer thread (Application) linked by bounded queue (8-16 blocks).
+- Algorithm path backpressures. Sink path may drop.
 
 ### Visualization
 
-- Terminal and dashboard visualizers come later.
-- Visualizers are ZMQ subscribers, not core logic.
-- Keep visualizers out of the real-time hot path.
+- Visualizers are ZMQ subscribers, not core logic. Keep out of hot path.
 
 ### Deployment goal
 
-- Whole pipeline must run on real hardware.
-- No dependency that blocks embedded or edge deployment.
-- GPU acceleration optional. CPU fallback is mandatory.
-- Primary targets: x86_64 Linux, and ARM64 Linux.
-- Concrete boards: Raspberry Pi 4/5, NVIDIA Jetson.
-- Linux only. No Windows or macOS support.
-- Future hardware `Source`s: RTL-SDR, USRP (UHD), BladeRF.
+- Linux only (x86_64, ARM64). Target: RPi 4/5, Jetson.
+- GPU optional, CPU fallback mandatory.
+- No dependency that blocks embedded deployment.
 
-## Dependency Policy
+## Dependencies
 
-- Keep core pipeline dependencies minimal.
-- C++17 standard library is always fine.
-- OpenCL allowed, for GPU acceleration only.
-- ZMQ allowed, only for the Sink publisher path.
-- CMake option `GPSOPENCL_ENABLE_ZMQ`, on if found.
-- Sim-to-Source IPC uses a Linux FIFO, no library.
-- No heavy frameworks inside the core pipeline.
-- Python tools (dashboard, benchmark) may use more.
-- Justify any new dependency in the PR.
+- C++17 stdlib, OpenCL (GPU only), ZMQ (Sink only, gated by `GPSOPENCL_ENABLE_ZMQ`).
+- FIFO for sim IPC, no library.
+- Python tools may use additional packages.
+- Justify any new dependency in PR.
 
 ## Build
 
@@ -181,9 +114,7 @@ cmake -S . -B build
 cmake --build build
 ```
 
-- Requires CMake 3.14+, and C++17.
-- OpenCL headers auto-fetched if not found.
-- GoogleTest auto-fetched via FetchContent.
+CMake 3.14+, C++17. OpenCL headers and GoogleTest auto-fetched.
 
 ## Test
 
@@ -191,11 +122,7 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-- 33 GoogleTest cases, across all modules.
-- Covers acquisition, tracking, PVT, NMEA, atmosphere.
-- `Tests/E2ETest.cpp` runs one full pipeline pass.
-- Add a test for every new algorithm.
-- Do not merge algorithm code without a test.
+33 GoogleTest cases. Every new algorithm needs a test.
 
 ## Benchmarking
 
@@ -203,33 +130,37 @@ ctest --test-dir build --output-on-failure
 python3 Tools/e2e_benchmark.py --duration 5
 ```
 
-- Writes `e2e_benchmark_report.json` and `.md`.
-- Reports throughput in samples per second.
-- Run this after any algorithm change.
-- Watch for timing regressions in acquisition and tracking.
+Writes JSON and Markdown reports. Run after any algorithm change.
 
 ## Live Demo
 
 ```bash
-python3 run_live_demo.py
+python3 run_system.py
 ```
 
-- Builds the project, generates a signal, launches dashboard.
-- Auto-compiles `gps-sdr-sim` if missing.
-- Dashboard is Plotly Dash, served on `localhost:8050`.
+Builds, streams signal over FIFO, launches Dash dashboard on `localhost:8050`.
 
 ## Code Style
 
-- Format with `.clang-format` before committing.
+- `.clang-format` before committing.
 - 4-space indent, Allman braces, 120 columns.
-- One namespace for everything: `GPSOpenCl`.
+- Namespace: `GPSOpenCl`.
 - File naming: `GPSOpenCl<ModuleName>.h` / `.cpp`.
+
+## Commenting Rules
+
+- **C++ headers (`.h`):** Doxygen only. `/** */` for classes, structs, functions. `///<` for fields. No `//` or `/* */`.
+- **C++ sources (`.cpp`):** Zero comments.
+- **Python (`.py`):** One `#` comment on the preceding line. No docstrings, no inline comments.
+- **CMake (`CMakeLists.txt`):** One `#` comment on the preceding line.
+- **OpenCL (`.cl`):** Doxygen `/** */` blocks on every kernel.
+- Simple English. Short, direct, no filler.
 
 ## Working Rules
 
 - Never fake or stub algorithm correctness.
 - Verify PLL/DLL and PVT math against references.
 - Prefer measured profiling over assumed performance.
-- Ask before adding a new external dependency.
-- Keep GPU and CPU compute paths behaviorally identical.
+- Ask before adding a new dependency.
+- GPU and CPU compute paths must be identical.
 - New modules must fit the Source/struct/Sink contract.

@@ -49,6 +49,11 @@ add_executable(
 
 target_compile_definitions(GPSOpenClTest PUBLIC CTEST)
 
+if(GPSOPENCL_ENABLE_ZMQ)
+    target_compile_definitions(GPSOpenClTest PRIVATE GPSOPENCL_ENABLE_ZMQ)
+    target_link_libraries(GPSOpenClTest PRIVATE ${ZMQ_LIB})
+endif()
+
 target_include_directories(
   GPSOpenClTest
   PUBLIC 

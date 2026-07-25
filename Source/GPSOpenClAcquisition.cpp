@@ -3,15 +3,36 @@
 using namespace GPSOpenCl;
 
 Acquisition::Acquisition(Settings::Configuration conf)
+    : m_inputConfig{STRUCT_VERSION_1,
+                    conf.acquisitionSettings.acquisitionDopplerMinimum,
+                    conf.acquisitionSettings.acquisitionDopplerMaximum,
+                    conf.acquisitionSettings.acquisitionDopplerSearchRange,
+                    conf.rawDataSettings.samplingFrequency,
+                    conf.rawDataSettings.numberOfSamplesPerCode}
 {
     m_numberOfFreqencyBins =
-        ((conf.acquisitionSettings.acquisitionDopplerMaximum - conf.acquisitionSettings.acquisitionDopplerMinimum) /
-         conf.acquisitionSettings.acquisitionDopplerSearchRange) +
+        ((m_inputConfig.acquisitionDopplerMaximum - m_inputConfig.acquisitionDopplerMinimum) /
+         m_inputConfig.acquisitionDopplerSearchRange) +
         1;
-    m_initialFrequency = conf.acquisitionSettings.acquisitionDopplerMinimum;
-    m_freqSpacing = conf.acquisitionSettings.acquisitionDopplerSearchRange;
-    m_length = conf.rawDataSettings.numberOfSamplesPerCode;
-    m_samplingFrequency = conf.rawDataSettings.samplingFrequency;
+    m_initialFrequency = static_cast<float>(m_inputConfig.acquisitionDopplerMinimum);
+    m_freqSpacing = static_cast<float>(m_inputConfig.acquisitionDopplerSearchRange);
+    m_length = m_inputConfig.numberOfSamplesPerCode;
+    m_samplingFrequency = static_cast<float>(m_inputConfig.samplingFrequency);
+
+    createDopplerSearchTable();
+}
+
+Acquisition::Acquisition(const AcquisitionInput &input)
+    : m_inputConfig(input)
+{
+    m_numberOfFreqencyBins =
+        ((m_inputConfig.acquisitionDopplerMaximum - m_inputConfig.acquisitionDopplerMinimum) /
+         m_inputConfig.acquisitionDopplerSearchRange) +
+        1;
+    m_initialFrequency = static_cast<float>(m_inputConfig.acquisitionDopplerMinimum);
+    m_freqSpacing = static_cast<float>(m_inputConfig.acquisitionDopplerSearchRange);
+    m_length = m_inputConfig.numberOfSamplesPerCode;
+    m_samplingFrequency = static_cast<float>(m_inputConfig.samplingFrequency);
 
     createDopplerSearchTable();
 }

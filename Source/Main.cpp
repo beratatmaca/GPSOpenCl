@@ -66,12 +66,13 @@ int main(int argc, char **argv)
         }
     }
 
-    // 1. Create Sink Publisher
+    // 1. Create Composite Sink Publisher (ZMQ + File telemetry stream)
+    auto compositeSink = std::make_shared<GPSOpenCl::CompositeSink>();
+    compositeSink->addSink(std::make_shared<GPSOpenCl::FileSink>("build/telemetry_wire.log"));
 #ifdef GPSOPENCL_ENABLE_ZMQ
-    auto sink = std::make_shared<GPSOpenCl::ZmqSink>("ipc:///tmp/gpsopencl/telemetry.sock");
-#else
-    auto sink = std::make_shared<GPSOpenCl::FileSink>("build/telemetry_wire.log");
+    compositeSink->addSink(std::make_shared<GPSOpenCl::ZmqSink>("ipc:///tmp/gpsopencl/telemetry.sock"));
 #endif
+    auto sink = std::static_pointer_cast<GPSOpenCl::Sink>(compositeSink);
 
     // 2. Initialize Source
     std::shared_ptr<GPSOpenCl::Source> source;

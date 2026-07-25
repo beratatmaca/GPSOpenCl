@@ -42,3 +42,11 @@ build/
 *.dat
 *.bin
 log.txt
+
+# Generated reports and run artifacts
+TestResult.xml
+e2e_benchmark_report.json
+e2e_benchmark_report.md
+telemetry_stream.json
+__pycache__/
+*.pyc

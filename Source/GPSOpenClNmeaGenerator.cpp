@@ -8,11 +8,47 @@
 using namespace GPSOpenCl;
 
 NmeaGenerator::NmeaGenerator()
+    : m_inputConfig{STRUCT_VERSION_1, 1, 1, 1, 1}
+{
+}
+
+NmeaGenerator::NmeaGenerator(const NmeaGeneratorInput &input)
+    : m_inputConfig(input)
 {
 }
 
 NmeaGenerator::~NmeaGenerator()
 {
+}
+
+NmeaGeneratorOutput NmeaGenerator::generateGggaOutput(const ReceiverPvtSolution &solution, int numSatellites, double utcTimeSec)
+{
+    std::string str = generateGgga(solution, numSatellites, utcTimeSec);
+    NmeaGeneratorOutput out{};
+    out.structVersion = STRUCT_VERSION_1;
+    snprintf(out.sentence, sizeof(out.sentence), "%s", str.c_str());
+    return out;
+}
+
+NmeaGeneratorOutput NmeaGenerator::generateGprmcOutput(const ReceiverPvtSolution &solution, double utcTimeSec)
+{
+    std::string str = generateGprmc(solution, utcTimeSec);
+    NmeaGeneratorOutput out{};
+    out.structVersion = STRUCT_VERSION_1;
+    snprintf(out.sentence, sizeof(out.sentence), "%s", str.c_str());
+    return out;
+}
+
+NmeaGeneratorOutput NmeaGenerator::generateGggaOutput(const PvtSolverOutput &pvtOutput, int numSatellites, double utcTimeSec)
+{
+    ReceiverPvtSolution sol = PVTSolver::outputToSolution(pvtOutput);
+    return generateGggaOutput(sol, numSatellites, utcTimeSec);
+}
+
+NmeaGeneratorOutput NmeaGenerator::generateGprmcOutput(const PvtSolverOutput &pvtOutput, double utcTimeSec)
+{
+    ReceiverPvtSolution sol = PVTSolver::outputToSolution(pvtOutput);
+    return generateGprmcOutput(sol, utcTimeSec);
 }
 
 uint8_t NmeaGenerator::calculateChecksum(const std::string &sentenceBody)
@@ -131,7 +167,7 @@ std::string NmeaGenerator::generateGpgsa(const ReceiverPvtSolution &solution, co
     return appendChecksum(oss.str());
 }
 
-std::string NmeaGenerator::generateGpgsv(const Channel channels[GPS_CA_SV_COUNT])
+std::vector<std::string> NmeaGenerator::generateGpgsvSentences(const Channel channels[GPS_CA_SV_COUNT])
 {
     struct SvInfo
     {
@@ -155,7 +191,7 @@ std::string NmeaGenerator::generateGpgsv(const Channel channels[GPS_CA_SV_COUNT]
     int numSentences = (totalSats + 3) / 4;
     if (numSentences == 0) numSentences = 1;
 
-    std::string result;
+    std::vector<std::string> sentences;
     for (int s = 0; s < numSentences; s++)
     {
         std::ostringstream oss;
@@ -177,8 +213,40 @@ std::string NmeaGenerator::generateGpgsv(const Channel channels[GPS_CA_SV_COUNT]
             }
         }
 
-        result += appendChecksum(oss.str());
+        sentences.push_back(appendChecksum(oss.str()));
     }
 
+    return sentences;
+}
+
+std::string NmeaGenerator::generateGpgsv(const Channel channels[GPS_CA_SV_COUNT])
+{
+    std::string result;
+    for (const auto &sentence : generateGpgsvSentences(channels))
+    {
+        result += sentence;
+    }
     return result;
+}
+
+NmeaGeneratorOutput NmeaGenerator::generateGpgsaOutput(const ReceiverPvtSolution &solution, const std::vector<int> &activePrns)
+{
+    std::string str = generateGpgsa(solution, activePrns);
+    NmeaGeneratorOutput out{};
+    out.structVersion = STRUCT_VERSION_1;
+    snprintf(out.sentence, sizeof(out.sentence), "%s", str.c_str());
+    return out;
+}
+
+std::vector<NmeaGeneratorOutput> NmeaGenerator::generateGpgsvOutput(const Channel channels[GPS_CA_SV_COUNT])
+{
+    std::vector<NmeaGeneratorOutput> outputs;
+    for (const auto &sentence : generateGpgsvSentences(channels))
+    {
+        NmeaGeneratorOutput out{};
+        out.structVersion = STRUCT_VERSION_1;
+        snprintf(out.sentence, sizeof(out.sentence), "%s", sentence.c_str());
+        outputs.push_back(out);
+    }
+    return outputs;
 }

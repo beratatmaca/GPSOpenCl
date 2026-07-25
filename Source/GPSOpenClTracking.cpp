@@ -5,12 +5,27 @@
 
 using namespace GPSOpenCl;
 
+float Tracking::loopFilterTau1(double noiseBandwidthHz)
+{
+    const double zeta = 0.70710678118654752440; // damping ratio 1/sqrt(2)
+    double wn = noiseBandwidthHz * 8.0 * zeta / (4.0 * zeta * zeta + 1.0);
+    return static_cast<float>(1.0 / (wn * wn));
+}
+
+float Tracking::loopFilterTau2(double noiseBandwidthHz)
+{
+    const double zeta = 0.70710678118654752440; // damping ratio 1/sqrt(2)
+    double wn = noiseBandwidthHz * 8.0 * zeta / (4.0 * zeta * zeta + 1.0);
+    return static_cast<float>(2.0 * zeta / wn);
+}
+
 Tracking::Tracking(Settings::Configuration conf)
     : m_gpu(nullptr),
       m_configuration(conf),
+      m_inputConfig{STRUCT_VERSION_1, conf.trackingInput.pllBandwidthHz, conf.trackingInput.dllBandwidthHz, conf.rawDataSettings.samplingFrequency, conf.rawDataSettings.numberOfSamplesPerCode},
       m_totalSamples(0),
-      m_pllTau1(0.0004494f),
-      m_pllTau2(0.02998f),
+      m_pllTau1(loopFilterTau1(conf.trackingInput.pllBandwidthHz)),
+      m_pllTau2(loopFilterTau2(conf.trackingInput.pllBandwidthHz)),
       m_carrFreqBasis(0.0f),
       m_carrFreq(0.0f),
       m_remCarrPhase(0.0f),
@@ -18,8 +33,8 @@ Tracking::Tracking(Settings::Configuration conf)
       m_carrNcoPrev(0.0f),
       m_carrError(0.0f),
       m_carrErrorPrev(0.0f),
-      m_dllTau1(0.07022f),
-      m_dllTau2(0.37476f),
+      m_dllTau1(loopFilterTau1(conf.trackingInput.dllBandwidthHz)),
+      m_dllTau2(loopFilterTau2(conf.trackingInput.dllBandwidthHz)),
       m_codeFreqBasis(GPS_CA_CODE_FREQUENCY_HZ),
       m_codeFreq(GPS_CA_CODE_FREQUENCY_HZ),
       m_codePhaseStep(0.0f),
@@ -35,6 +50,57 @@ Tracking::Tracking(Settings::Configuration conf)
       m_Qp(0.0f),
       m_Ql(0.0f)
 {
+    m_gpu = new Compute();
+
+    m_code.setConfiguration(m_configuration);
+
+    m_totalSamples = m_configuration.rawDataSettings.numberOfSamplesPerCode;
+
+    if (m_configuration.rawDataSettings.samplingFrequency > 0.0f)
+    {
+        m_codePhaseStep = m_codeFreq / m_configuration.rawDataSettings.samplingFrequency;
+    }
+
+    m_carrSig.resize(m_totalSamples);
+    m_earlyCode.resize(m_totalSamples);
+    m_promptCode.resize(m_totalSamples);
+    m_lateCode.resize(m_totalSamples);
+}
+
+Tracking::Tracking(const TrackingInput &input)
+    : m_gpu(nullptr),
+      m_inputConfig(input),
+      m_totalSamples(0),
+      m_pllTau1(loopFilterTau1(input.pllBandwidthHz)),
+      m_pllTau2(loopFilterTau2(input.pllBandwidthHz)),
+      m_carrFreqBasis(0.0f),
+      m_carrFreq(0.0f),
+      m_remCarrPhase(0.0f),
+      m_carrNco(0.0f),
+      m_carrNcoPrev(0.0f),
+      m_carrError(0.0f),
+      m_carrErrorPrev(0.0f),
+      m_dllTau1(loopFilterTau1(input.dllBandwidthHz)),
+      m_dllTau2(loopFilterTau2(input.dllBandwidthHz)),
+      m_codeFreqBasis(GPS_CA_CODE_FREQUENCY_HZ),
+      m_codeFreq(GPS_CA_CODE_FREQUENCY_HZ),
+      m_codePhaseStep(0.0f),
+      m_remCodePhase(0.0f),
+      m_codeNco(0.0f),
+      m_codeNcoPrev(0.0f),
+      m_codeError(0.0f),
+      m_codeErrorPrev(0.0f),
+      m_Ie(0.0f),
+      m_Ip(0.0f),
+      m_Il(0.0f),
+      m_Qe(0.0f),
+      m_Qp(0.0f),
+      m_Ql(0.0f)
+{
+    m_configuration.trackingInput = input;
+    m_configuration.rawDataSettings.samplingFrequency = static_cast<float>(input.samplingFrequency);
+    m_configuration.rawDataSettings.numberOfSamplesPerCode = input.numberOfSamplesPerCode;
+
     m_gpu = new Compute();
 
     m_code.setConfiguration(m_configuration);
@@ -99,7 +165,31 @@ void Tracking::doWork(const ComplexFloatVector &input, int prn, ComplexFloatVect
         output->push_back(std::complex<float>(m_Ip, m_Qp));
     }
 
+    if (m_sink)
+    {
+        TrackingOutput trkOut = getTrackingOutput(prn);
+        m_sink->publishTrackingOutput(trkOut);
+    }
+
     resetAccumulation();
+}
+
+TrackingOutput Tracking::getTrackingOutput(int prn) const
+{
+    TrackingOutput out{};
+    out.structVersion = STRUCT_VERSION_1;
+    out.prn = prn;
+    out.carrierFreqHz = static_cast<double>(m_carrFreq);
+    out.codeFreqHz = static_cast<double>(m_codeFreq);
+    out.carrierError = static_cast<double>(m_carrError);
+    out.codeError = static_cast<double>(m_codeError);
+    out.Ie = static_cast<double>(m_Ie);
+    out.Ip = static_cast<double>(m_Ip);
+    out.Il = static_cast<double>(m_Il);
+    out.Qe = static_cast<double>(m_Qe);
+    out.Qp = static_cast<double>(m_Qp);
+    out.Ql = static_cast<double>(m_Ql);
+    return out;
 }
 
 void Tracking::ncoMultiplicate(const ComplexFloatVector &input, float frequency, ComplexFloatVector *output)

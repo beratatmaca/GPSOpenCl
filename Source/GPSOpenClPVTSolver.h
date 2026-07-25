@@ -6,6 +6,8 @@
 
 #include <vector>
 
+#include "GPSOpenClStructs.h"
+
 namespace GPSOpenCl
 {
 struct EcefPosition
@@ -47,15 +49,28 @@ class PVTSolver
 {
   public:
     PVTSolver();
+    PVTSolver(const PvtSolverInput &input);
     ~PVTSolver();
 
     static SatelliteOrbit computeSatelliteOrbit(const GpsEphemeris &ephem, double transmitTimeSeconds);
+    static SatelliteOrbit computeSatelliteOrbit(const NavDecoderOutput &navOut, double transmitTimeSeconds);
     static GeodeticPosition ecefToWgs84(const EcefPosition &ecef);
+
+    static PvtSolverOutput solutionToOutput(const ReceiverPvtSolution &sol);
+    static ReceiverPvtSolution outputToSolution(const PvtSolverOutput &out);
 
     bool solvePosition(const std::vector<GpsEphemeris> &ephemerides,
                        const std::vector<double> &measuredPseudoranges,
                        const std::vector<double> &transmitTimesSeconds,
                        ReceiverPvtSolution &solution);
+
+    bool solvePosition(const std::vector<NavDecoderOutput> &outputs,
+                       const std::vector<double> &measuredPseudoranges,
+                       const std::vector<double> &transmitTimesSeconds,
+                       PvtSolverOutput &outputSolution);
+
+  private:
+    PvtSolverInput m_inputConfig;
 };
 } // namespace GPSOpenCl
 

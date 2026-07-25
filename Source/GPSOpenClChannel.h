@@ -4,7 +4,10 @@
 #include "GPSOpenClCommon.h"
 #include "GPSOpenClNavigationDecoder.h"
 #include "GPSOpenClSettings.h"
+#include "GPSOpenClSink.h"
 #include "GPSOpenClTracking.h"
+
+#include <memory>
 
 namespace GPSOpenCl
 {
@@ -27,6 +30,8 @@ class Channel
     void trackBlock(const ComplexFloatVector &input);
     const ComplexFloatVector &getPromptHistory() const { return m_promptHistory; }
 
+    void setSink(std::shared_ptr<Sink> sink);
+
     // Attempts to decode the next available subframe from this channel's tracked prompt history and
     // merges it into the accumulated ephemeris. Returns true once subframes 1, 2 and 3 have all been
     // seen at least once, at which point getAccumulatedEphemeris()/getLastSubframeTow()/
@@ -48,6 +53,7 @@ class Channel
 
     bool m_isAcquired;
     Tracking *m_tracking;
+    std::shared_ptr<Sink> m_sink{nullptr};
     ComplexFloatVector m_promptHistory;
 
     size_t m_navBitOffset;

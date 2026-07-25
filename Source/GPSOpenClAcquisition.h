@@ -9,6 +9,7 @@
 #include "GPSOpenClCommon.h"
 #include "GPSOpenClGPUCompute.h"
 #include "GPSOpenClSettings.h"
+#include "GPSOpenClStructs.h"
 
 namespace GPSOpenCl
 {
@@ -16,6 +17,7 @@ class Acquisition
 {
   public:
     Acquisition(Settings::Configuration conf);
+    Acquisition(const AcquisitionInput &input);
     ~Acquisition();
 
     void correlate(const ComplexFloatVector &input, Compute *gpu, Code *code, Channel *acqChannel);
@@ -24,6 +26,7 @@ class Acquisition
     void createDopplerSearchTable();
     void exp(int length, float frequency, float samplingRate, float phaseOffset, ComplexFloatVector *output);
 
+    AcquisitionInput m_inputConfig;
     std::vector<ComplexFloatVector> m_dopplerSearch;
     int m_numberOfFreqencyBins;
     float m_initialFrequency;

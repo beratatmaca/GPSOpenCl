@@ -5,6 +5,8 @@
 
 #include <vector>
 
+#include "GPSOpenClStructs.h"
+
 namespace GPSOpenCl
 {
 struct KlobucharParams
@@ -17,6 +19,7 @@ class AtmosphericCorrections
 {
   public:
     AtmosphericCorrections();
+    AtmosphericCorrections(const AtmosphericInput &input);
     ~AtmosphericCorrections();
 
     static double klobucharIonosphericDelay(const GeodeticPosition &rxPos,
@@ -32,6 +35,23 @@ class AtmosphericCorrections
                                         const EcefPosition &satEcef,
                                         double &azimuthDeg,
                                         double &elevationDeg);
+
+    static AtmosphericOutput computeCorrections(int svId,
+                                                const GeodeticPosition &rxPos,
+                                                const EcefPosition &rxEcef,
+                                                const EcefPosition &satEcef,
+                                                double gpsTimeSec,
+                                                const AtmosphericInput &input);
+
+    // Same as above, using the Klobuchar alpha/beta this instance was constructed with.
+    AtmosphericOutput computeCorrections(int svId,
+                                         const GeodeticPosition &rxPos,
+                                         const EcefPosition &rxEcef,
+                                         const EcefPosition &satEcef,
+                                         double gpsTimeSec) const;
+
+  private:
+    AtmosphericInput m_inputConfig;
 };
 } // namespace GPSOpenCl
 

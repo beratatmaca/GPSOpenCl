@@ -18,7 +18,8 @@ static std::string stripTrailingNewlines(std::string str)
 }
 
 Application::Application(Settings::Configuration conf)
-    : m_acquisition(nullptr), m_tracking(nullptr), m_configuration(conf), m_code(nullptr), m_gpu(nullptr)
+    : m_acquisition(nullptr), m_tracking(nullptr), m_configuration(conf), m_code(nullptr), m_gpu(nullptr),
+      m_pvtSolver(conf.pvtSolverInput), m_navDecoder(conf.navDecoderInput), m_nmeaGenerator(conf.nmeaGeneratorInput)
 {
     std::cout << SOFTWARE_NAME << " " << SOFTWARE_VERSION << " started to run" << std::endl;
 
@@ -163,10 +164,10 @@ bool Application::computeNavigationSolution(ReceiverPvtSolution &solution)
                   << solution.dopPDOP << ", VDOP = " << solution.dopVDOP << std::endl;
 
         std::cout << "\n--- NMEA 0183 Output Stream ---" << std::endl;
-        std::cout << NmeaGenerator::generateGgga(solution, static_cast<int>(activePrns.size()), 45319.0);
-        std::cout << NmeaGenerator::generateGprmc(solution, 45319.0);
-        std::cout << NmeaGenerator::generateGpgsa(solution, activePrns);
-        std::cout << NmeaGenerator::generateGpgsv(m_channels);
+        if (m_nmeaGenerator.isGgaEnabled()) std::cout << NmeaGenerator::generateGgga(solution, static_cast<int>(activePrns.size()), 45319.0);
+        if (m_nmeaGenerator.isRmcEnabled()) std::cout << NmeaGenerator::generateGprmc(solution, 45319.0);
+        if (m_nmeaGenerator.isGsaEnabled()) std::cout << NmeaGenerator::generateGpgsa(solution, activePrns);
+        if (m_nmeaGenerator.isGsvEnabled()) std::cout << NmeaGenerator::generateGpgsv(m_channels);
 
         exportTelemetryJson("telemetry_stream.json", solution);
 
@@ -189,11 +190,28 @@ bool Application::computeNavigationSolution(ReceiverPvtSolution &solution)
             pvtOut.isValid = solution.isValid ? 1 : 0;
             m_sink->publishPvtSolverOutput(pvtOut);
 
-            std::string ggaStr = NmeaGenerator::generateGgga(solution, static_cast<int>(activePrns.size()), 45319.0);
-            NmeaGeneratorOutput nmeaOut;
-            nmeaOut.structVersion = STRUCT_VERSION_1;
-            snprintf(nmeaOut.sentence, sizeof(nmeaOut.sentence), "%s", ggaStr.c_str());
-            m_sink->publishNmeaGeneratorOutput(nmeaOut);
+            if (m_nmeaGenerator.isGgaEnabled())
+            {
+                NmeaGeneratorOutput nmeaOut = NmeaGenerator::generateGggaOutput(solution, static_cast<int>(activePrns.size()), 45319.0);
+                m_sink->publishNmeaGeneratorOutput(nmeaOut);
+            }
+            if (m_nmeaGenerator.isRmcEnabled())
+            {
+                NmeaGeneratorOutput nmeaOut = NmeaGenerator::generateGprmcOutput(solution, 45319.0);
+                m_sink->publishNmeaGeneratorOutput(nmeaOut);
+            }
+            if (m_nmeaGenerator.isGsaEnabled())
+            {
+                NmeaGeneratorOutput nmeaOut = NmeaGenerator::generateGpgsaOutput(solution, activePrns);
+                m_sink->publishNmeaGeneratorOutput(nmeaOut);
+            }
+            if (m_nmeaGenerator.isGsvEnabled())
+            {
+                for (const NmeaGeneratorOutput &nmeaOut : NmeaGenerator::generateGpgsvOutput(m_channels))
+                {
+                    m_sink->publishNmeaGeneratorOutput(nmeaOut);
+                }
+            }
         }
     }
 
@@ -204,6 +222,11 @@ void Application::setSink(std::shared_ptr<Sink> sink)
 {
     m_sink = sink;
     m_profiler.setSink(sink);
+    m_navDecoder.setSink(sink);
+    for (int i = 0; i < GPS_CA_SV_COUNT; i++)
+    {
+        m_channels[i].setSink(sink);
+    }
 }
 
 void Application::setSource(std::shared_ptr<Source> source)

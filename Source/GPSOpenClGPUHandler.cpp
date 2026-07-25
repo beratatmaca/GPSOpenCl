@@ -78,15 +78,16 @@ int GpuHandler::createDevice()
     }
 
     m_error = clGetDeviceIDs(m_platform, CL_DEVICE_TYPE_GPU, 1, &m_device, &numOfDevices);
-    if (m_error == CL_DEVICE_NOT_FOUND || m_error < 0)
+    if (m_error == CL_DEVICE_NOT_FOUND || m_error < 0 || numOfDevices == 0)
     {
-        m_error = clGetDeviceIDs(m_platform, CL_DEVICE_TYPE_CPU, 1, &m_device, NULL);
+        // Fall back to an OpenCL CPU device (e.g. POCL) before giving up on OpenCL entirely.
+        m_error = clGetDeviceIDs(m_platform, CL_DEVICE_TYPE_CPU, 1, &m_device, &numOfDevices);
     }
 
-    if (m_error < 0)
+    if (m_error < 0 || numOfDevices == 0)
     {
         std::cout << "[INFO] No OpenCL GPU/CPU device detected. Using C++ CPU software compute mode." << std::endl;
-        return m_error;
+        return m_error < 0 ? m_error : -1;
     }
 
     m_context = clCreateContext(NULL, 1, &m_device, NULL, NULL, &m_error);

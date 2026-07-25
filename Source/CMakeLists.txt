@@ -35,6 +35,11 @@ target_link_libraries(
 
 target_compile_definitions(GPSOpenCl PRIVATE CL_TARGET_OPENCL_VERSION=220)
 
+if(GPSOPENCL_ENABLE_ZMQ)
+    target_compile_definitions(GPSOpenCl PRIVATE GPSOPENCL_ENABLE_ZMQ)
+    target_link_libraries(GPSOpenCl PRIVATE ${ZMQ_LIB})
+endif()
+
 file(
   COPY 
   ${CMAKE_CURRENT_SOURCE_DIR}/../Tests/Scripts/ConfigurationFile/DefaultConf.ini

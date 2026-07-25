@@ -6,6 +6,22 @@
 
 using namespace GPSOpenCl;
 
+unsigned int Compute::roundDownToPowerOfTwo(unsigned int value)
+{
+    if (value == 0) return 0;
+    return static_cast<unsigned int>(pow(2, trunc(log2(static_cast<double>(value)))));
+}
+
+unsigned int Compute::clampLocalSizeForMinPointsPerItem(unsigned int localSize, unsigned int pointsPerGroup,
+                                                        unsigned int minPointsPerItem)
+{
+    while (localSize > pointsPerGroup / minPointsPerItem && localSize > 1)
+    {
+        localSize >>= 1;
+    }
+    return localSize;
+}
+
 /**
  * @brief Construct a new GPSOpenCl::Compute::Compute object
  *
@@ -95,10 +111,22 @@ int Compute::fft(const ComplexFloatVector &input, ComplexFloatVector *output, FF
                 {
                     localMemorySize = m_gpu.m_localMemorySize;
                     points_per_group = localMemorySize / (2 * sizeof(float));
+                    // Round down to a power of two so it evenly divides length (always a power of
+                    // two here) and local_size; otherwise length/points_per_group truncates on the
+                    // host and points_per_group/get_local_size(0) truncates in the kernel, silently
+                    // dropping a tail portion of the buffer from processing.
+                    points_per_group = roundDownToPowerOfTwo(points_per_group);
                     if (points_per_group > length)
                     {
                         points_per_group = length;
                     }
+                    // fft_init loads and combines points in fixed groups of 4 per work-item
+                    // (points_per_item = points_per_group / local_size must be a multiple of 4, and
+                    // its merge stage divides points_per_item by 2), so local_size must leave at
+                    // least 4 points per item. A device's max kernel work-group size (local_size)
+                    // can otherwise exceed that (seen on CPU OpenCL drivers like POCL): points_per_item
+                    // truncating to 0 hangs the kernel, and truncating to 1 or 2 silently corrupts it.
+                    local_size = clampLocalSizeForMinPointsPerItem(static_cast<unsigned int>(local_size), points_per_group, 4);
 
                     m_error = clSetKernelArg(initKernel, 0, sizeof(cl_mem), &dataBuffer);
                     m_error |= clSetKernelArg(initKernel, 1, localMemorySize, NULL);
@@ -271,10 +299,14 @@ int Compute::complexMultiplier(const ComplexFloatVector &input1, const ComplexFl
                 {
                     localMemorySize = m_gpu.m_localMemorySize;
                     points_per_group = localMemorySize / (2 * sizeof(float));
+                    // Round down to a power of two so it evenly divides length and local_size (see
+                    // the identical comment in Compute::fft).
+                    points_per_group = roundDownToPowerOfTwo(points_per_group);
                     if (points_per_group > length)
                     {
                         points_per_group = length;
                     }
+                    local_size = clampLocalSizeForMinPointsPerItem(static_cast<unsigned int>(local_size), points_per_group, 1);
 
                     clSetKernelArg(complexMultiplierKernel, 0, sizeof(cl_mem), &d_a);
                     clSetKernelArg(complexMultiplierKernel, 1, sizeof(cl_mem), &d_b);
@@ -365,16 +397,25 @@ int Compute::absolute(const ComplexFloatVector &input1, FloatVector *output)
                 {
                     localMemorySize = m_gpu.m_localMemorySize;
                     points_per_group = localMemorySize / (2 * sizeof(float));
+                    // Round down to a power of two so it evenly divides length and local_size (see
+                    // the identical comment in Compute::fft).
+                    points_per_group = roundDownToPowerOfTwo(points_per_group);
                     if (points_per_group > length)
                     {
                         points_per_group = length;
                     }
+                    local_size = clampLocalSizeForMinPointsPerItem(static_cast<unsigned int>(local_size), points_per_group, 1);
 
                     clSetKernelArg(absoluteKernel, 0, sizeof(cl_mem), &d_a);
                     clSetKernelArg(absoluteKernel, 1, sizeof(cl_mem), &d_c);
                     clSetKernelArg(absoluteKernel, 2, sizeof(unsigned int), &points_per_group);
 
-                    global_size = length;
+                    // Must match complexMultiplier/fft/ncoMultiplication: the kernel addresses
+                    // memory via get_group_id(0)*points_per_group, so the number of work-groups
+                    // launched must be length/points_per_group, not length/local_size. Dispatching
+                    // with global_size = length (one item per point) launches too many groups
+                    // whenever local_size < points_per_group, reading/writing past the buffer end.
+                    global_size = (length / points_per_group) * local_size;
                     m_error = clEnqueueNDRangeKernel(m_queue, absoluteKernel, 1, NULL, &global_size, &local_size, 0, NULL, NULL);
 
                     if (m_error == CL_SUCCESS)
@@ -414,7 +455,7 @@ int Compute::absolute(const ComplexFloatVector &input1, FloatVector *output)
 
 int Compute::sum(const FloatVector &input, float *sumValue)
 {
-    if (m_queue && m_gpu.m_acquisitionKernelList.size() > GpuHandler::Sum)
+    if (m_queue && m_gpu.m_acquisitionKernelList.size() > GpuHandler::Sum && !input.empty())
     {
         size_t global_size = 0;
         size_t local_size = 0;
@@ -553,7 +594,15 @@ int Compute::ncoMultiplication(const ComplexFloatVector &input, const FloatVecto
                 {
                     localMemorySize = m_gpu.m_localMemorySize;
                     points_per_group = localMemorySize / (2 * sizeof(float));
+                    // Round down to a power of two so it evenly divides length and local_size (see
+                    // the identical comment in Compute::fft).
+                    points_per_group = roundDownToPowerOfTwo(points_per_group);
                     points_per_group = (points_per_group > length) ? length : points_per_group;
+                    // ncoMultiplicate processes points in fixed groups of 4 per work-item (its loop
+                    // body executes unconditionally for i=0 regardless of points_per_item), so, like
+                    // fft_init, local_size must leave at least 4 points per item; otherwise multiple
+                    // work-items race on overlapping g_data ranges with unpredictable results.
+                    local_size = clampLocalSizeForMinPointsPerItem(static_cast<unsigned int>(local_size), points_per_group, 4);
 
                     clSetKernelArg(ncoMultiplicationKernel, 0, sizeof(cl_mem), &dataBuffer);
                     clSetKernelArg(ncoMultiplicationKernel, 1, sizeof(cl_mem), &phaseBuffer);

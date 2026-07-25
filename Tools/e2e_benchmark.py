@@ -28,7 +28,10 @@ def main():
     args = parse_args()
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     
-    sim_binary = os.path.join(project_root, "Tools", "gps-sdr-sim", "gps-sdr-sim")
+    sim_binary = os.path.join(project_root, "build", "Tools", "gps-sdr-sim", "gps-sdr-sim")
+    if not os.path.exists(sim_binary):
+        sim_binary = os.path.join(project_root, "Tools", "gps-sdr-sim", "gps-sdr-sim")
+
     receiver_binary = os.path.join(project_root, "build", "Source", "GPSOpenCl")
     nav_file = os.path.abspath(os.path.join(project_root, args.nav_file))
     sim_output_bin = os.path.join(project_root, "build", "simulated_benchmark.bin")
