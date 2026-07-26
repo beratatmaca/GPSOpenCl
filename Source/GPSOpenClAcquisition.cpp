@@ -73,31 +73,78 @@ void Acquisition::exp(int length, float frequency, float samplingRate, float pha
     }
 }
 
+int Acquisition::computeReuseFactor() const
+{
+    if (m_length <= 0 || m_freqSpacing <= 0.0f || m_samplingFrequency <= 0.0f)
+    {
+        return 1;
+    }
+
+    float binResolution = m_samplingFrequency / static_cast<float>(m_length);
+    float ratio = binResolution / m_freqSpacing;
+    int rounded = static_cast<int>(std::lround(ratio));
+
+    if (rounded < 1 || rounded > m_numberOfFreqencyBins || std::fabs(ratio - static_cast<float>(rounded)) > 1e-3f)
+    {
+        return 1;
+    }
+
+    return rounded;
+}
+
+void Acquisition::circularShiftFreqDomain(const ComplexFloatVector &input, int shiftBins, ComplexFloatVector *output)
+{
+    int n = static_cast<int>(input.size());
+    output->resize(static_cast<size_t>(n));
+    if (n == 0)
+    {
+        return;
+    }
+
+    int shift = ((shiftBins % n) + n) % n;
+    auto splitPoint = input.end() - shift;
+    std::copy(input.begin(), splitPoint, output->begin() + shift);
+    std::copy(splitPoint, input.end(), output->begin());
+}
+
 void Acquisition::correlate(const ComplexFloatVector &input, Compute *gpu, Code *code, Channel *acqChannel)
 {
     acqChannel->resetAcquisitionMetrics();
 
-    float frequency = m_initialFrequency;
-    float maxVal = 0.0f;
-    int maxIndex = 0;
-
-    for (int freqBin = 0; freqBin < m_numberOfFreqencyBins; freqBin++)
+    // Reference spectra: one forward FFT per residue class (see computeReuseFactor). Every other bin's
+    // carrier-wiped spectrum is derived from these via an exact circular shift instead of its own FFT.
+    std::vector<ComplexFloatVector> referenceFreq(static_cast<size_t>(m_reuseFactor));
+    for (int r = 0; r < m_reuseFactor; r++)
     {
-        float sumVal = 0.0f;
-
         ComplexFloatVector dopplerMultiplication;
-        gpu->complexMultiplier(input, m_dopplerSearch[freqBin], &dopplerMultiplication);
+        gpu->complexMultiplier(input, m_dopplerSearch[r], &dopplerMultiplication);
 
-        ComplexFloatVector dopplerMultiplicationFreq;
-        if (gpu->fft(dopplerMultiplication, &dopplerMultiplicationFreq, Compute::FFTForward) != 0)
+        if (gpu->fft(dopplerMultiplication, &referenceFreq[r], Compute::FFTForward) != 0)
         {
             std::cerr << "Acquisition::correlate: forward FFT failed (samplesPerCode=" << m_length
                       << " is not a power of two); skipping correlation for SV " << acqChannel->m_svId << std::endl;
             return;
         }
+    }
+
+    float frequency = m_initialFrequency;
+
+    for (int freqBin = 0; freqBin < m_numberOfFreqencyBins; freqBin++)
+    {
+        float sumVal = 0.0f;
+        int residue = freqBin % m_reuseFactor;
+        int shift = freqBin / m_reuseFactor;
+
+        const ComplexFloatVector *dopplerMultiplicationFreq = &referenceFreq[residue];
+        ComplexFloatVector shiftedFreq;
+        if (shift > 0)
+        {
+            circularShiftFreqDomain(referenceFreq[residue], shift, &shiftedFreq);
+            dopplerMultiplicationFreq = &shiftedFreq;
+        }
 
         ComplexFloatVector correlationFreq;
-        gpu->complexMultiplier(code->m_upsampledFreqDomainCaCode[acqChannel->m_svId - 1], dopplerMultiplicationFreq,
+        gpu->complexMultiplier(code->m_upsampledFreqDomainCaCode[acqChannel->m_svId - 1], *dopplerMultiplicationFreq,
                                &correlationFreq);
 
         ComplexFloatVector correlation;
@@ -122,8 +169,8 @@ void Acquisition::correlate(const ComplexFloatVector &input, Compute *gpu, Code 
         sumVal /= static_cast<float>(correlationAbs.size() * m_numberOfFreqencyBins);
 
         auto maxIt = std::max_element(correlationAbs.begin(), correlationAbs.end());
-        maxIndex = maxIt - correlationAbs.begin();
-        maxVal = correlationAbs.at(maxIndex);
+        int maxIndex = static_cast<int>(maxIt - correlationAbs.begin());
+        float maxVal = correlationAbs.at(static_cast<size_t>(maxIndex));
 
         acqChannel->insertAcquisitionMetrics(maxVal, maxIndex, frequency, sumVal);
 
