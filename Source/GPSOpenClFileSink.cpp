@@ -1,15 +1,22 @@
 #include "GPSOpenClFileSink.h"
 #include <cstdint>
+#include <cstring>
 
 namespace GPSOpenCl
 {
-FileSink::FileSink(const std::string &outputFilePath)
+FileSink::FileSink(const std::string &outputFilePath) : m_queue(1024)
 {
     m_file.open(outputFilePath, std::ios::binary | std::ios::app);
+    m_writerThread = std::thread([this] { writerThreadLoop(); });
 }
 
 FileSink::~FileSink()
 {
+    m_queue.finish();
+    if (m_writerThread.joinable())
+    {
+        m_writerThread.join();
+    }
     if (m_file.is_open())
     {
         m_file.close();
@@ -18,15 +25,27 @@ FileSink::~FileSink()
 
 void FileSink::publish(const std::string &identifier, const void *data, size_t size)
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    if (!m_file.is_open()) return;
+    SinkMessage message;
+    message.identifier = identifier;
+    message.data.resize(size);
+    std::memcpy(message.data.data(), data, size);
+    m_queue.tryPush(std::move(message));
+}
 
-    uint32_t nameLen = static_cast<uint32_t>(identifier.size());
-    uint32_t dataLen = static_cast<uint32_t>(size);
+void FileSink::writerThreadLoop()
+{
+    SinkMessage message;
+    while (m_queue.pop(message))
+    {
+        if (!m_file.is_open()) continue;
 
-    m_file.write(reinterpret_cast<const char *>(&nameLen), sizeof(nameLen));
-    m_file.write(identifier.data(), nameLen);
-    m_file.write(reinterpret_cast<const char *>(&dataLen), sizeof(dataLen));
-    m_file.write(reinterpret_cast<const char *>(data), size);
+        uint32_t nameLen = static_cast<uint32_t>(message.identifier.size());
+        uint32_t dataLen = static_cast<uint32_t>(message.data.size());
+
+        m_file.write(reinterpret_cast<const char *>(&nameLen), sizeof(nameLen));
+        m_file.write(message.identifier.data(), nameLen);
+        m_file.write(reinterpret_cast<const char *>(&dataLen), sizeof(dataLen));
+        m_file.write(message.data.data(), static_cast<std::streamsize>(message.data.size()));
+    }
 }
 }

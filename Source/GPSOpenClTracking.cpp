@@ -22,8 +22,7 @@ float Tracking::loopFilterTau2(double noiseBandwidthHz)
 }
 
 Tracking::Tracking(Settings::Configuration conf)
-    : m_gpu(nullptr),
-      m_configuration(conf),
+    : m_configuration(conf),
       m_inputConfig{STRUCT_VERSION_1, conf.trackingInput.pllBandwidthHz, conf.trackingInput.dllBandwidthHz, conf.rawDataSettings.samplingFrequency, conf.rawDataSettings.numberOfSamplesPerCode},
       m_totalSamples(0),
       m_pllTau1(loopFilterTau1(conf.trackingInput.pllBandwidthHz)),
@@ -63,8 +62,6 @@ Tracking::Tracking(Settings::Configuration conf)
       m_codeLockEma(0.0f),
       m_lastChannelState(0)
 {
-    m_gpu = new Compute();
-
     m_code.setConfiguration(m_configuration);
 
     m_totalSamples = m_configuration.rawDataSettings.numberOfSamplesPerCode;
@@ -81,8 +78,7 @@ Tracking::Tracking(Settings::Configuration conf)
 }
 
 Tracking::Tracking(const TrackingInput &input)
-    : m_gpu(nullptr),
-      m_inputConfig(input),
+    : m_inputConfig(input),
       m_totalSamples(0),
       m_pllTau1(loopFilterTau1(input.pllBandwidthHz)),
       m_pllTau2(loopFilterTau2(input.pllBandwidthHz)),
@@ -125,8 +121,6 @@ Tracking::Tracking(const TrackingInput &input)
     m_configuration.rawDataSettings.samplingFrequency = static_cast<float>(input.samplingFrequency);
     m_configuration.rawDataSettings.numberOfSamplesPerCode = input.numberOfSamplesPerCode;
 
-    m_gpu = new Compute();
-
     m_code.setConfiguration(m_configuration);
 
     m_totalSamples = m_configuration.rawDataSettings.numberOfSamplesPerCode;
@@ -144,11 +138,6 @@ Tracking::Tracking(const TrackingInput &input)
 
 Tracking::~Tracking()
 {
-    if (m_gpu)
-    {
-        delete m_gpu;
-        m_gpu = nullptr;
-    }
 }
 
 void Tracking::initTrackingState(float initDopplerHz, float initCodePhaseChips)
@@ -260,22 +249,6 @@ TrackingOutput Tracking::getTrackingOutput(int prn) const
     out.carrierLockIndicator = static_cast<double>(m_carrierLockEma);
     out.codeLockRatio = static_cast<double>(m_codeLockEma);
     return out;
-}
-
-void Tracking::ncoMultiplicate(const ComplexFloatVector &input, float frequency, ComplexFloatVector *output)
-{
-    float samplingFreq = m_configuration.rawDataSettings.samplingFrequency;
-    if (samplingFreq <= 0.0f) return;
-
-    size_t length = input.size();
-    FloatVector phaseVector(length, 0.0f);
-
-    for (size_t i = 0; i < length; i++)
-    {
-        phaseVector[i] = static_cast<float>(2.0 * M_PI * frequency * static_cast<double>(i) / samplingFreq);
-    }
-
-    m_gpu->ncoMultiplication(input, phaseVector, output);
 }
 
 void Tracking::earlyLatePromptGen(int prn)

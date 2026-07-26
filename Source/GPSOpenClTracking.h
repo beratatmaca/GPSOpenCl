@@ -8,7 +8,6 @@
 #include <memory>
 
 #include "GPSOpenClCode.h"
-#include "GPSOpenClGPUCompute.h"
 #include "GPSOpenClSettings.h"
 #include "GPSOpenClSink.h"
 #include "GPSOpenClStructs.h"
@@ -45,12 +44,6 @@ class Tracking
      *  @param prn Satellite PRN.
      *  @return Tracking output struct. */
     TrackingOutput getTrackingOutput(int prn) const;
-
-    /** @brief Multiply input samples by NCO carrier replica.
-     *  @param input     IQ samples.
-     *  @param frequency NCO frequency (Hz).
-     *  @param output    Carrier-wiped output. */
-    void ncoMultiplicate(const ComplexFloatVector &input, float frequency, ComplexFloatVector *output);
 
     /** @brief Set telemetry sink.
      *  @param sink Sink implementation. */
@@ -127,7 +120,6 @@ class Tracking
     void updateLockIndicators();
 
     Code m_code;                              ///< C/A code generator.
-    Compute *m_gpu;                           ///< GPU/CPU compute back-end.
     Settings::Configuration m_configuration;  ///< Application configuration.
     TrackingInput m_inputConfig;              ///< Tracking parameters.
     std::shared_ptr<Sink> m_sink{nullptr};    ///< Telemetry sink.

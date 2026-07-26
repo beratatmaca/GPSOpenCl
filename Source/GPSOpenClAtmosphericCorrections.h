@@ -62,6 +62,21 @@ class AtmosphericCorrections
                                         double &azimuthDeg,
                                         double &elevationDeg);
 
+    /** @brief Compute azimuth and elevation from receiver to satellite, reusing an already-computed
+     *   receiver geodetic position instead of re-deriving it from rxEcef. Callers that already hold
+     *   the receiver's GeodeticPosition (e.g. computeCorrections, called once per satellite per WLS
+     *   iteration) should use this overload to avoid redundantly repeating the ECEF-to-WGS84 conversion.
+     *  @param rxGeodeticPos Receiver geodetic position (already computed from rxEcef).
+     *  @param rxEcef       Receiver ECEF position.
+     *  @param satEcef      Satellite ECEF position.
+     *  @param azimuthDeg   Azimuth output (deg).
+     *  @param elevationDeg Elevation output (deg). */
+    static void computeAzimuthElevation(const GeodeticPosition &rxGeodeticPos,
+                                        const EcefPosition &rxEcef,
+                                        const EcefPosition &satEcef,
+                                        double &azimuthDeg,
+                                        double &elevationDeg);
+
     /** @brief Compute all atmospheric corrections for one satellite (static).
      *  @param svId       Satellite vehicle ID.
      *  @param rxPos      Receiver geodetic position.

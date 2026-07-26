@@ -1,9 +1,10 @@
 #include "GPSOpenClZmqSink.h"
+#include <cstring>
 #include <iostream>
 
 namespace GPSOpenCl
 {
-ZmqSink::ZmqSink(const std::string &endpoint) : m_endpoint(endpoint)
+ZmqSink::ZmqSink(const std::string &endpoint) : m_endpoint(endpoint), m_queue(1024)
 {
 #ifdef GPSOPENCL_ENABLE_ZMQ
     m_context = zmq_ctx_new();
@@ -16,10 +17,16 @@ ZmqSink::ZmqSink(const std::string &endpoint) : m_endpoint(endpoint)
         }
     }
 #endif
+    m_senderThread = std::thread([this] { senderThreadLoop(); });
 }
 
 ZmqSink::~ZmqSink()
 {
+    m_queue.finish();
+    if (m_senderThread.joinable())
+    {
+        m_senderThread.join();
+    }
 #ifdef GPSOPENCL_ENABLE_ZMQ
     if (m_publisher)
     {
@@ -34,25 +41,33 @@ ZmqSink::~ZmqSink()
 
 void ZmqSink::publish(const std::string &identifier, const void *data, size_t size)
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
-#ifdef GPSOPENCL_ENABLE_ZMQ
-    if (!m_publisher) return;
+    SinkMessage message;
+    message.identifier = identifier;
+    message.data.resize(size);
+    std::memcpy(message.data.data(), data, size);
+    m_queue.tryPush(std::move(message));
+}
 
-    int rc = zmq_send(m_publisher, identifier.data(), identifier.size(), ZMQ_SNDMORE);
-    if (rc < 0)
+void ZmqSink::senderThreadLoop()
+{
+    SinkMessage message;
+    while (m_queue.pop(message))
     {
-        std::cerr << "ZmqSink: identifier frame send failed: " << zmq_strerror(zmq_errno()) << std::endl;
-        return;
-    }
-    rc = zmq_send(m_publisher, data, size, 0);
-    if (rc < 0)
-    {
-        std::cerr << "ZmqSink: data frame send failed: " << zmq_strerror(zmq_errno()) << std::endl;
-    }
-#else
-    (void)identifier;
-    (void)data;
-    (void)size;
+#ifdef GPSOPENCL_ENABLE_ZMQ
+        if (!m_publisher) continue;
+
+        int rc = zmq_send(m_publisher, message.identifier.data(), message.identifier.size(), ZMQ_SNDMORE);
+        if (rc < 0)
+        {
+            std::cerr << "ZmqSink: identifier frame send failed: " << zmq_strerror(zmq_errno()) << std::endl;
+            continue;
+        }
+        rc = zmq_send(m_publisher, message.data.data(), message.data.size(), 0);
+        if (rc < 0)
+        {
+            std::cerr << "ZmqSink: data frame send failed: " << zmq_strerror(zmq_errno()) << std::endl;
+        }
 #endif
+    }
 }
 }

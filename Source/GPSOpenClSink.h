@@ -14,6 +14,16 @@
 
 namespace GPSOpenCl
 {
+/** @brief Owned copy of one publish() call's identifier and struct bytes, queued for a background
+ *   writer thread. Sink implementations that do real I/O (file writes, network sends) should copy
+ *   into this on their real-time-facing publish() call and hand the actual I/O to a dedicated
+ *   thread, so a slow write never stalls the caller. */
+struct SinkMessage
+{
+    std::string identifier;    ///< Topic/module name.
+    std::vector<char> data;    ///< Copied struct bytes.
+};
+
 /** @brief Abstract telemetry output interface. Publish calls are serialized by this base class,
  *   so concrete implementations (including test doubles) don't each need their own locking even
  *   when multiple satellite channels publish concurrently from the tracking worker pool. */

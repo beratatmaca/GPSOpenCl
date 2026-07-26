@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
+#include <sstream>
 
 using namespace GPSOpenCl;
 
@@ -80,7 +81,7 @@ void Channel::resetAcquisitionMetrics()
 
 void Channel::checkAcquisition()
 {
-    std::cout << "SV ID " << m_svId << " C/N0 : " << m_acquisitionCN0 << std::endl;
+    std::cout << "SV ID " << m_svId << " C/N0 : " << m_acquisitionCN0 << "\n";
 }
 
 void Channel::getAcquisitionResults(int *peakIndex, float *peakValue, float *peakFrequency, float *meanValue,
@@ -206,18 +207,20 @@ void Channel::evaluateLockState()
     {
         m_isAcquired = false;
         resetNavigationState();
-        std::cout << "SV ID " << m_svId << " confirmation TIMED OUT (lock: carrier=" << m_tracking->getCarrierLockIndicator()
-                  << " code=" << m_tracking->getCodeLockRatio() << "), back to acquiring" << std::endl;
+        std::ostringstream msg;
+        msg << "SV ID " << m_svId << " confirmation TIMED OUT (lock: carrier=" << m_tracking->getCarrierLockIndicator()
+            << " code=" << m_tracking->getCodeLockRatio() << "), back to acquiring\n";
+        std::cout << msg.str();
     }
     else if (previous == ChannelState::Tracking && m_state == ChannelState::Acquiring)
     {
         m_isAcquired = false;
         resetNavigationState();
-        std::cout << "SV ID " << m_svId << " LOST LOCK, back to acquiring" << std::endl;
+        std::cout << "SV ID " + std::to_string(m_svId) + " LOST LOCK, back to acquiring\n";
     }
     else if (previous == ChannelState::Confirming && m_state == ChannelState::Tracking)
     {
-        std::cout << "SV ID " << m_svId << " tracking CONFIRMED" << std::endl;
+        std::cout << "SV ID " + std::to_string(m_svId) + " tracking CONFIRMED\n";
     }
 }
 

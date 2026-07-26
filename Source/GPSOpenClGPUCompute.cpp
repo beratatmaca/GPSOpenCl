@@ -41,8 +41,6 @@ Compute::Compute() : m_queue(nullptr), m_error(-1)
             m_gpu.getLastErrorAsString();
         }
     }
-
-    m_allocatedMemory.resize(DEFAULT_MAX_ALLOCATION * 4, 0.0f);
 }
 
 

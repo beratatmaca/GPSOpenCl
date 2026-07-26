@@ -34,6 +34,20 @@ class BoundedQueue
         return true;
     }
 
+    /** @brief Push an item without blocking; drops it if the queue is full instead of waiting.
+     *   For producers that must never stall on a slow consumer (e.g. telemetry callers on a
+     *   real-time path), matching a "may drop" delivery contract rather than backpressure.
+     *  @param item Item to push.
+     *  @return True if enqueued; false if the queue was full or finished (item is dropped). */
+    bool tryPush(T item)
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        if (m_finished || m_queue.size() >= m_maxCapacity) return false;
+        m_queue.push(std::move(item));
+        m_cvPop.notify_one();
+        return true;
+    }
+
     /** @brief Pop an item, blocking if empty.
      *  @param item Output item.
      *  @return False if queue is empty and finished. */

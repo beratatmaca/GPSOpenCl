@@ -300,11 +300,13 @@ TEST(GroundTruthVerificationTest, FullEphemerisAndPvtMatchSimulatorTruth)
     // Subframes cycle 1-2-3-4-5 every 30s on a fixed GPS-time schedule shared by every satellite in
     // the scenario. Since the scenario's start time is frame-aligned, subframe 1's preamble falls at
     // the very first instant, before acquisition/confirm can lock on to catch it - every satellite
-    // misses it in the first cycle and only catches it ~30s later in the second. 45s reliably covers
-    // a full second cycle plus margin; 32s is not enough for any satellite to complete ephemeris.
+    // misses it in the first cycle and only catches it ~30s later in the second. PVT additionally
+    // needs 4 satellites with complete ephemeris simultaneously; the weaker ones (~15 dB-Hz below the
+    // strongest) need multiple clean cycles to get every word's parity right. 180s (six full cycles)
+    // gives them a realistic chance; empirically 45-90s only ever got the single strongest satellite.
     std::string iqFile = "ground_truth_iq_long.bin";
     std::string cmd = gpsSimBin + " -e " + navFile +
-                       " -l 48.1173,11.5167,545.4 -s 4096000 -b 8 -d 45 -o " + iqFile + " > /dev/null 2>&1";
+                       " -l 48.1173,11.5167,545.4 -s 4096000 -b 8 -d 180 -o " + iqFile + " > /dev/null 2>&1";
     int sysRet = std::system(cmd.c_str());
     ASSERT_EQ(sysRet, 0);
 
@@ -339,6 +341,29 @@ TEST(GroundTruthVerificationTest, FullEphemerisAndPvtMatchSimulatorTruth)
     }
 
     std::vector<int> completedPrns = accumulator.completedPrns();
+
+    std::cerr << "DEBUG completedPrns.size()=" << completedPrns.size() << " prns=[";
+    for (int prn : completedPrns) std::cerr << prn << " ";
+    std::cerr << "]" << std::endl;
+    std::cerr << "DEBUG navDecoderOutputs.size()=" << sink->navDecoderOutputs.size() << std::endl;
+    std::map<int, int> subframeCountByPrn;
+    std::map<int, uint8_t> subframeMaskByPrn;
+    for (const GPSOpenCl::NavDecoderOutput &out : sink->navDecoderOutputs)
+    {
+        if (!out.isValid) continue;
+        subframeCountByPrn[out.svId]++;
+        if (out.subframeId >= 1 && out.subframeId <= 3)
+        {
+            subframeMaskByPrn[out.svId] |= static_cast<uint8_t>(1u << (out.subframeId - 1));
+        }
+    }
+    for (const auto &entry : subframeCountByPrn)
+    {
+        int mask = subframeMaskByPrn.count(entry.first) ? subframeMaskByPrn[entry.first] : 0;
+        std::cerr << "DEBUG PRN " << entry.first << " valid subframe decodes=" << entry.second
+                  << " subframe123Mask=0b" << ((mask >> 2) & 1) << ((mask >> 1) & 1) << (mask & 1) << std::endl;
+    }
+
     ASSERT_FALSE(completedPrns.empty()) << "Expected at least one satellite to decode a complete ephemeris "
                                         << "(subframes 1-3) within " << blocksAvailable << " blocks";
 

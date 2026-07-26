@@ -199,13 +199,11 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
 
     double state[4] = {4180483.4, 851798.0, 4725999.8, 0.0};
 
+    std::vector<std::vector<double>> H(numSats, std::vector<double>(4, 0.0));
+    std::vector<double> deltaRho(numSats, 0.0);
 
     for (int iter = 0; iter < 15; iter++)
     {
-        std::vector<std::vector<double>> H(numSats, std::vector<double>(4, 0.0));
-        std::vector<double> deltaRho(numSats, 0.0);
-
-
 
 
 
@@ -285,7 +283,11 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
                     pivotRow = k;
                 }
             }
-            if (pivotAbs < 1e-12) return false;
+            if (pivotAbs < 1e-12)
+            {
+                std::cerr << "  DEBUG singular matrix at iter=" << iter << " pivotAbs=" << pivotAbs << std::endl;
+                return false;
+            }
             if (pivotRow != i)
             {
                 for (int j = 0; j < 8; j++)
@@ -318,6 +320,13 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
         }
 
         double stepNorm = std::sqrt(deltaX[0] * deltaX[0] + deltaX[1] * deltaX[1] + deltaX[2] * deltaX[2]);
+        static int debugSolveCount = 0;
+        bool debugThisCall = (debugSolveCount % 20 == 0);
+        if (debugThisCall)
+        {
+            std::cerr << "  DEBUG solvePosition iter=" << iter << " stepNorm=" << stepNorm << " state=(" << state[0]
+                      << "," << state[1] << "," << state[2] << "," << state[3] << ")" << std::endl;
+        }
         if (stepNorm < 1e-4)
         {
             double maxAbsResidual = 0.0;
@@ -327,8 +336,12 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
                 if (absResidual > maxAbsResidual) maxAbsResidual = absResidual;
             }
 
-
-
+            if (debugThisCall)
+            {
+                std::cerr << "  DEBUG converged at iter=" << iter << " maxAbsResidual=" << maxAbsResidual
+                          << " limit=" << m_inputConfig.maxPseudorangeErrMeters << std::endl;
+            }
+            debugSolveCount++;
 
             if (maxAbsResidual > m_inputConfig.maxPseudorangeErrMeters)
             {
@@ -389,6 +402,7 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
         }
     }
 
+    std::cerr << "  DEBUG never converged within 15 iterations" << std::endl;
     return false;
 }
 

@@ -31,7 +31,7 @@ AtmosphericOutput AtmosphericCorrections::computeCorrections(int svId,
     out.svId = svId;
 
     double azDeg = 0.0, elDeg = 0.0;
-    computeAzimuthElevation(rxEcef, satEcef, azDeg, elDeg);
+    computeAzimuthElevation(rxPos, rxEcef, satEcef, azDeg, elDeg);
     out.azimuthDeg = azDeg;
     out.elevationDeg = elDeg;
 
@@ -65,9 +65,17 @@ void AtmosphericCorrections::computeAzimuthElevation(const EcefPosition &rxEcef,
                                                      double &azimuthDeg,
                                                      double &elevationDeg)
 {
-    GeodeticPosition geo = PVTSolver::ecefToWgs84(rxEcef);
-    double latRad = geo.latitude * M_PI / 180.0;
-    double lonRad = geo.longitude * M_PI / 180.0;
+    computeAzimuthElevation(PVTSolver::ecefToWgs84(rxEcef), rxEcef, satEcef, azimuthDeg, elevationDeg);
+}
+
+void AtmosphericCorrections::computeAzimuthElevation(const GeodeticPosition &rxGeodeticPos,
+                                                     const EcefPosition &rxEcef,
+                                                     const EcefPosition &satEcef,
+                                                     double &azimuthDeg,
+                                                     double &elevationDeg)
+{
+    double latRad = rxGeodeticPos.latitude * M_PI / 180.0;
+    double lonRad = rxGeodeticPos.longitude * M_PI / 180.0;
 
     double dx = satEcef.x - rxEcef.x;
     double dy = satEcef.y - rxEcef.y;

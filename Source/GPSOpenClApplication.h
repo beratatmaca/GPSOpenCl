@@ -78,6 +78,12 @@ class Application
     /** @brief Initialize all 32 satellite channels. */
     void initializeChannels();
 
+    /** @brief Run acquisition on a single channel, applying the C/N0 threshold and starting tracking
+     *   on success. No-op if the channel isn't currently eligible for acquisition.
+     *  @param input        IQ samples for one code period.
+     *  @param channelIndex Channel index (0-based, PRN - 1). */
+    void searchOneChannel(const ComplexFloatVector &input, int channelIndex);
+
     /** @brief Decode navigation bits for all confirmed-tracking channels. Must run every block
      *   regardless of the PVT fix-output cadence, since nav-bit decode needs to consume newly
      *   arrived Prompt samples continuously. */
