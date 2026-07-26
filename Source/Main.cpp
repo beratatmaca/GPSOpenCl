@@ -8,9 +8,9 @@
 #include "GPSOpenClPVTSolver.h"
 #include "GPSOpenClSettings.h"
 #include "GPSOpenClZmqSink.h"
-#include "../Tests/TestUtils.h"
 
 #include <chrono>
+#include <exception>
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -76,12 +76,13 @@ int main(int argc, char **argv)
 
 
     std::shared_ptr<GPSOpenCl::Source> source;
+    bool sourceInitialized = false;
     if (signalPath.find(".fifo") != std::string::npos)
     {
         auto simSource = std::make_shared<GPSOpenCl::GpsSdrSimSource>();
         GPSOpenCl::SourceInput srcInput = settings.configuration.sourceInput;
         snprintf(srcInput.fifoPath, sizeof(srcInput.fifoPath), "%s", signalPath.c_str());
-        simSource->initialize(srcInput);
+        sourceInitialized = simSource->initialize(srcInput);
         source = simSource;
     }
     else
@@ -89,9 +90,17 @@ int main(int argc, char **argv)
         auto fileSource = std::make_shared<GPSOpenCl::FileSource>();
         GPSOpenCl::SourceInput srcInput = settings.configuration.sourceInput;
         snprintf(srcInput.fifoPath, sizeof(srcInput.fifoPath), "%s", signalPath.c_str());
-        fileSource->initialize(srcInput);
+        sourceInitialized = fileSource->initialize(srcInput);
         source = fileSource;
     }
+
+    if (!sourceInitialized)
+    {
+        std::cerr << "Failed to initialize signal source (path: '" << signalPath
+                   << "'). Nothing to process, aborting." << std::endl;
+        return 1;
+    }
+
     source->setSink(sink);
 
 
@@ -114,31 +123,46 @@ int main(int argc, char **argv)
 
 
     std::thread producerThread([&]() {
-        uint32_t blockIdx = 0;
-        while (true)
+        try
         {
-            SignalBlock block;
-            block.blockIndex = blockIdx;
-            GPSOpenCl::SourceOutput telemetry{};
-            bool ok = source->readBlock(block.samples, telemetry);
-            if (!ok || block.samples.empty())
+            uint32_t blockIdx = 0;
+            while (true)
             {
-                break;
+                SignalBlock block;
+                block.blockIndex = blockIdx;
+                GPSOpenCl::SourceOutput telemetry{};
+                bool ok = source->readBlock(block.samples, telemetry);
+                if (!ok || block.samples.empty())
+                {
+                    break;
+                }
+                if (!blockQueue.push(block))
+                {
+                    break;
+                }
+                blockIdx++;
             }
-            if (!blockQueue.push(block))
-            {
-                break;
-            }
-            blockIdx++;
+        }
+        catch (const std::exception &e)
+        {
+            std::cerr << "Producer thread terminated by exception: " << e.what() << std::endl;
         }
         blockQueue.finish();
     });
 
 
     SignalBlock block;
-    while (blockQueue.pop(block))
+    try
     {
-        app.processBlock(block.samples, block.blockIndex);
+        while (blockQueue.pop(block))
+        {
+            app.processBlock(block.samples, block.blockIndex);
+        }
+    }
+    catch (const std::exception &e)
+    {
+        std::cerr << "Consumer loop terminated by exception: " << e.what() << std::endl;
+        blockQueue.finish();
     }
 
     if (producerThread.joinable())

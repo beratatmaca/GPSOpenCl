@@ -63,14 +63,21 @@ class NmeaGenerator
     static std::string generateGpgsa(const ReceiverPvtSolution &solution, const std::vector<int> &activePrns);
 
     /** @brief Generate GSV sentence string (all sentences concatenated).
-     *  @param channels Satellite channel array.
+     *  @param channels        Satellite channel array.
+     *  @param rxEcef          Receiver ECEF position, used to compute real az/el per satellite.
+     *  @param rxPositionValid True if rxEcef holds a valid solution.
      *  @return GSV sentences. */
-    static std::string generateGpgsv(const Channel channels[GPS_CA_SV_COUNT]);
+    static std::string generateGpgsv(const Channel channels[GPS_CA_SV_COUNT], const EcefPosition &rxEcef,
+                                     bool rxPositionValid);
 
     /** @brief Generate individual GSV sentences.
-     *  @param channels Satellite channel array.
-     *  @return Vector of GSV sentences. */
-    static std::vector<std::string> generateGpgsvSentences(const Channel channels[GPS_CA_SV_COUNT]);
+     *  @param channels        Satellite channel array.
+     *  @param rxEcef          Receiver ECEF position, used to compute real az/el per satellite.
+     *  @param rxPositionValid True if rxEcef holds a valid solution.
+     *  @return Vector of GSV sentences. Elevation/azimuth fields are left empty for satellites with
+     *          no receiver fix or no complete decoded ephemeris yet, rather than fabricated. */
+    static std::vector<std::string> generateGpgsvSentences(const Channel channels[GPS_CA_SV_COUNT],
+                                                            const EcefPosition &rxEcef, bool rxPositionValid);
 
     /** @brief Generate GGA as output struct.
      *  @param solution      PVT solution.
@@ -105,9 +112,12 @@ class NmeaGenerator
     static NmeaGeneratorOutput generateGpgsaOutput(const ReceiverPvtSolution &solution, const std::vector<int> &activePrns);
 
     /** @brief Generate GSV as output struct vector.
-     *  @param channels Satellite channel array.
+     *  @param channels        Satellite channel array.
+     *  @param rxEcef          Receiver ECEF position, used to compute real az/el per satellite.
+     *  @param rxPositionValid True if rxEcef holds a valid solution.
      *  @return Vector of NMEA output structs. */
-    static std::vector<NmeaGeneratorOutput> generateGpgsvOutput(const Channel channels[GPS_CA_SV_COUNT]);
+    static std::vector<NmeaGeneratorOutput> generateGpgsvOutput(const Channel channels[GPS_CA_SV_COUNT],
+                                                                 const EcefPosition &rxEcef, bool rxPositionValid);
 
     /** @brief Format latitude for NMEA output.
      *  @param latDegrees Latitude (deg).

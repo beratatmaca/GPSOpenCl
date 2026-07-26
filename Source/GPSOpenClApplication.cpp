@@ -182,12 +182,12 @@ bool Application::computeNavigationSolution(ReceiverPvtSolution &solution)
                   << solution.dopPDOP << ", VDOP = " << solution.dopVDOP << std::endl;
 
         std::cout << "\n--- NMEA 0183 Output Stream ---" << std::endl;
-        if (m_nmeaGenerator.isGgaEnabled()) std::cout << NmeaGenerator::generateGgga(solution, static_cast<int>(activePrns.size()), 45319.0);
-        if (m_nmeaGenerator.isRmcEnabled()) std::cout << NmeaGenerator::generateGprmc(solution, 45319.0);
+        if (m_nmeaGenerator.isGgaEnabled()) std::cout << NmeaGenerator::generateGgga(solution, static_cast<int>(activePrns.size()), receiverTime);
+        if (m_nmeaGenerator.isRmcEnabled()) std::cout << NmeaGenerator::generateGprmc(solution, receiverTime);
         if (m_nmeaGenerator.isGsaEnabled()) std::cout << NmeaGenerator::generateGpgsa(solution, activePrns);
-        if (m_nmeaGenerator.isGsvEnabled()) std::cout << NmeaGenerator::generateGpgsv(m_channels);
+        if (m_nmeaGenerator.isGsvEnabled()) std::cout << NmeaGenerator::generateGpgsv(m_channels, solution.ecefPosition, solution.isValid);
 
-        exportTelemetryJson("telemetry_stream.json", solution);
+        exportTelemetryJson("telemetry_stream.json", solution, receiverTime);
 
         if (m_sink)
         {
@@ -210,12 +210,12 @@ bool Application::computeNavigationSolution(ReceiverPvtSolution &solution)
 
             if (m_nmeaGenerator.isGgaEnabled())
             {
-                NmeaGeneratorOutput nmeaOut = NmeaGenerator::generateGggaOutput(solution, static_cast<int>(activePrns.size()), 45319.0);
+                NmeaGeneratorOutput nmeaOut = NmeaGenerator::generateGggaOutput(solution, static_cast<int>(activePrns.size()), receiverTime);
                 m_sink->publishNmeaGeneratorOutput(nmeaOut);
             }
             if (m_nmeaGenerator.isRmcEnabled())
             {
-                NmeaGeneratorOutput nmeaOut = NmeaGenerator::generateGprmcOutput(solution, 45319.0);
+                NmeaGeneratorOutput nmeaOut = NmeaGenerator::generateGprmcOutput(solution, receiverTime);
                 m_sink->publishNmeaGeneratorOutput(nmeaOut);
             }
             if (m_nmeaGenerator.isGsaEnabled())
@@ -225,7 +225,8 @@ bool Application::computeNavigationSolution(ReceiverPvtSolution &solution)
             }
             if (m_nmeaGenerator.isGsvEnabled())
             {
-                for (const NmeaGeneratorOutput &nmeaOut : NmeaGenerator::generateGpgsvOutput(m_channels))
+                for (const NmeaGeneratorOutput &nmeaOut :
+                     NmeaGenerator::generateGpgsvOutput(m_channels, solution.ecefPosition, solution.isValid))
                 {
                     m_sink->publishNmeaGeneratorOutput(nmeaOut);
                 }
@@ -277,7 +278,7 @@ void Application::processBlock(const ComplexFloatVector &input, uint32_t blockIn
     m_profiler.finishBlock();
 }
 
-void Application::exportTelemetryJson(const std::string &filepath, const ReceiverPvtSolution &solution)
+void Application::exportTelemetryJson(const std::string &filepath, const ReceiverPvtSolution &solution, double utcTimeSec)
 {
     std::ofstream file(filepath);
     if (!file.is_open()) return;
@@ -289,7 +290,7 @@ void Application::exportTelemetryJson(const std::string &filepath, const Receive
     }
 
     file << "{\n";
-    file << "  \"timestamp\": 45319.0,\n";
+    file << "  \"timestamp\": " << utcTimeSec << ",\n";
     file << "  \"software\": \"" << SOFTWARE_NAME << " " << SOFTWARE_VERSION << "\",\n";
     file << "  \"total_acquired\": " << activePrns.size() << ",\n";
 
@@ -313,15 +314,33 @@ void Application::exportTelemetryJson(const std::string &filepath, const Receive
         float peakVal = 0.0f, peakFreq = 0.0f, meanVal = 0.0f, cn0 = 0.0f, peakRatio = 0.0f;
         m_channels[i].getAcquisitionResults(&peakIndex, &peakVal, &peakFreq, &meanVal, &cn0, &peakRatio);
 
+        bool hasPosition = false;
+        double az = 0.0;
+        double el = 0.0;
 
-        double az = (m_channels[i].m_svId * 11.25);
-        double el = 15.0 + ((m_channels[i].m_svId * 7) % 70);
+        if (solution.isValid && m_channels[i].hasCompleteEphemeris())
+        {
+            size_t promptCount = m_channels[i].getPromptHistory().size();
+            size_t subframeStartSample = m_channels[i].getLastSubframeStartSample();
+            if (promptCount >= subframeStartSample)
+            {
+                double subframeStartTow = m_channels[i].getLastSubframeTow() - 6.0;
+                double elapsedSeconds = static_cast<double>(promptCount - subframeStartSample) * GPS_CA_CODE_PERIOD_SEC;
+                double transmitTime = subframeStartTow + elapsedSeconds;
+
+                SatelliteOrbit orbit =
+                    PVTSolver::computeSatelliteOrbit(m_channels[i].getAccumulatedEphemeris(), transmitTime);
+                AtmosphericCorrections::computeAzimuthElevation(solution.ecefPosition, orbit.position, az, el);
+                hasPosition = true;
+            }
+        }
 
         file << "    {\n";
         file << "      \"prn\": " << m_channels[i].m_svId << ",\n";
         file << "      \"acquired\": " << (m_channels[i].isAcquired() ? "true" : "false") << ",\n";
         file << "      \"cn0\": " << cn0 << ",\n";
         file << "      \"doppler\": " << -peakFreq << ",\n";
+        file << "      \"has_position\": " << (hasPosition ? "true" : "false") << ",\n";
         file << "      \"azimuth\": " << az << ",\n";
         file << "      \"elevation\": " << el << "\n";
         file << "    }" << (i < GPS_CA_SV_COUNT - 1 ? "," : "") << "\n";
@@ -329,8 +348,8 @@ void Application::exportTelemetryJson(const std::string &filepath, const Receive
     file << "  ],\n";
 
     file << "  \"nmea\": [\n";
-    file << "    \"" << stripTrailingNewlines(NmeaGenerator::generateGgga(solution, static_cast<int>(activePrns.size()), 45319.0)) << "\",\n";
-    file << "    \"" << stripTrailingNewlines(NmeaGenerator::generateGprmc(solution, 45319.0)) << "\",\n";
+    file << "    \"" << stripTrailingNewlines(NmeaGenerator::generateGgga(solution, static_cast<int>(activePrns.size()), utcTimeSec)) << "\",\n";
+    file << "    \"" << stripTrailingNewlines(NmeaGenerator::generateGprmc(solution, utcTimeSec)) << "\",\n";
     file << "    \"" << stripTrailingNewlines(NmeaGenerator::generateGpgsa(solution, activePrns)) << "\"\n";
     file << "  ]\n";
     file << "}\n";

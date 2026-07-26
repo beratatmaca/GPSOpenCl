@@ -48,9 +48,10 @@ class Application
     bool computeNavigationSolution(ReceiverPvtSolution &solution);
 
     /** @brief Export telemetry to JSON file.
-     *  @param filepath Output file path.
-     *  @param solution PVT solution to export. */
-    void exportTelemetryJson(const std::string &filepath, const ReceiverPvtSolution &solution);
+     *  @param filepath   Output file path.
+     *  @param solution   PVT solution to export.
+     *  @param utcTimeSec Receiver GPS time of week (s), used for the NMEA/timestamp fields. */
+    void exportTelemetryJson(const std::string &filepath, const ReceiverPvtSolution &solution, double utcTimeSec);
 
     /** @brief Set telemetry sink.
      *  @param sink Sink implementation. */

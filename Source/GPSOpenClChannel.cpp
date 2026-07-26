@@ -67,6 +67,16 @@ void Channel::insertAcquisitionMetrics(float peakValue, int peakIndex, float pea
     }
 }
 
+void Channel::resetAcquisitionMetrics()
+{
+    m_acquisitionPeakIndex = 0;
+    m_acquisitionPeakValue = 0.0f;
+    m_acquisitionPeakFrequency = 0.0f;
+    m_acquisitionMeanValue = 0.0f;
+    m_acquisitionCN0 = 0.0f;
+    m_acquisitionPeakRatio = 0.0f;
+}
+
 void Channel::checkAcquisition()
 {
     std::cout << "SV ID " << m_svId << " C/N0 : " << m_acquisitionCN0 << std::endl;
@@ -229,6 +239,7 @@ bool Channel::updateNavigation(NavigationDecoder &decoder)
             m_accumulatedEphemeris.af0 = ephem.af0;
             m_accumulatedEphemeris.af1 = ephem.af1;
             m_accumulatedEphemeris.af2 = ephem.af2;
+            m_accumulatedEphemeris.tgd = ephem.tgd;
             m_seenSubframeMask |= 0x1;
             break;
         case 2:

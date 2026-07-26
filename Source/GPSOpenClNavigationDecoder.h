@@ -29,6 +29,7 @@ struct GpsEphemeris
     double af0;        ///< Clock bias (s).
     double af1;        ///< Clock drift (s/s).
     double af2;        ///< Clock drift rate (s/s^2).
+    double tgd;        ///< Group delay differential (s).
     int iodc;          ///< Issue of Data, Clock (10-bit, subframe 1).
 
     double toe;        ///< Ephemeris reference time (s).

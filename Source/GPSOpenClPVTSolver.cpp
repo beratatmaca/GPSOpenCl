@@ -102,7 +102,7 @@ SatelliteOrbit PVTSolver::computeSatelliteOrbit(const GpsEphemeris &ephem, doubl
     if (dtT > 302400.0) dtT -= 604800.0;
     if (dtT < -302400.0) dtT += 604800.0;
 
-    orbit.clockBias = ephem.af0 + ephem.af1 * dtT + ephem.af2 * dtT * dtT + orbit.relCorr;
+    orbit.clockBias = ephem.af0 + ephem.af1 * dtT + ephem.af2 * dtT * dtT + orbit.relCorr - ephem.tgd;
 
 
     double sinEk = std::sin(Ek);
@@ -352,8 +352,37 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
 
             solution.dopGDOP = std::sqrt(invHtH[0][0] + invHtH[1][1] + invHtH[2][2] + invHtH[3][3]);
             solution.dopPDOP = std::sqrt(invHtH[0][0] + invHtH[1][1] + invHtH[2][2]);
-            solution.dopHDOP = std::sqrt(invHtH[0][0] + invHtH[1][1]);
-            solution.dopVDOP = std::sqrt(invHtH[2][2]);
+
+            double latRad = solution.geodeticPosition.latitude * M_PI / 180.0;
+            double lonRad = solution.geodeticPosition.longitude * M_PI / 180.0;
+            double sinLat = std::sin(latRad);
+            double cosLat = std::cos(latRad);
+            double sinLon = std::sin(lonRad);
+            double cosLon = std::cos(lonRad);
+
+            double enuRotation[3][3] = {{-sinLon, cosLon, 0.0},
+                                        {-sinLat * cosLon, -sinLat * sinLon, cosLat},
+                                        {cosLat * cosLon, cosLat * sinLon, sinLat}};
+
+            double enuCovariance[3][3] = {{0.0}};
+            for (int r = 0; r < 3; r++)
+            {
+                for (int col = 0; col < 3; col++)
+                {
+                    double sum = 0.0;
+                    for (int a = 0; a < 3; a++)
+                    {
+                        for (int b = 0; b < 3; b++)
+                        {
+                            sum += enuRotation[r][a] * invHtH[a][b] * enuRotation[col][b];
+                        }
+                    }
+                    enuCovariance[r][col] = sum;
+                }
+            }
+
+            solution.dopHDOP = std::sqrt(enuCovariance[0][0] + enuCovariance[1][1]);
+            solution.dopVDOP = std::sqrt(enuCovariance[2][2]);
 
             solution.isValid = true;
             return true;

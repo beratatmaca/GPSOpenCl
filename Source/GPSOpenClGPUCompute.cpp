@@ -195,8 +195,14 @@ int Compute::fft(const ComplexFloatVector &input, ComplexFloatVector *output, FF
     output->clear();
     size_t N = input.size();
     if (N == 0) return 0;
-    output->resize(N);
 
+    auto isPowerOfTwo = [](size_t n) { return n > 0 && (n & (n - 1)) == 0; };
+    if (!isPowerOfTwo(N))
+    {
+        return -1;
+    }
+
+    output->resize(N);
 
     size_t revIndex = 0;
     for (size_t i = 0; i < N; i++)

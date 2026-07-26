@@ -120,6 +120,7 @@ struct NavDecoderOutput
     double af0{0.0};  ///< Clock bias (s).
     double af1{0.0};  ///< Clock drift (s/s).
     double af2{0.0};  ///< Clock drift rate (s/s^2).
+    double tgd{0.0};  ///< Group delay differential (s).
 
     double toe{0.0};      ///< Ephemeris reference time (s).
     double sqrtA{0.0};    ///< Sqrt of semi-major axis (m^1/2).

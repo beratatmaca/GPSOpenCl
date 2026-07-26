@@ -1,7 +1,9 @@
 #include "GPSOpenClNmeaGenerator.h"
 
 #include "gtest/gtest.h"
+#include <cstdio>
 #include <cstring>
+#include <ctime>
 #include <string>
 
 namespace GPSOpenClTest
@@ -56,8 +58,17 @@ TEST(NmeaGeneratorTest, GenerateGprmc)
 
     std::string gprmc = GPSOpenCl::NmeaGenerator::generateGprmc(sol, 45319.0);
 
+    time_t now = std::time(nullptr);
+    struct tm utcTm{};
+    gmtime_r(&now, &utcTm);
+    char expectedDate[8];
+    std::snprintf(expectedDate, sizeof(expectedDate), "%02d%02d%02d", utcTm.tm_mday, utcTm.tm_mon + 1,
+                  utcTm.tm_year % 100);
+
     EXPECT_EQ(gprmc.substr(0, 7), "$GPRMC,");
-    EXPECT_TRUE(gprmc.find(",A,4807.0380,N,01131.0020,E,0.0,0.0,250726,,,A*") != std::string::npos);
+    std::string expectedFragment =
+        std::string(",A,4807.0380,N,01131.0020,E,0.0,0.0,") + expectedDate + ",,,A*";
+    EXPECT_TRUE(gprmc.find(expectedFragment) != std::string::npos) << "gprmc was: " << gprmc;
 }
 
 TEST(NmeaGeneratorTest, GenerateGpgsaOutputMatchesString)
@@ -86,8 +97,10 @@ TEST(NmeaGeneratorTest, GenerateGpgsvOutputSplitsIntoMultipleMessages)
         channels[i].insertAcquisitionMetrics(10.0f, 0, 1000.0f, 1.0f);
     }
 
-    std::string fullString = GPSOpenCl::NmeaGenerator::generateGpgsv(channels);
-    std::vector<GPSOpenCl::NmeaGeneratorOutput> outputs = GPSOpenCl::NmeaGenerator::generateGpgsvOutput(channels);
+    GPSOpenCl::EcefPosition rxEcef{0.0, 0.0, 0.0};
+    std::string fullString = GPSOpenCl::NmeaGenerator::generateGpgsv(channels, rxEcef, false);
+    std::vector<GPSOpenCl::NmeaGeneratorOutput> outputs =
+        GPSOpenCl::NmeaGenerator::generateGpgsvOutput(channels, rxEcef, false);
 
     EXPECT_EQ(outputs.size(), 2u);
 

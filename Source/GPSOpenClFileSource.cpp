@@ -22,7 +22,13 @@ bool FileSource::initialize(const SourceInput &input)
     {
         return false;
     }
-    return loadAllSamples(filePath, 4096);
+    size_t samplesPerBlock = 4096;
+    if (input.samplingRate > 0.0)
+    {
+        samplesPerBlock = static_cast<size_t>(
+            std::round(input.samplingRate / (GPS_CA_CODE_FREQUENCY_HZ / GPS_CA_CODE_LENGTH)));
+    }
+    return loadAllSamples(filePath, samplesPerBlock);
 }
 
 bool FileSource::loadAllSamples(const std::string &filePath, size_t samplesPerBlock)

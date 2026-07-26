@@ -1,5 +1,7 @@
 #include "GPSOpenClAcquisition.h"
 
+#include <iostream>
+
 using namespace GPSOpenCl;
 
 Acquisition::Acquisition(Settings::Configuration conf)
@@ -70,6 +72,8 @@ void Acquisition::exp(int length, float frequency, float samplingRate, float pha
 
 void Acquisition::correlate(const ComplexFloatVector &input, Compute *gpu, Code *code, Channel *acqChannel)
 {
+    acqChannel->resetAcquisitionMetrics();
+
     float frequency = m_initialFrequency;
     float maxVal = 0.0f;
     int maxIndex = 0;
@@ -82,17 +86,34 @@ void Acquisition::correlate(const ComplexFloatVector &input, Compute *gpu, Code 
         gpu->complexMultiplier(input, m_dopplerSearch[freqBin], &dopplerMultiplication);
 
         ComplexFloatVector dopplerMultiplicationFreq;
-        gpu->fft(dopplerMultiplication, &dopplerMultiplicationFreq, Compute::FFTForward);
+        if (gpu->fft(dopplerMultiplication, &dopplerMultiplicationFreq, Compute::FFTForward) != 0)
+        {
+            std::cerr << "Acquisition::correlate: forward FFT failed (samplesPerCode=" << m_length
+                      << " is not a power of two); skipping correlation for SV " << acqChannel->m_svId << std::endl;
+            return;
+        }
 
         ComplexFloatVector correlationFreq;
         gpu->complexMultiplier(code->m_upsampledFreqDomainCaCode[acqChannel->m_svId - 1], dopplerMultiplicationFreq,
                                &correlationFreq);
 
         ComplexFloatVector correlation;
-        gpu->fft(correlationFreq, &correlation, Compute::FFTInverse);
+        if (gpu->fft(correlationFreq, &correlation, Compute::FFTInverse) != 0)
+        {
+            std::cerr << "Acquisition::correlate: inverse FFT failed (samplesPerCode=" << m_length
+                      << " is not a power of two); skipping correlation for SV " << acqChannel->m_svId << std::endl;
+            return;
+        }
 
         FloatVector correlationAbs;
         gpu->absolute(correlation, &correlationAbs);
+
+        if (correlationAbs.empty())
+        {
+            std::cerr << "Acquisition::correlate: empty correlation result; skipping SV " << acqChannel->m_svId
+                      << std::endl;
+            return;
+        }
 
         gpu->sum(correlationAbs, &sumVal);
         sumVal /= static_cast<float>(correlationAbs.size() * m_numberOfFreqencyBins);

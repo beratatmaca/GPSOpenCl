@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <iostream>
 
 using namespace GPSOpenCl;
 
@@ -125,7 +126,14 @@ void Code::createLookupTable(Compute *gpu)
 
             tmpInput.push_back(std::complex<float>(codeValue, 0.0));
         }
-        gpu->fft(tmpInput, &m_upsampledFreqDomainCaCode[i - 1], Compute::FFTForward);
+        if (gpu->fft(tmpInput, &m_upsampledFreqDomainCaCode[i - 1], Compute::FFTForward) != 0)
+        {
+            std::cerr << "Code::createLookupTable: FFT failed for PRN " << i << " (samplesPerCode=" << m_sampleLength
+                      << " is not a power of two); aborting lookup table construction." << std::endl;
+            m_upsampledCaCode.clear();
+            m_upsampledFreqDomainCaCode.clear();
+            return;
+        }
 
         for (int j = 0; j < m_sampleLength; j++)
         {

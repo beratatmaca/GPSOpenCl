@@ -4,6 +4,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <cmath>
 #include <cstring>
 #include <iostream>
 #include <vector>
@@ -60,6 +61,11 @@ bool GpsSdrSimSource::sendControlCommand(const std::string &command)
 bool GpsSdrSimSource::readBlock(ComplexFloatVector &outputSamples, SourceOutput &telemetry)
 {
     size_t samplesPerBlock = 4096;
+    if (m_inputConfig.samplingRate > 0.0)
+    {
+        samplesPerBlock = static_cast<size_t>(
+            std::round(m_inputConfig.samplingRate / (GPS_CA_CODE_FREQUENCY_HZ / GPS_CA_CODE_LENGTH)));
+    }
     size_t bytesNeeded = samplesPerBlock * 2 * sizeof(int8_t);
     std::vector<int8_t> buffer(bytesNeeded);
 

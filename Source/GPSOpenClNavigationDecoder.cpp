@@ -32,6 +32,7 @@ NavDecoderOutput NavigationDecoder::ephemerisToOutput(const GpsEphemeris &ephem)
     out.af0 = ephem.af0;
     out.af1 = ephem.af1;
     out.af2 = ephem.af2;
+    out.tgd = ephem.tgd;
     out.toe = ephem.toe;
     out.sqrtA = ephem.sqrtA;
     out.e = ephem.e;
@@ -63,6 +64,7 @@ GpsEphemeris NavigationDecoder::outputToEphemeris(const NavDecoderOutput &out)
     ephem.af0 = out.af0;
     ephem.af1 = out.af1;
     ephem.af2 = out.af2;
+    ephem.tgd = out.tgd;
     ephem.toe = out.toe;
     ephem.sqrtA = out.sqrtA;
     ephem.e = out.e;
@@ -226,7 +228,8 @@ bool NavigationDecoder::decodeSubframe(const std::vector<uint32_t> &words30bit, 
 
 
         ephem.weekNumber = extractUnsignedBits(w3, 1, 10);
-        ephem.iodc = (extractUnsignedBits(w3, 23, 2) << 8) | extractUnsignedBits(w8, 9, 8);
+        ephem.iodc = (extractUnsignedBits(w3, 23, 2) << 8) | extractUnsignedBits(w8, 1, 8);
+        ephem.tgd = extractSignedBits(w7, 17, 8) * std::pow(2.0, -31);
         ephem.toc = extractUnsignedBits(w8, 9, 16) * std::pow(2.0, 4);
         ephem.af2 = extractSignedBits(w9, 1, 8) * std::pow(2.0, -55);
         ephem.af1 = extractSignedBits(w9, 9, 16) * std::pow(2.0, -43);

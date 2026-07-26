@@ -39,6 +39,9 @@ class Channel
      *  @param meanValue     Mean correlation level. */
     void insertAcquisitionMetrics(float peakValue, int peakIndex, float peakFrequency, float meanValue);
 
+    /** @brief Reset accumulated acquisition metrics before a fresh search sweep. */
+    void resetAcquisitionMetrics();
+
     /** @brief Retrieve acquisition results.
      *  @param peakIndex     Code phase of peak (output).
      *  @param peakValue     Peak magnitude (output).

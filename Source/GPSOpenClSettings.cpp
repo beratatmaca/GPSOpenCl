@@ -134,6 +134,16 @@ void Settings::updateConfigurationStruct()
             configuration.acquisitionInput.numberOfSamplesPerCode = configuration.rawDataSettings.numberOfSamplesPerCode;
             configuration.trackingInput.samplingFrequency = configuration.rawDataSettings.samplingFrequency;
             configuration.trackingInput.numberOfSamplesPerCode = configuration.rawDataSettings.numberOfSamplesPerCode;
+
+            int samplesPerCode = configuration.rawDataSettings.numberOfSamplesPerCode;
+            bool isPowerOfTwo = samplesPerCode > 0 && (samplesPerCode & (samplesPerCode - 1)) == 0;
+            if (!isPowerOfTwo)
+            {
+                std::cerr << "Warning: SamplingFrequency=" << configuration.rawDataSettings.samplingFrequency
+                          << " yields " << samplesPerCode << " samples per code period, which is not a power of "
+                          << "two. The FFT-based acquisition/lookup-table path requires a power-of-two length and "
+                          << "will fail for this configuration." << std::endl;
+            }
         }
         catch (const std::exception &)
         {

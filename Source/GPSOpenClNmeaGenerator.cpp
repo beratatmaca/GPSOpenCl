@@ -1,8 +1,10 @@
 #include "GPSOpenClNmeaGenerator.h"
 
+#include "GPSOpenClAtmosphericCorrections.h"
+
 #include <cmath>
 #include <cstdio>
-#include <iomanip>
+#include <ctime>
 #include <sstream>
 
 using namespace GPSOpenCl;
@@ -137,9 +139,20 @@ std::string NmeaGenerator::generateGprmc(const ReceiverPvtSolution &solution, do
     std::string latStr = formatLatitude(solution.geodeticPosition.latitude);
     std::string lonStr = formatLongitude(solution.geodeticPosition.longitude);
 
+    char dateBuf[8] = "000000";
+    {
+        time_t now = std::time(nullptr);
+        struct tm utcTm{};
+        if (gmtime_r(&now, &utcTm) != nullptr)
+        {
+            std::snprintf(dateBuf, sizeof(dateBuf), "%02d%02d%02d",
+                          utcTm.tm_mday, utcTm.tm_mon + 1, utcTm.tm_year % 100);
+        }
+    }
+
     char body[256];
-    std::snprintf(body, sizeof(body), "GPRMC,%s,%c,%s,%s,0.0,0.0,250726,,,A",
-                  timeBuf, status, latStr.c_str(), lonStr.c_str());
+    std::snprintf(body, sizeof(body), "GPRMC,%s,%c,%s,%s,0.0,0.0,%s,,,A",
+                  timeBuf, status, latStr.c_str(), lonStr.c_str(), dateBuf);
 
     return appendChecksum(body);
 }
@@ -175,12 +188,16 @@ std::string NmeaGenerator::generateGpgsa(const ReceiverPvtSolution &solution, co
     return appendChecksum(oss.str());
 }
 
-std::vector<std::string> NmeaGenerator::generateGpgsvSentences(const Channel channels[GPS_CA_SV_COUNT])
+std::vector<std::string> NmeaGenerator::generateGpgsvSentences(const Channel channels[GPS_CA_SV_COUNT],
+                                                                const EcefPosition &rxEcef, bool rxPositionValid)
 {
     struct SvInfo
     {
         int prn;
         int snr;
+        bool hasPosition;
+        double elevationDeg;
+        double azimuthDeg;
     };
     std::vector<SvInfo> acquiredSats;
 
@@ -191,7 +208,29 @@ std::vector<std::string> NmeaGenerator::generateGpgsvSentences(const Channel cha
             int peakIdx = 0;
             float peakVal = 0.0f, peakFreq = 0.0f, meanVal = 0.0f, cn0 = 0.0f, peakRatio = 0.0f;
             const_cast<Channel &>(channels[i]).getAcquisitionResults(&peakIdx, &peakVal, &peakFreq, &meanVal, &cn0, &peakRatio);
-            acquiredSats.push_back({channels[i].m_svId, static_cast<int>(std::round(cn0))});
+
+            SvInfo sv{channels[i].m_svId, static_cast<int>(std::round(cn0)), false, 0.0, 0.0};
+
+            if (rxPositionValid && channels[i].hasCompleteEphemeris())
+            {
+                size_t promptCount = channels[i].getPromptHistory().size();
+                size_t subframeStartSample = channels[i].getLastSubframeStartSample();
+                if (promptCount >= subframeStartSample)
+                {
+                    double subframeStartTow = channels[i].getLastSubframeTow() - 6.0;
+                    double elapsedSeconds =
+                        static_cast<double>(promptCount - subframeStartSample) * GPS_CA_CODE_PERIOD_SEC;
+                    double transmitTime = subframeStartTow + elapsedSeconds;
+
+                    SatelliteOrbit orbit =
+                        PVTSolver::computeSatelliteOrbit(channels[i].getAccumulatedEphemeris(), transmitTime);
+                    AtmosphericCorrections::computeAzimuthElevation(rxEcef, orbit.position, sv.azimuthDeg,
+                                                                    sv.elevationDeg);
+                    sv.hasPosition = true;
+                }
+            }
+
+            acquiredSats.push_back(sv);
         }
     }
 
@@ -211,8 +250,17 @@ std::vector<std::string> NmeaGenerator::generateGpgsvSentences(const Channel cha
             if (idx < totalSats)
             {
                 char buf[32];
-
-                std::snprintf(buf, sizeof(buf), ",%02d,45,120,%02d", acquiredSats[idx].prn, acquiredSats[idx].snr);
+                if (acquiredSats[idx].hasPosition)
+                {
+                    int elev = static_cast<int>(std::lround(acquiredSats[idx].elevationDeg));
+                    int azim = ((static_cast<int>(std::lround(acquiredSats[idx].azimuthDeg)) % 360) + 360) % 360;
+                    std::snprintf(buf, sizeof(buf), ",%02d,%02d,%03d,%02d",
+                                  acquiredSats[idx].prn, elev, azim, acquiredSats[idx].snr);
+                }
+                else
+                {
+                    std::snprintf(buf, sizeof(buf), ",%02d,,,%02d", acquiredSats[idx].prn, acquiredSats[idx].snr);
+                }
                 oss << buf;
             }
             else if (totalSats > 0)
@@ -227,10 +275,11 @@ std::vector<std::string> NmeaGenerator::generateGpgsvSentences(const Channel cha
     return sentences;
 }
 
-std::string NmeaGenerator::generateGpgsv(const Channel channels[GPS_CA_SV_COUNT])
+std::string NmeaGenerator::generateGpgsv(const Channel channels[GPS_CA_SV_COUNT], const EcefPosition &rxEcef,
+                                         bool rxPositionValid)
 {
     std::string result;
-    for (const auto &sentence : generateGpgsvSentences(channels))
+    for (const auto &sentence : generateGpgsvSentences(channels, rxEcef, rxPositionValid))
     {
         result += sentence;
     }
@@ -246,10 +295,11 @@ NmeaGeneratorOutput NmeaGenerator::generateGpgsaOutput(const ReceiverPvtSolution
     return out;
 }
 
-std::vector<NmeaGeneratorOutput> NmeaGenerator::generateGpgsvOutput(const Channel channels[GPS_CA_SV_COUNT])
+std::vector<NmeaGeneratorOutput> NmeaGenerator::generateGpgsvOutput(const Channel channels[GPS_CA_SV_COUNT],
+                                                                     const EcefPosition &rxEcef, bool rxPositionValid)
 {
     std::vector<NmeaGeneratorOutput> outputs;
-    for (const auto &sentence : generateGpgsvSentences(channels))
+    for (const auto &sentence : generateGpgsvSentences(channels, rxEcef, rxPositionValid))
     {
         NmeaGeneratorOutput out{};
         out.structVersion = STRUCT_VERSION_1;

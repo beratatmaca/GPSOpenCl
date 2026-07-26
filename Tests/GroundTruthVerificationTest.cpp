@@ -367,7 +367,9 @@ TEST(GroundTruthVerificationTest, FullEphemerisAndPvtMatchSimulatorTruth)
         TestUtils::compareRealResults(static_cast<float>(decoded.Cis), static_cast<float>(truthEphem.Cis), tolerance);
         TestUtils::compareRealResults(static_cast<float>(decoded.af0), static_cast<float>(truthEphem.af0), tolerance);
         TestUtils::compareRealResults(static_cast<float>(decoded.af1), static_cast<float>(truthEphem.af1), tolerance);
-        EXPECT_EQ(decoded.weekNumber, truthEphem.weekNumber) << "PRN " << prn;
+        // Subframe 1's broadcast WN field is a raw 10-bit (mod-1024) value per ICD-GPS-200, while RINEX
+        // stores the un-rolled continuous GPS week - reduce the truth value the same way before comparing.
+        EXPECT_EQ(decoded.weekNumber, truthEphem.weekNumber % 1024) << "PRN " << prn;
 
         verifiedCount++;
     }
