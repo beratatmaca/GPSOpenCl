@@ -15,7 +15,7 @@
 
 namespace GPSOpenCl
 {
-/** @brief Code and carrier tracking engine (FLL-assisted 3rd-order PLL + DLL). */
+/** @brief Code and carrier tracking engine (FLL-assisted 2nd-order Costas PLL + DLL). */
 class Tracking
 {
   public:
@@ -90,13 +90,22 @@ class Tracking
      *  @return Frequency error estimate (Hz). */
     float computeFllError() const;
 
+    /** @brief Compute the Costas (data-bit-sign-invariant) phase discriminator from the current
+     *   Prompt correlator sum. Uses the double-angle atan2(2*Ip*Qp, Ip^2-Qp^2)/2 form so a genuine
+     *   50 bps nav data-bit transition (which flips Ip/Qp's sign but not the true carrier phase)
+     *   cannot be misread as a phase error, unlike a plain atan2(Qp,Ip) discriminator.
+     *  @return Phase error estimate (cycles, range (-0.25, 0.25]). */
+    float computeCostasPhaseError() const;
+
     /** @brief Check whether this block's prompt correlator sum is strong enough to trust for carrier
      *   discrimination, guarding against nav-bit-transition blocks whose correlation partially cancels.
      *   Updates the running magnitude average as a side effect when the block is judged reliable.
      *  @return True if this block's carrier discriminators should be applied. */
     bool isPromptSignalReliable();
 
-    /** @brief Compute FLL-assisted pull-in frequency discriminator. */
+    /** @brief Compute FLL-assisted pull-in frequency discriminator. Only invoked on blocks judged
+     *   reliable by isPromptSignalReliable(); an unreliable block holds the carrier frequency steady
+     *   instead of feeding a nav-bit-transition-corrupted correlator sum into the FLL integrator. */
     void fllDiscriminator();
 
     /** @brief Transfer a fraction of the settled PLL NCO into the carrier frequency basis,
@@ -105,7 +114,7 @@ class Tracking
      *   to ±15 kHz to bound long-term drift. */
     void rateAidDiscriminator();
 
-    /** @brief Compute PLL frequency discriminator. */
+    /** @brief Compute PLL phase discriminator via computeCostasPhaseError() and advance the 2nd-order loop filter. */
     void freqDiscriminator();
 
     /** @brief Compute DLL code discriminator. */

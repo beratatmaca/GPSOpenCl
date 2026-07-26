@@ -195,7 +195,14 @@ void Tracking::doWork(const ComplexFloatVector &input, int prn, ComplexFloatVect
 
     if (m_blocksSinceInit < m_fllPullInBlocks)
     {
-        fllDiscriminator();
+        if (isPromptSignalReliable())
+        {
+            fllDiscriminator();
+        }
+        else
+        {
+            m_carrFreq = m_carrFreqBasis + m_fllNco;
+        }
     }
     else
     {
@@ -203,7 +210,7 @@ void Tracking::doWork(const ComplexFloatVector &input, int prn, ComplexFloatVect
         {
             m_carrNco = m_fllNco;
             m_carrNcoPrev = m_fllNco;
-            m_carrErrorPrev = 0.0f;
+            m_carrErrorPrev = computeCostasPhaseError();
         }
 
         if (isPromptSignalReliable())
@@ -383,16 +390,19 @@ void Tracking::rateAidDiscriminator()
     m_carrNcoPrev = m_carrNco;
 }
 
+float Tracking::computeCostasPhaseError() const
+{
+    if (m_Ip == 0.0f && m_Qp == 0.0f)
+    {
+        return 0.0f;
+    }
+
+    return static_cast<float>(std::atan2(2.0 * m_Qp * m_Ip, m_Ip * m_Ip - m_Qp * m_Qp) / (4.0 * M_PI));
+}
+
 void Tracking::freqDiscriminator()
 {
-    if (m_Ip != 0.0f)
-    {
-        m_carrError = std::atan2(m_Qp, m_Ip) / (2.0 * M_PI);
-    }
-    else
-    {
-        m_carrError = 0.0f;
-    }
+    m_carrError = computeCostasPhaseError();
 
     if (m_pllTau1 != 0.0f)
     {
