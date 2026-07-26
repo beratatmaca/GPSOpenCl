@@ -19,6 +19,7 @@ Channel::Channel()
       m_isAcquired(false),
       m_tracking(nullptr),
       m_bitSyncPhase(-1),
+      m_bitSyncSearchPositions(),
       m_navBitOffset(0),
       m_seenSubframeMask(0),
       m_accumulatedEphemeris(),
@@ -138,6 +139,7 @@ void Channel::resetNavigationState()
 {
     m_promptHistory.clear();
     m_bitSyncPhase = -1;
+    m_bitSyncSearchPositions.clear();
     m_navBitOffset = 0;
     m_seenSubframeMask = 0;
     m_accumulatedEphemeris = GpsEphemeris();
@@ -222,7 +224,8 @@ bool Channel::updateNavigation(NavigationDecoder &decoder)
 {
     GpsEphemeris ephem = GpsEphemeris();
     size_t subframeStartSample = 0;
-    if (!decoder.processPromptSignal(m_svId, m_promptHistory, m_bitSyncPhase, m_navBitOffset, ephem, subframeStartSample))
+    if (!decoder.processPromptSignal(m_svId, m_promptHistory, m_bitSyncPhase, m_bitSyncSearchPositions, m_navBitOffset,
+                                     ephem, subframeStartSample))
     {
         return hasCompleteEphemeris();
     }

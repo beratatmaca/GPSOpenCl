@@ -156,6 +156,7 @@ class Channel
     ComplexFloatVector m_promptHistory;   ///< Prompt correlator history.
 
     int m_bitSyncPhase;                   ///< Locked sample-level bit-edge phase, 0-19 (-1 = not yet synced).
+    std::vector<size_t> m_bitSyncSearchPositions; ///< Per-candidate-phase search cursor while unsynced.
     size_t m_navBitOffset;                ///< Current nav bit offset.
     uint8_t m_seenSubframeMask;           ///< Bitmask of decoded subframes.
     GpsEphemeris m_accumulatedEphemeris;  ///< Accumulated ephemeris data.

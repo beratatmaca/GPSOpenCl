@@ -418,8 +418,124 @@ bool NavigationDecoder::decodeAtPhaseOffset(int svId, const ComplexFloatVector &
     return decodeSubframe(words, ephem);
 }
 
+bool NavigationDecoder::tryDecodeAtBitPosition(int svId, const ComplexFloatVector &promptHistory, int phase,
+                                               size_t bitPosition, bool &hadEnoughData, GpsEphemeris &ephem,
+                                               size_t &subframeStartSample)
+{
+    hadEnoughData = false;
+
+    size_t phaseBase = static_cast<size_t>(phase);
+    if (phaseBase > promptHistory.size())
+    {
+        return false;
+    }
+
+    size_t startSample = phaseBase + bitPosition * 20;
+    if (startSample + 300 * 20 > promptHistory.size())
+    {
+        return false;
+    }
+
+    hadEnoughData = true;
+
+    std::vector<bool> bits;
+    bits.reserve(300);
+    for (int i = 0; i < 300; i++)
+    {
+        float sumRe = 0.0f;
+        size_t base = startSample + static_cast<size_t>(i) * 20;
+        for (int k = 0; k < 20; k++)
+        {
+            sumRe += promptHistory[base + k].real();
+        }
+        bits.push_back(sumRe > 0.0f);
+    }
+
+    uint8_t byteVal = 0;
+    for (int b = 0; b < 8; b++)
+    {
+        byteVal = (byteVal << 1) | (bits[static_cast<size_t>(b)] ? 1u : 0u);
+    }
+
+    bool inverted;
+    if (byteVal == 0x8B)
+    {
+        inverted = false;
+    }
+    else if (byteVal == 0x74)
+    {
+        inverted = true;
+    }
+    else
+    {
+        return false;
+    }
+
+    auto bitAt = [&](size_t idx) -> bool {
+        bool v = bits[idx];
+        return inverted ? !v : v;
+    };
+
+    bool prevD29 = false;
+    bool prevD30 = false;
+    if (bitPosition >= 2)
+    {
+        for (int back = 2; back >= 1; back--)
+        {
+            size_t base = startSample - static_cast<size_t>(back) * 20;
+            float sumRe = 0.0f;
+            for (int k = 0; k < 20; k++)
+            {
+                sumRe += promptHistory[base + k].real();
+            }
+            bool bit = sumRe > 0.0f;
+            bool v = inverted ? !bit : bit;
+            if (back == 2)
+            {
+                prevD29 = v;
+            }
+            else
+            {
+                prevD30 = v;
+            }
+        }
+    }
+
+    std::vector<uint32_t> words(10, 0);
+    for (int w = 0; w < 10; w++)
+    {
+        size_t wordStartBit = static_cast<size_t>(w) * 30;
+        uint32_t raw = 0;
+        for (int b = 0; b < 30; b++)
+        {
+            raw = (raw << 1) | (bitAt(wordStartBit + static_cast<size_t>(b)) ? 1u : 0u);
+        }
+
+        if (!checkParity(raw, prevD29, prevD30))
+        {
+            return false;
+        }
+
+        uint32_t dataWord = raw;
+        if (prevD30)
+        {
+            const uint32_t dataBitsMask = 0x3FFFFFC0u;
+            dataWord = raw ^ dataBitsMask;
+        }
+        words[static_cast<size_t>(w)] = dataWord;
+
+        prevD29 = ((raw >> 1) & 1u) != 0;
+        prevD30 = (raw & 1u) != 0;
+    }
+
+    subframeStartSample = startSample;
+    ephem.svId = svId;
+    return decodeSubframe(words, ephem);
+}
+
 bool NavigationDecoder::processPromptSignal(int svId, const ComplexFloatVector &promptHistory, int &bitSyncPhase,
-                                            size_t &bitOffset, GpsEphemeris &ephem, size_t &subframeStartSample)
+                                            std::vector<size_t> &searchPositions, size_t &bitOffset,
+                                            GpsEphemeris &ephem, size_t &subframeStartSample)
 {
     ephem.svId = svId;
     ephem.isValid = false;
@@ -432,23 +548,24 @@ bool NavigationDecoder::processPromptSignal(int svId, const ComplexFloatVector &
     }
     else
     {
+        if (searchPositions.size() != 20)
+        {
+            searchPositions.assign(20, 0);
+        }
+
         for (int phase = 0; phase < 20 && !decoded; phase++)
         {
-            size_t trialOffset = 0;
-            for (;;)
+            bool hadEnoughData = false;
+            decoded = tryDecodeAtBitPosition(svId, promptHistory, phase, searchPositions[static_cast<size_t>(phase)],
+                                             hadEnoughData, ephem, subframeStartSample);
+            if (decoded)
             {
-                size_t beforeOffset = trialOffset;
-                decoded = decodeAtPhaseOffset(svId, promptHistory, phase, trialOffset, ephem, subframeStartSample);
-                if (decoded)
-                {
-                    bitSyncPhase = phase;
-                    bitOffset = trialOffset;
-                    break;
-                }
-                if (trialOffset == beforeOffset)
-                {
-                    break;
-                }
+                bitSyncPhase = phase;
+                bitOffset = searchPositions[static_cast<size_t>(phase)] + 300;
+            }
+            else if (hadEnoughData)
+            {
+                searchPositions[static_cast<size_t>(phase)]++;
             }
         }
     }
@@ -461,10 +578,12 @@ bool NavigationDecoder::processPromptSignal(int svId, const ComplexFloatVector &
 }
 
 bool NavigationDecoder::processPromptSignal(int svId, const ComplexFloatVector &promptHistory, int &bitSyncPhase,
-                                           size_t &bitOffset, NavDecoderOutput &output, size_t &subframeStartSample)
+                                            std::vector<size_t> &searchPositions, size_t &bitOffset,
+                                            NavDecoderOutput &output, size_t &subframeStartSample)
 {
     GpsEphemeris ephem{};
-    bool res = processPromptSignal(svId, promptHistory, bitSyncPhase, bitOffset, ephem, subframeStartSample);
+    bool res = processPromptSignal(svId, promptHistory, bitSyncPhase, searchPositions, bitOffset, ephem,
+                                   subframeStartSample);
     if (res)
     {
         output = ephemerisToOutput(ephem);

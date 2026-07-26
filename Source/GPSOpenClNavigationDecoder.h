@@ -118,23 +118,30 @@ class NavigationDecoder
      *  @param svId                Satellite vehicle ID.
      *  @param promptHistory       Accumulated Prompt I samples.
      *  @param bitSyncPhase        Locked sample-level bit-edge phase, 0-19 (in/out, -1 = not yet synced).
+     *  @param searchPositions     Per-candidate-phase search cursor (bit position), size 20, used only
+     *                             while bitSyncPhase is unresolved; each candidate phase is checked at
+     *                             exactly one new bit position per call so total search cost stays
+     *                             linear in the number of blocks processed (in/out).
      *  @param bitOffset           Current bit offset within the phase-aligned bit stream (in/out).
      *  @param ephem               Output ephemeris.
      *  @param subframeStartSample Subframe start sample index (output).
      *  @return True if subframe decoded. */
-    bool processPromptSignal(int svId, const ComplexFloatVector &promptHistory, int &bitSyncPhase, size_t &bitOffset,
-                             GpsEphemeris &ephem, size_t &subframeStartSample);
+    bool processPromptSignal(int svId, const ComplexFloatVector &promptHistory, int &bitSyncPhase,
+                             std::vector<size_t> &searchPositions, size_t &bitOffset, GpsEphemeris &ephem,
+                             size_t &subframeStartSample);
 
     /** @brief Process prompt signal and decode subframe into output struct.
      *  @param svId                Satellite vehicle ID.
      *  @param promptHistory       Accumulated Prompt I samples.
      *  @param bitSyncPhase        Locked sample-level bit-edge phase, 0-19 (in/out, -1 = not yet synced).
+     *  @param searchPositions     Per-candidate-phase search cursor, size 20 (in/out). See other overload.
      *  @param bitOffset           Current bit offset within the phase-aligned bit stream (in/out).
      *  @param output              Output struct.
      *  @param subframeStartSample Subframe start sample index (output).
      *  @return True if subframe decoded. */
-    bool processPromptSignal(int svId, const ComplexFloatVector &promptHistory, int &bitSyncPhase, size_t &bitOffset,
-                             NavDecoderOutput &output, size_t &subframeStartSample);
+    bool processPromptSignal(int svId, const ComplexFloatVector &promptHistory, int &bitSyncPhase,
+                             std::vector<size_t> &searchPositions, size_t &bitOffset, NavDecoderOutput &output,
+                             size_t &subframeStartSample);
 
     /** @brief Set telemetry sink.
      *  @param sink Sink implementation. */
@@ -163,6 +170,23 @@ class NavigationDecoder
      *  @return True if a parity-valid subframe decoded at this phase. */
     bool decodeAtPhaseOffset(int svId, const ComplexFloatVector &promptHistory, int phase, size_t &bitOffset,
                              GpsEphemeris &ephem, size_t &subframeStartSample);
+
+    /** @brief Check exactly one candidate (phase, bitPosition) for a parity-valid subframe, doing
+     *   only the fixed 300-bit demodulation and check needed for that single position (no scanning
+     *   ahead). Used during bit-sync search so total cost across many calls stays linear instead of
+     *   rescanning the whole growing buffer on every block.
+     *  @param svId                Satellite vehicle ID.
+     *  @param promptHistory       Accumulated Prompt I samples.
+     *  @param phase               Candidate sample-level bit-edge phase, 0-19.
+     *  @param bitPosition         Candidate subframe start, in bits, within the phase-aligned stream.
+     *  @param hadEnoughData       Output: true if promptHistory already held enough samples to check
+     *                             this position at all. Callers must not advance bitPosition when this
+     *                             is false, or the search cursor (bits) outpaces the buffer (samples).
+     *  @param ephem               Output ephemeris.
+     *  @param subframeStartSample Subframe start sample index (output).
+     *  @return True if a parity-valid subframe starts at exactly this position. */
+    bool tryDecodeAtBitPosition(int svId, const ComplexFloatVector &promptHistory, int phase, size_t bitPosition,
+                                bool &hadEnoughData, GpsEphemeris &ephem, size_t &subframeStartSample);
 
     NavDecoderInput m_inputConfig;            ///< Decoder parameters.
     std::shared_ptr<Sink> m_sink{nullptr};    ///< Telemetry sink.

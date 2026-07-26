@@ -230,10 +230,16 @@ TEST(NavigationDecoderTest, BitSyncFindsSubframeWhenNaiveZeroPhaseCannot)
     GPSOpenCl::NavigationDecoder decoder;
     GPSOpenCl::GpsEphemeris ephem{};
     int bitSyncPhase = -1;
+    std::vector<size_t> searchPositions;
     size_t bitOffset = 0;
     size_t subframeStartSample = 0;
 
-    bool decoded = decoder.processPromptSignal(1, promptHistory, bitSyncPhase, bitOffset, ephem, subframeStartSample);
+    bool decoded = false;
+    for (int attempt = 0; attempt < 20 && !decoded; attempt++)
+    {
+        decoded = decoder.processPromptSignal(1, promptHistory, bitSyncPhase, searchPositions, bitOffset, ephem,
+                                              subframeStartSample);
+    }
 
     EXPECT_TRUE(decoded);
     EXPECT_TRUE(ephem.isValid);
@@ -257,10 +263,12 @@ TEST(NavigationDecoderTest, BitSyncNeverLocksWithFewerThanOneSubframeOfSamples)
     GPSOpenCl::NavigationDecoder decoder;
     GPSOpenCl::GpsEphemeris ephem{};
     int bitSyncPhase = -1;
+    std::vector<size_t> searchPositions;
     size_t bitOffset = 0;
     size_t subframeStartSample = 0;
 
-    bool decoded = decoder.processPromptSignal(1, promptHistory, bitSyncPhase, bitOffset, ephem, subframeStartSample);
+    bool decoded = decoder.processPromptSignal(1, promptHistory, bitSyncPhase, searchPositions, bitOffset, ephem,
+                                               subframeStartSample);
 
     EXPECT_FALSE(decoded);
     EXPECT_EQ(bitSyncPhase, -1);
