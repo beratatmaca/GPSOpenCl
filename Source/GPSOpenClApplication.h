@@ -20,8 +20,12 @@
 #include "GPSOpenClStructs.h"
 #include "GPSOpenClTracking.h"
 
+#include <condition_variable>
 #include <memory>
+#include <mutex>
 #include <string>
+#include <thread>
+#include <vector>
 
 namespace GPSOpenCl
 {
@@ -74,6 +78,28 @@ class Application
     /** @brief Initialize all 32 satellite channels. */
     void initializeChannels();
 
+    /** @brief Decode navigation bits for all confirmed-tracking channels. Must run every block
+     *   regardless of the PVT fix-output cadence, since nav-bit decode needs to consume newly
+     *   arrived Prompt samples continuously. */
+    void updateChannelNavigation();
+
+    /** @brief Track channels in [startIdx, endIdx). Used as the per-worker unit of the tracking pool.
+     *  @param input    IQ samples.
+     *  @param startIdx First channel index (inclusive).
+     *  @param endIdx   Last channel index (exclusive). */
+    void trackChannelRange(const ComplexFloatVector &input, int startIdx, int endIdx);
+
+    /** @brief Persistent worker thread body: waits for a tracking dispatch, processes its channel
+     *   range, and reports completion. Avoids spawning threads on every block.
+     *  @param workerIndex Index of this worker, used to derive its channel range. */
+    void workerLoop(int workerIndex);
+
+    /** @brief Start the persistent tracking thread pool. */
+    void startWorkerPool();
+
+    /** @brief Signal and join all worker threads. */
+    void stopWorkerPool();
+
     Acquisition *m_acquisition;              ///< Acquisition engine.
     Tracking *m_tracking;                    ///< Tracking engine.
     Settings::Configuration m_configuration; ///< Application configuration.
@@ -88,6 +114,16 @@ class Application
     std::shared_ptr<Sink> m_sink{nullptr};   ///< Telemetry sink.
     std::shared_ptr<Source> m_source{nullptr}; ///< Sample source.
     Profiler m_profiler;                     ///< Processing time profiler.
+
+    std::vector<std::thread> m_workers;             ///< Persistent tracking worker threads.
+    std::mutex m_poolMutex;                         ///< Guards the pool dispatch state below.
+    std::condition_variable m_startCv;              ///< Signals workers that a new range is ready.
+    std::condition_variable m_doneCv;                ///< Signals the dispatcher that all workers finished.
+    const ComplexFloatVector *m_currentTrackInput{nullptr}; ///< Block being tracked by the current dispatch.
+    int m_generation{0};                            ///< Incremented on each new dispatch; workers compare against their last-seen value.
+    int m_pendingWorkers{0};                        ///< Workers still processing the current dispatch.
+    bool m_shutdownWorkers{false};                  ///< Set to stop all workers during destruction.
+    int m_numWorkers{0};                            ///< Active worker count (0 or 1 disables the pool).
 };
 }
 

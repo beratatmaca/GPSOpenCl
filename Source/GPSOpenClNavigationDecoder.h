@@ -160,7 +160,10 @@ class NavigationDecoder
      *  @param words30bit Vector of 10 parity-checked 30-bit words. */
     void decodeIonosphericParams(const std::vector<uint32_t> &words30bit);
 
-    /** @brief Search for and parity-validate one subframe at a fixed sample-level bit-edge phase.
+    /** @brief Check exactly one candidate bit position (the current bitOffset) for a parity-valid
+     *   subframe at a fixed sample-level bit-edge phase, via tryDecodeAtBitPosition. Advances bitOffset
+     *   by 300 on success or by 1 on a failed check (no preamble at this position, or a parity miss),
+     *   so cost stays O(1) per call instead of rescanning the whole growing buffer every call.
      *  @param svId                Satellite vehicle ID.
      *  @param promptHistory       Accumulated Prompt I samples.
      *  @param phase               Sample-level bit-edge phase to demodulate at, 0-19.

@@ -306,14 +306,18 @@ void Tracking::numericOscillator()
     float samplingFreq = m_configuration.rawDataSettings.samplingFrequency;
     if (samplingFreq <= 0.0f) return;
 
+    double phaseStepRad = 2.0 * M_PI * static_cast<double>(m_carrFreq) / samplingFreq;
+
+    std::complex<float> step = std::exp(IMAGINARY_UNIT * static_cast<float>(phaseStepRad));
+    std::complex<float> phasor = std::exp(IMAGINARY_UNIT * m_remCarrPhase);
+
     for (int sample = 0; sample < m_totalSamples; sample++)
     {
-        double sampDouble = static_cast<double>(sample);
-        double phase = (2.0 * M_PI * m_carrFreq * sampDouble / samplingFreq) + m_remCarrPhase;
-        m_carrSig[sample] = std::exp(IMAGINARY_UNIT * static_cast<float>(phase));
+        m_carrSig[sample] = phasor;
+        phasor *= step;
     }
 
-    double finalPhase = (2.0 * M_PI * m_carrFreq * m_totalSamples / samplingFreq) + m_remCarrPhase;
+    double finalPhase = (phaseStepRad * m_totalSamples) + m_remCarrPhase;
     m_remCarrPhase = std::fmod(finalPhase, 2.0 * M_PI);
 }
 

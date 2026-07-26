@@ -146,6 +146,7 @@ struct PvtSolverInput
     uint32_t structVersion{STRUCT_VERSION_1}; ///< Struct version tag.
     uint32_t minSatellites{4};               ///< Min satellites for solution.
     double maxPseudorangeErrMeters{100.0};   ///< Max pseudorange error (m).
+    int32_t fixOutputIntervalBlocks{100};    ///< Blocks between PVT solve + telemetry output (100 = 10 Hz at 1ms/block).
 };
 
 /** @brief PVT solver output with position and DOP. */

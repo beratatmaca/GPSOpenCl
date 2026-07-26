@@ -138,6 +138,7 @@ void Channel::initTracking(const Settings::Configuration &conf, float dopplerHz,
 void Channel::resetNavigationState()
 {
     m_promptHistory.clear();
+    m_promptHistory.reserve(60000);
     m_bitSyncPhase = -1;
     m_bitSyncSearchPositions.clear();
     m_navBitOffset = 0;

@@ -1,7 +1,6 @@
 #include "GPSOpenClNavigationDecoder.h"
 
 #include <cmath>
-#include <iostream>
 
 using namespace GPSOpenCl;
 
@@ -335,84 +334,20 @@ void NavigationDecoder::decodeIonosphericParams(const std::vector<uint32_t> &wor
 bool NavigationDecoder::decodeAtPhaseOffset(int svId, const ComplexFloatVector &promptHistory, int phase,
                                             size_t &bitOffset, GpsEphemeris &ephem, size_t &subframeStartSample)
 {
-    size_t phaseBase = static_cast<size_t>(phase);
-    if (phaseBase > promptHistory.size())
+    bool hadEnoughData = false;
+    bool decoded =
+        tryDecodeAtBitPosition(svId, promptHistory, phase, bitOffset, hadEnoughData, ephem, subframeStartSample);
+
+    if (decoded)
     {
-        return false;
+        bitOffset += 300;
+    }
+    else if (hadEnoughData)
+    {
+        bitOffset++;
     }
 
-    size_t startSample = phaseBase + bitOffset * 20;
-    if (startSample > promptHistory.size())
-    {
-        bitOffset = 0;
-        startSample = phaseBase;
-    }
-
-    ComplexFloatVector slicedHistory(promptHistory.begin() + startSample, promptHistory.end());
-    std::vector<bool> newBits = promptToBits(slicedHistory);
-
-    if (newBits.size() < 300)
-    {
-        return false;
-    }
-
-    size_t relPreambleIdx = 0;
-    bool inverted = false;
-    if (!findPreamble(newBits, relPreambleIdx, inverted))
-    {
-        return false;
-    }
-
-    if (relPreambleIdx + 300 > newBits.size())
-    {
-        return false;
-    }
-
-    size_t preambleIdx = bitOffset + relPreambleIdx;
-
-    auto bitAt = [&](size_t relIdx) -> bool {
-        bool v = newBits[relIdx];
-        return inverted ? !v : v;
-    };
-
-    bool prevD29 = false;
-    bool prevD30 = false;
-    if (relPreambleIdx >= 2)
-    {
-        prevD29 = bitAt(relPreambleIdx - 2);
-        prevD30 = bitAt(relPreambleIdx - 1);
-    }
-
-    std::vector<uint32_t> words(10, 0);
-    for (int w = 0; w < 10; w++)
-    {
-        size_t wordStartBit = relPreambleIdx + static_cast<size_t>(w) * 30;
-        uint32_t raw = 0;
-        for (int b = 0; b < 30; b++)
-        {
-            raw = (raw << 1) | (bitAt(wordStartBit + b) ? 1u : 0u);
-        }
-
-        const uint32_t dataBitsMask = 0x3FFFFFC0u;
-        uint32_t dataWord = prevD30 ? (raw ^ dataBitsMask) : raw;
-
-        if (!checkParity(dataWord, prevD29, prevD30))
-        {
-            bitOffset = preambleIdx + 1;
-            return false;
-        }
-
-        words[w] = dataWord;
-
-        prevD29 = ((raw >> 1) & 1u) != 0;
-        prevD30 = (raw & 1u) != 0;
-    }
-
-    subframeStartSample = phaseBase + preambleIdx * 20;
-    bitOffset = preambleIdx + 300;
-
-    ephem.svId = svId;
-    return decodeSubframe(words, ephem);
+    return decoded;
 }
 
 bool NavigationDecoder::tryDecodeAtBitPosition(int svId, const ComplexFloatVector &promptHistory, int phase,

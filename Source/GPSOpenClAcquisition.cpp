@@ -1,5 +1,6 @@
 #include "GPSOpenClAcquisition.h"
 
+#include <cmath>
 #include <iostream>
 
 using namespace GPSOpenCl;
@@ -22,6 +23,7 @@ Acquisition::Acquisition(Settings::Configuration conf)
     m_samplingFrequency = static_cast<float>(m_inputConfig.samplingFrequency);
 
     createDopplerSearchTable();
+    m_reuseFactor = computeReuseFactor();
 }
 
 Acquisition::Acquisition(const AcquisitionInput &input)
@@ -37,6 +39,7 @@ Acquisition::Acquisition(const AcquisitionInput &input)
     m_samplingFrequency = static_cast<float>(m_inputConfig.samplingFrequency);
 
     createDopplerSearchTable();
+    m_reuseFactor = computeReuseFactor();
 }
 
 Acquisition::~Acquisition()

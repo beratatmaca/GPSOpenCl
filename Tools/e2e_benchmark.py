@@ -17,7 +17,37 @@ def parse_args():
     parser.add_argument("--nav-file", type=str, default="Tools/gps-sdr-sim/brdc0010.22n", help="RINEX navigation file path")
     parser.add_argument("--output-json", type=str, default="e2e_benchmark_report.json", help="Path to write LLM-parsable JSON report")
     parser.add_argument("--output-md", type=str, default="e2e_benchmark_report.md", help="Path to write Markdown report")
+    parser.add_argument("--allow-debug-build", action="store_true", help="Skip the Release-build check (numbers will not reflect real-time performance)")
     return parser.parse_args()
+
+# Detects a Debug/_GLIBCXX_DEBUG binary, which is 5-50x slower than Release and would
+# silently produce misleading real-time-speedup numbers.
+def check_release_build(project_root, receiver_binary):
+    cache_path = os.path.join(project_root, "build", "CMakeCache.txt")
+    build_type = None
+    if os.path.exists(cache_path):
+        with open(cache_path) as f:
+            for line in f:
+                if line.startswith("CMAKE_BUILD_TYPE:"):
+                    build_type = line.strip().split("=", 1)[-1]
+                    break
+
+    debug_symbol_present = False
+    with open(receiver_binary, "rb") as f:
+        debug_symbol_present = b"__glibcxx_assert_fail" in f.read()
+
+    if debug_symbol_present or (build_type and build_type != "Release"):
+        print("=========================================================", file=sys.stderr)
+        print("WARNING: build/Source/GPSOpenCl does not look like a Release build.", file=sys.stderr)
+        if build_type:
+            print(f"  CMAKE_BUILD_TYPE cache entry: '{build_type}'", file=sys.stderr)
+        if debug_symbol_present:
+            print("  Binary contains __glibcxx_assert_fail (libstdc++ debug-mode instrumentation).", file=sys.stderr)
+        print("  Benchmark numbers from a Debug/_GLIBCXX_DEBUG binary understate real-time", file=sys.stderr)
+        print("  performance by 5-50x and must not be used to judge algorithm speed.", file=sys.stderr)
+        print("  Rebuild with: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build", file=sys.stderr)
+        print("=========================================================", file=sys.stderr)
+        sys.exit(1)
 
 def main():
     args = parse_args()
@@ -38,6 +68,9 @@ def main():
     if not os.path.exists(receiver_binary):
         print(f"Error: GPSOpenCl binary not found at {receiver_binary}. Please build the project first.", file=sys.stderr)
         sys.exit(1)
+
+    if not args.allow_debug_build:
+        check_release_build(project_root, receiver_binary)
 
     print("=========================================================")
     print("   GPSOpenCl End-to-End Simulation & Profiling Suite     ")
@@ -72,7 +105,7 @@ def main():
     # Step 2: Run GPSOpenCl Software Receiver
     print("\n[Step 2/2] Running GPSOpenCl Software Receiver Pipeline...")
     t_rx_start = time.time()
-    rx_proc = subprocess.run([receiver_binary], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, cwd=project_root)
+    rx_proc = subprocess.run([receiver_binary, sim_output_bin], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, cwd=project_root)
     t_rx_end = time.time()
     rx_wall_time = t_rx_end - t_rx_start
 

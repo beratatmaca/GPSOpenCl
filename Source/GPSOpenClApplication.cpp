@@ -5,6 +5,7 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#include <thread>
 
 using namespace GPSOpenCl;
 
@@ -33,10 +34,12 @@ Application::Application(Settings::Configuration conf)
     m_pvtSolver.setIonosphericParams(conf.atmosphericInput);
 
     initializeChannels();
+    startWorkerPool();
 }
 
 Application::~Application()
 {
+    stopWorkerPool();
     delete m_gpu;
     delete m_acquisition;
     delete m_tracking;
@@ -91,14 +94,124 @@ void Application::searchForSatellites(const ComplexFloatVector &input)
     }
 }
 
-void Application::trackSatellites(const ComplexFloatVector &input)
+void Application::trackChannelRange(const ComplexFloatVector &input, int startIdx, int endIdx)
 {
-    for (int i = 0; i < GPS_CA_SV_COUNT; i++)
+    for (int i = startIdx; i < endIdx; i++)
     {
         if (m_channels[i].isTrackingLoopActive())
         {
-            m_channels[i].trackBlock(input);
+            try
+            {
+                m_channels[i].trackBlock(input);
+            }
+            catch (const std::exception &e)
+            {
+                std::cerr << "Channel " << m_channels[i].m_svId << " tracking threw: " << e.what() << std::endl;
+            }
         }
+    }
+}
+
+void Application::workerLoop(int workerIndex)
+{
+    int lastSeenGeneration = 0;
+    int channelsPerWorker = (GPS_CA_SV_COUNT + m_numWorkers - 1) / m_numWorkers;
+    int startIdx = workerIndex * channelsPerWorker;
+    int endIdx = std::min(startIdx + channelsPerWorker, GPS_CA_SV_COUNT);
+
+    while (true)
+    {
+        std::unique_lock<std::mutex> lock(m_poolMutex);
+        m_startCv.wait(lock, [&] { return m_shutdownWorkers || m_generation != lastSeenGeneration; });
+        if (m_shutdownWorkers)
+        {
+            return;
+        }
+        lastSeenGeneration = m_generation;
+        const ComplexFloatVector *input = m_currentTrackInput;
+        lock.unlock();
+
+        trackChannelRange(*input, startIdx, endIdx);
+
+        lock.lock();
+        m_pendingWorkers--;
+        if (m_pendingWorkers == 0)
+        {
+            lock.unlock();
+            m_doneCv.notify_one();
+        }
+    }
+}
+
+void Application::startWorkerPool()
+{
+    unsigned int hw = std::thread::hardware_concurrency();
+    m_numWorkers = std::max(1, std::min(static_cast<int>(hw > 0 ? hw : 4), GPS_CA_SV_COUNT));
+    if (m_numWorkers <= 1)
+    {
+        m_numWorkers = 1;
+        return;
+    }
+
+    m_workers.reserve(static_cast<size_t>(m_numWorkers));
+    for (int i = 0; i < m_numWorkers; i++)
+    {
+        m_workers.emplace_back([this, i] { workerLoop(i); });
+    }
+}
+
+void Application::stopWorkerPool()
+{
+    if (m_workers.empty())
+    {
+        return;
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(m_poolMutex);
+        m_shutdownWorkers = true;
+    }
+    m_startCv.notify_all();
+
+    for (auto &worker : m_workers)
+    {
+        if (worker.joinable())
+        {
+            worker.join();
+        }
+    }
+    m_workers.clear();
+}
+
+void Application::trackSatellites(const ComplexFloatVector &input)
+{
+    if (m_numWorkers <= 1)
+    {
+        trackChannelRange(input, 0, GPS_CA_SV_COUNT);
+        return;
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(m_poolMutex);
+        m_currentTrackInput = &input;
+        m_pendingWorkers = m_numWorkers;
+        m_generation++;
+    }
+    m_startCv.notify_all();
+
+    std::unique_lock<std::mutex> lock(m_poolMutex);
+    m_doneCv.wait(lock, [&] { return m_pendingWorkers == 0; });
+}
+
+void Application::updateChannelNavigation()
+{
+    for (int i = 0; i < GPS_CA_SV_COUNT; i++)
+    {
+        if (!m_channels[i].isTrackingConfirmed())
+        {
+            continue;
+        }
+        m_channels[i].updateNavigation(m_navDecoder);
     }
 }
 
@@ -113,16 +226,7 @@ bool Application::computeNavigationSolution(ReceiverPvtSolution &solution)
 
     for (int i = 0; i < GPS_CA_SV_COUNT; i++)
     {
-        if (!m_channels[i].isTrackingConfirmed())
-        {
-            continue;
-        }
-
-
-
-
-        bool complete = m_channels[i].updateNavigation(m_navDecoder);
-        if (!complete)
+        if (!m_channels[i].isTrackingConfirmed() || !m_channels[i].hasCompleteEphemeris())
         {
             continue;
         }
@@ -270,6 +374,12 @@ void Application::processBlock(const ComplexFloatVector &input, uint32_t blockIn
         Profiler::ScopedTimer trackTimer(m_profiler, "tracking");
         trackSatellites(input);
     }
+    {
+        Profiler::ScopedTimer navTimer(m_profiler, "navDecode");
+        updateChannelNavigation();
+    }
+    int32_t fixOutputIntervalBlocks = m_configuration.pvtSolverInput.fixOutputIntervalBlocks;
+    if (fixOutputIntervalBlocks <= 0 || blockIndex % static_cast<uint32_t>(fixOutputIntervalBlocks) == 0)
     {
         Profiler::ScopedTimer pvtTimer(m_profiler, "pvtSolve");
         ReceiverPvtSolution solution;

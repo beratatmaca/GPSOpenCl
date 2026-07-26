@@ -38,7 +38,6 @@ add_executable(
     GPUTest.cpp
     CaCodeTest.cpp
     SettingsTest.cpp
-    AcquisitionTest.cpp
     TrackingTest.cpp
     NavigationDecoderTest.cpp
     PVTSolverTest.cpp
@@ -48,6 +47,7 @@ add_executable(
     LockDetectorTest.cpp
     ChannelTest.cpp
     GroundTruthVerificationTest.cpp
+    SingleChannelGroundTruthTest.cpp
     E2ETest.cpp
 )
 

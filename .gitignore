@@ -50,3 +50,4 @@ e2e_benchmark_report.md
 telemetry_stream.json
 __pycache__/
 *.pyc
+build_gpufork/

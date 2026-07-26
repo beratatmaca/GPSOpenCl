@@ -297,9 +297,14 @@ TEST(GroundTruthVerificationTest, FullEphemerisAndPvtMatchSimulatorTruth)
         return;
     }
 
+    // Subframes cycle 1-2-3-4-5 every 30s on a fixed GPS-time schedule shared by every satellite in
+    // the scenario. Since the scenario's start time is frame-aligned, subframe 1's preamble falls at
+    // the very first instant, before acquisition/confirm can lock on to catch it - every satellite
+    // misses it in the first cycle and only catches it ~30s later in the second. 45s reliably covers
+    // a full second cycle plus margin; 32s is not enough for any satellite to complete ephemeris.
     std::string iqFile = "ground_truth_iq_long.bin";
     std::string cmd = gpsSimBin + " -e " + navFile +
-                       " -l 48.1173,11.5167,545.4 -s 4096000 -b 8 -d 32 -o " + iqFile + " > /dev/null 2>&1";
+                       " -l 48.1173,11.5167,545.4 -s 4096000 -b 8 -d 45 -o " + iqFile + " > /dev/null 2>&1";
     int sysRet = std::system(cmd.c_str());
     ASSERT_EQ(sysRet, 0);
 

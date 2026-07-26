@@ -255,6 +255,19 @@ void Settings::updateConfigurationStruct()
             std::cerr << "Invalid FllPullInBlocks value in config, using default." << std::endl;
         }
     }
+
+    if (m_configurationMap["FixOutputIntervalBlocks"] != "")
+    {
+        try
+        {
+            configuration.pvtSolverInput.fixOutputIntervalBlocks =
+                std::stoi(m_configurationMap["FixOutputIntervalBlocks"]);
+        }
+        catch (const std::exception &)
+        {
+            std::cerr << "Invalid FixOutputIntervalBlocks value in config, using default." << std::endl;
+        }
+    }
 }
 
 

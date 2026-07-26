@@ -28,6 +28,5 @@ void FileSink::publish(const std::string &identifier, const void *data, size_t s
     m_file.write(identifier.data(), nameLen);
     m_file.write(reinterpret_cast<const char *>(&dataLen), sizeof(dataLen));
     m_file.write(reinterpret_cast<const char *>(data), size);
-    m_file.flush();
 }
 }

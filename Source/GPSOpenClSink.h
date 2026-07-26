@@ -7,13 +7,16 @@
 
 #include <cstddef>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 #include "GPSOpenClStructs.h"
 
 namespace GPSOpenCl
 {
-/** @brief Abstract telemetry output interface. */
+/** @brief Abstract telemetry output interface. Publish calls are serialized by this base class,
+ *   so concrete implementations (including test doubles) don't each need their own locking even
+ *   when multiple satellite channels publish concurrently from the tracking worker pool. */
 class Sink
 {
   public:
@@ -29,6 +32,7 @@ class Sink
      *  @param out Source output struct. */
     void publishSourceOutput(const SourceOutput &out)
     {
+        std::lock_guard<std::mutex> lock(m_publishMutex);
         publish("SourceOutput", &out, sizeof(out));
     }
 
@@ -36,6 +40,7 @@ class Sink
      *  @param out Acquisition output struct. */
     void publishAcquisitionOutput(const AcquisitionOutput &out)
     {
+        std::lock_guard<std::mutex> lock(m_publishMutex);
         publish("AcquisitionOutput", &out, sizeof(out));
     }
 
@@ -43,6 +48,7 @@ class Sink
      *  @param out Tracking output struct. */
     void publishTrackingOutput(const TrackingOutput &out)
     {
+        std::lock_guard<std::mutex> lock(m_publishMutex);
         publish("TrackingOutput", &out, sizeof(out));
     }
 
@@ -50,6 +56,7 @@ class Sink
      *  @param out Nav decoder output struct. */
     void publishNavDecoderOutput(const NavDecoderOutput &out)
     {
+        std::lock_guard<std::mutex> lock(m_publishMutex);
         publish("NavDecoderOutput", &out, sizeof(out));
     }
 
@@ -57,6 +64,7 @@ class Sink
      *  @param out PVT solver output struct. */
     void publishPvtSolverOutput(const PvtSolverOutput &out)
     {
+        std::lock_guard<std::mutex> lock(m_publishMutex);
         publish("PvtSolverOutput", &out, sizeof(out));
     }
 
@@ -64,6 +72,7 @@ class Sink
      *  @param out Atmospheric output struct. */
     void publishAtmosphericOutput(const AtmosphericOutput &out)
     {
+        std::lock_guard<std::mutex> lock(m_publishMutex);
         publish("AtmosphericOutput", &out, sizeof(out));
     }
 
@@ -71,6 +80,7 @@ class Sink
      *  @param out NMEA output struct. */
     void publishNmeaGeneratorOutput(const NmeaGeneratorOutput &out)
     {
+        std::lock_guard<std::mutex> lock(m_publishMutex);
         publish("NmeaGeneratorOutput", &out, sizeof(out));
     }
 
@@ -78,8 +88,12 @@ class Sink
      *  @param out Profiler output struct. */
     void publishProfilerOutput(const ProfilerOutput &out)
     {
+        std::lock_guard<std::mutex> lock(m_publishMutex);
         publish("ProfilerOutput", &out, sizeof(out));
     }
+
+  private:
+    std::mutex m_publishMutex; ///< Serializes publish() calls across concurrent callers.
 };
 
 /** @brief No-op sink that discards all telemetry. */
