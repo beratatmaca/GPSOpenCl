@@ -393,18 +393,15 @@ bool NavigationDecoder::decodeAtPhaseOffset(int svId, const ComplexFloatVector &
             raw = (raw << 1) | (bitAt(wordStartBit + b) ? 1u : 0u);
         }
 
-        if (!checkParity(raw, prevD29, prevD30))
+        const uint32_t dataBitsMask = 0x3FFFFFC0u;
+        uint32_t dataWord = prevD30 ? (raw ^ dataBitsMask) : raw;
+
+        if (!checkParity(dataWord, prevD29, prevD30))
         {
             bitOffset = preambleIdx + 1;
             return false;
         }
 
-        uint32_t dataWord = raw;
-        if (prevD30)
-        {
-            const uint32_t dataBitsMask = 0x3FFFFFC0u;
-            dataWord = raw ^ dataBitsMask;
-        }
         words[w] = dataWord;
 
         prevD29 = ((raw >> 1) & 1u) != 0;
@@ -511,17 +508,14 @@ bool NavigationDecoder::tryDecodeAtBitPosition(int svId, const ComplexFloatVecto
             raw = (raw << 1) | (bitAt(wordStartBit + static_cast<size_t>(b)) ? 1u : 0u);
         }
 
-        if (!checkParity(raw, prevD29, prevD30))
+        const uint32_t dataBitsMask = 0x3FFFFFC0u;
+        uint32_t dataWord = prevD30 ? (raw ^ dataBitsMask) : raw;
+
+        if (!checkParity(dataWord, prevD29, prevD30))
         {
             return false;
         }
 
-        uint32_t dataWord = raw;
-        if (prevD30)
-        {
-            const uint32_t dataBitsMask = 0x3FFFFFC0u;
-            dataWord = raw ^ dataBitsMask;
-        }
         words[static_cast<size_t>(w)] = dataWord;
 
         prevD29 = ((raw >> 1) & 1u) != 0;

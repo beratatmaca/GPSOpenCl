@@ -157,9 +157,8 @@ static std::vector<uint32_t> buildValidSubframe(const std::vector<uint32_t> &sem
     bool prevD30 = false;
     for (int w = 0; w < 10; w++)
     {
-        uint32_t transmitted = prevD30 ? (semanticWords30[static_cast<size_t>(w)] ^ 0x3FFFFFC0u)
-                                        : semanticWords30[static_cast<size_t>(w)];
-        raw[static_cast<size_t>(w)] = buildParityWord(transmitted, prevD29, prevD30);
+        uint32_t withParity = buildParityWord(semanticWords30[static_cast<size_t>(w)], prevD29, prevD30);
+        raw[static_cast<size_t>(w)] = prevD30 ? (withParity ^ 0x3FFFFFC0u) : withParity;
         prevD29 = ((raw[static_cast<size_t>(w)] >> 1) & 1u) != 0;
         prevD30 = (raw[static_cast<size_t>(w)] & 1u) != 0;
     }
