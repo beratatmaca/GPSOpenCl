@@ -376,11 +376,11 @@ bool Tracking::isPromptSignalReliable()
 
 void Tracking::rateAidDiscriminator()
 {
-    float fllError = computeFllError();
-    m_carrFreqBasis += fllError * m_rateAidGain;
-
-    m_ipPrev = m_Ip;
-    m_qpPrev = m_Qp;
+    float bleed = m_rateAidGain * m_carrNco;
+    m_carrFreqBasis += bleed;
+    m_carrFreqBasis = std::clamp(m_carrFreqBasis, -15000.0f, 15000.0f);
+    m_carrNco -= bleed;
+    m_carrNcoPrev = m_carrNco;
 }
 
 void Tracking::freqDiscriminator()
@@ -402,6 +402,9 @@ void Tracking::freqDiscriminator()
 
     m_carrNcoPrev = m_carrNco;
     m_carrErrorPrev = m_carrError;
+
+    m_ipPrev = m_Ip;
+    m_qpPrev = m_Qp;
 
     m_carrFreq = m_carrFreqBasis + m_carrNco;
 }

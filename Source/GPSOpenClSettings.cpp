@@ -185,6 +185,66 @@ void Settings::updateConfigurationStruct()
             std::cerr << "Invalid AcquisitionDopplerSearchRange value in config, using default." << std::endl;
         }
     }
+
+    if (m_configurationMap["PllBandwidthHz"] != "")
+    {
+        try
+        {
+            configuration.trackingInput.pllBandwidthHz = std::stod(m_configurationMap["PllBandwidthHz"]);
+        }
+        catch (const std::exception &)
+        {
+            std::cerr << "Invalid PllBandwidthHz value in config, using default." << std::endl;
+        }
+    }
+
+    if (m_configurationMap["DllBandwidthHz"] != "")
+    {
+        try
+        {
+            configuration.trackingInput.dllBandwidthHz = std::stod(m_configurationMap["DllBandwidthHz"]);
+        }
+        catch (const std::exception &)
+        {
+            std::cerr << "Invalid DllBandwidthHz value in config, using default." << std::endl;
+        }
+    }
+
+    if (m_configurationMap["FllBandwidthHz"] != "")
+    {
+        try
+        {
+            configuration.trackingInput.fllBandwidthHz = std::stod(m_configurationMap["FllBandwidthHz"]);
+        }
+        catch (const std::exception &)
+        {
+            std::cerr << "Invalid FllBandwidthHz value in config, using default." << std::endl;
+        }
+    }
+
+    if (m_configurationMap["RateAidBandwidthHz"] != "")
+    {
+        try
+        {
+            configuration.trackingInput.rateAidBandwidthHz = std::stod(m_configurationMap["RateAidBandwidthHz"]);
+        }
+        catch (const std::exception &)
+        {
+            std::cerr << "Invalid RateAidBandwidthHz value in config, using default." << std::endl;
+        }
+    }
+
+    if (m_configurationMap["FllPullInBlocks"] != "")
+    {
+        try
+        {
+            configuration.trackingInput.fllPullInBlocks = std::stoi(m_configurationMap["FllPullInBlocks"]);
+        }
+        catch (const std::exception &)
+        {
+            std::cerr << "Invalid FllPullInBlocks value in config, using default." << std::endl;
+        }
+    }
 }
 
 

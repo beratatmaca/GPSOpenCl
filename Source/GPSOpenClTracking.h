@@ -15,7 +15,7 @@
 
 namespace GPSOpenCl
 {
-/** @brief Code and carrier tracking engine (2nd-order PLL + DLL). */
+/** @brief Code and carrier tracking engine (FLL-assisted 3rd-order PLL + DLL). */
 class Tracking
 {
   public:
@@ -99,8 +99,10 @@ class Tracking
     /** @brief Compute FLL-assisted pull-in frequency discriminator. */
     void fllDiscriminator();
 
-    /** @brief Continuously nudge the carrier basis to absorb slow Doppler rate, so the PLL only
-     *   ever has to correct a small residual instead of the whole ongoing ramp. */
+    /** @brief Transfer a fraction of the settled PLL NCO into the carrier frequency basis,
+     *   re-centering the NCO without creating a second independent integrator.
+     *   m_rateAidGain controls the bleed fraction per block; m_carrFreqBasis is clamped
+     *   to ±15 kHz to bound long-term drift. */
     void rateAidDiscriminator();
 
     /** @brief Compute PLL frequency discriminator. */

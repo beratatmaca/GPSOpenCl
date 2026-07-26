@@ -152,6 +152,7 @@ class Channel
     std::shared_ptr<Sink> m_sink{nullptr};///< Telemetry sink.
     ComplexFloatVector m_promptHistory;   ///< Prompt correlator history.
 
+    int m_bitSyncPhase;                   ///< Locked sample-level bit-edge phase, 0-19 (-1 = not yet synced).
     size_t m_navBitOffset;                ///< Current nav bit offset.
     uint8_t m_seenSubframeMask;           ///< Bitmask of decoded subframes.
     GpsEphemeris m_accumulatedEphemeris;  ///< Accumulated ephemeris data.

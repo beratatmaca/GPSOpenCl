@@ -18,6 +18,7 @@ Channel::Channel()
       m_acquisitionProcessingGain(10.0 * std::log10(GPS_CA_CODE_FREQUENCY_HZ / GPS_CA_CODE_LENGTH)),
       m_isAcquired(false),
       m_tracking(nullptr),
+      m_bitSyncPhase(-1),
       m_navBitOffset(0),
       m_seenSubframeMask(0),
       m_accumulatedEphemeris(),
@@ -126,6 +127,7 @@ void Channel::initTracking(const Settings::Configuration &conf, float dopplerHz,
 void Channel::resetNavigationState()
 {
     m_promptHistory.clear();
+    m_bitSyncPhase = -1;
     m_navBitOffset = 0;
     m_seenSubframeMask = 0;
     m_accumulatedEphemeris = GpsEphemeris();
@@ -210,7 +212,7 @@ bool Channel::updateNavigation(NavigationDecoder &decoder)
 {
     GpsEphemeris ephem = GpsEphemeris();
     size_t subframeStartSample = 0;
-    if (!decoder.processPromptSignal(m_svId, m_promptHistory, m_navBitOffset, ephem, subframeStartSample))
+    if (!decoder.processPromptSignal(m_svId, m_promptHistory, m_bitSyncPhase, m_navBitOffset, ephem, subframeStartSample))
     {
         return hasCompleteEphemeris();
     }

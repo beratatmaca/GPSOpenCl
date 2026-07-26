@@ -116,21 +116,23 @@ class NavigationDecoder
     /** @brief Process prompt signal and decode subframe into ephemeris.
      *  @param svId                Satellite vehicle ID.
      *  @param promptHistory       Accumulated Prompt I samples.
-     *  @param bitOffset           Current bit offset (in/out).
+     *  @param bitSyncPhase        Locked sample-level bit-edge phase, 0-19 (in/out, -1 = not yet synced).
+     *  @param bitOffset           Current bit offset within the phase-aligned bit stream (in/out).
      *  @param ephem               Output ephemeris.
      *  @param subframeStartSample Subframe start sample index (output).
      *  @return True if subframe decoded. */
-    bool processPromptSignal(int svId, const ComplexFloatVector &promptHistory, size_t &bitOffset,
+    bool processPromptSignal(int svId, const ComplexFloatVector &promptHistory, int &bitSyncPhase, size_t &bitOffset,
                              GpsEphemeris &ephem, size_t &subframeStartSample);
 
     /** @brief Process prompt signal and decode subframe into output struct.
      *  @param svId                Satellite vehicle ID.
      *  @param promptHistory       Accumulated Prompt I samples.
-     *  @param bitOffset           Current bit offset (in/out).
+     *  @param bitSyncPhase        Locked sample-level bit-edge phase, 0-19 (in/out, -1 = not yet synced).
+     *  @param bitOffset           Current bit offset within the phase-aligned bit stream (in/out).
      *  @param output              Output struct.
      *  @param subframeStartSample Subframe start sample index (output).
      *  @return True if subframe decoded. */
-    bool processPromptSignal(int svId, const ComplexFloatVector &promptHistory, size_t &bitOffset,
+    bool processPromptSignal(int svId, const ComplexFloatVector &promptHistory, int &bitSyncPhase, size_t &bitOffset,
                              NavDecoderOutput &output, size_t &subframeStartSample);
 
     /** @brief Set telemetry sink.
@@ -149,6 +151,17 @@ class NavigationDecoder
     /** @brief Decode Subframe 4 Page 18 ionospheric/UTC alpha/beta coefficients if present.
      *  @param words30bit Vector of 10 parity-checked 30-bit words. */
     void decodeIonosphericParams(const std::vector<uint32_t> &words30bit);
+
+    /** @brief Search for and parity-validate one subframe at a fixed sample-level bit-edge phase.
+     *  @param svId                Satellite vehicle ID.
+     *  @param promptHistory       Accumulated Prompt I samples.
+     *  @param phase               Sample-level bit-edge phase to demodulate at, 0-19.
+     *  @param bitOffset           Bit offset within the phase-aligned bit stream (in/out).
+     *  @param ephem               Output ephemeris.
+     *  @param subframeStartSample Subframe start sample index (output).
+     *  @return True if a parity-valid subframe decoded at this phase. */
+    bool decodeAtPhaseOffset(int svId, const ComplexFloatVector &promptHistory, int phase, size_t &bitOffset,
+                             GpsEphemeris &ephem, size_t &subframeStartSample);
 
     NavDecoderInput m_inputConfig;            ///< Decoder parameters.
     std::shared_ptr<Sink> m_sink{nullptr};    ///< Telemetry sink.

@@ -329,17 +329,20 @@ void NavigationDecoder::decodeIonosphericParams(const std::vector<uint32_t> &wor
     m_hasIonoParams = true;
 }
 
-bool NavigationDecoder::processPromptSignal(int svId, const ComplexFloatVector &promptHistory, size_t &bitOffset,
-                                            GpsEphemeris &ephem, size_t &subframeStartSample)
+bool NavigationDecoder::decodeAtPhaseOffset(int svId, const ComplexFloatVector &promptHistory, int phase,
+                                            size_t &bitOffset, GpsEphemeris &ephem, size_t &subframeStartSample)
 {
-    ephem.svId = svId;
-    ephem.isValid = false;
+    size_t phaseBase = static_cast<size_t>(phase);
+    if (phaseBase > promptHistory.size())
+    {
+        return false;
+    }
 
-    size_t startSample = bitOffset * 20;
+    size_t startSample = phaseBase + bitOffset * 20;
     if (startSample > promptHistory.size())
     {
-        startSample = 0;
         bitOffset = 0;
+        startSample = phaseBase;
     }
 
     ComplexFloatVector slicedHistory(promptHistory.begin() + startSample, promptHistory.end());
@@ -368,8 +371,6 @@ bool NavigationDecoder::processPromptSignal(int svId, const ComplexFloatVector &
         bool v = newBits[relIdx];
         return inverted ? !v : v;
     };
-
-
 
     bool prevD29 = false;
     bool prevD30 = false;
@@ -407,10 +408,48 @@ bool NavigationDecoder::processPromptSignal(int svId, const ComplexFloatVector &
         prevD30 = (raw & 1u) != 0;
     }
 
-    subframeStartSample = preambleIdx * 20;
+    subframeStartSample = phaseBase + preambleIdx * 20;
     bitOffset = preambleIdx + 300;
 
-    bool decoded = decodeSubframe(words, ephem);
+    ephem.svId = svId;
+    return decodeSubframe(words, ephem);
+}
+
+bool NavigationDecoder::processPromptSignal(int svId, const ComplexFloatVector &promptHistory, int &bitSyncPhase,
+                                            size_t &bitOffset, GpsEphemeris &ephem, size_t &subframeStartSample)
+{
+    ephem.svId = svId;
+    ephem.isValid = false;
+
+    bool decoded = false;
+
+    if (bitSyncPhase >= 0)
+    {
+        decoded = decodeAtPhaseOffset(svId, promptHistory, bitSyncPhase, bitOffset, ephem, subframeStartSample);
+    }
+    else
+    {
+        for (int phase = 0; phase < 20 && !decoded; phase++)
+        {
+            size_t trialOffset = 0;
+            for (;;)
+            {
+                size_t beforeOffset = trialOffset;
+                decoded = decodeAtPhaseOffset(svId, promptHistory, phase, trialOffset, ephem, subframeStartSample);
+                if (decoded)
+                {
+                    bitSyncPhase = phase;
+                    bitOffset = trialOffset;
+                    break;
+                }
+                if (trialOffset == beforeOffset)
+                {
+                    break;
+                }
+            }
+        }
+    }
+
     if (decoded && m_sink)
     {
         m_sink->publishNavDecoderOutput(ephemerisToOutput(ephem));
@@ -418,11 +457,11 @@ bool NavigationDecoder::processPromptSignal(int svId, const ComplexFloatVector &
     return decoded;
 }
 
-bool NavigationDecoder::processPromptSignal(int svId, const ComplexFloatVector &promptHistory, size_t &bitOffset,
-                                           NavDecoderOutput &output, size_t &subframeStartSample)
+bool NavigationDecoder::processPromptSignal(int svId, const ComplexFloatVector &promptHistory, int &bitSyncPhase,
+                                           size_t &bitOffset, NavDecoderOutput &output, size_t &subframeStartSample)
 {
     GpsEphemeris ephem{};
-    bool res = processPromptSignal(svId, promptHistory, bitOffset, ephem, subframeStartSample);
+    bool res = processPromptSignal(svId, promptHistory, bitSyncPhase, bitOffset, ephem, subframeStartSample);
     if (res)
     {
         output = ephemerisToOutput(ephem);
