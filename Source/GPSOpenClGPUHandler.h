@@ -82,6 +82,6 @@ class GpuHandler
 
     std::string GPSOpenClTrackingKernelCharList[TrackingKernelCount]{"ncoMultiplicate"};
 };
-} // namespace GPSOpenCl
+}
 
-#endif //! INCLUDED_GPSOPENCL_GPUHANDLER_H
+#endif

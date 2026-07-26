@@ -132,6 +132,6 @@ class NmeaGenerator
   private:
     NmeaGeneratorInput m_inputConfig; ///< Generator enable flags.
 };
-} // namespace GPSOpenCl
+}
 
-#endif //! INCLUDED_GPSOPENCL_NMEAGENERATOR_H
+#endif

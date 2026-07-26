@@ -58,6 +58,6 @@ class Acquisition
     int m_length;                                   ///< Samples per code period.
     float m_samplingFrequency;                      ///< Sampling rate (Hz).
 };
-} // namespace GPSOpenCl
+}
 
-#endif //! INCLUDED_GPSOPENCL_ACQUISITION_H
+#endif

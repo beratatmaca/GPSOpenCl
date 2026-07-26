@@ -152,6 +152,6 @@ class NavigationDecoder
     AtmosphericInput m_ionoParams{};          ///< Decoded broadcast Klobuchar coefficients.
     bool m_hasIonoParams{false};              ///< True once Subframe 4 Page 18 is decoded.
 };
-} // namespace GPSOpenCl
+}
 
-#endif //! INCLUDED_GPSOPENCL_NAVIGATIONDECODER_H
+#endif

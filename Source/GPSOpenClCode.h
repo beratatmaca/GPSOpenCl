@@ -47,6 +47,6 @@ class Code
     int m_sampleLength;            ///< Samples per code period.
     float m_samplingFrequencyHz;   ///< Sampling rate (Hz).
 };
-} // namespace GPSOpenCl
+}
 
-#endif //! INCLUDED_GPSOPENCL_CODE_H
+#endif

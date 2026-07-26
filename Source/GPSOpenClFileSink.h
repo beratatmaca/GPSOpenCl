@@ -31,6 +31,6 @@ class FileSink : public Sink
     std::ofstream m_file;  ///< Output file stream.
     std::mutex m_mutex;    ///< Write mutex.
 };
-} // namespace GPSOpenCl
+}
 
-#endif //! INCLUDED_GPSOPENCL_FILESINK_H
+#endif

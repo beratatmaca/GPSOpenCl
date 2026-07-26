@@ -70,6 +70,6 @@ class Settings
     std::string m_confFileName;                          ///< Config file path.
     std::map<std::string, std::string> m_configurationMap; ///< Parsed key-value pairs.
 };
-} // namespace GPSOpenCl
+}
 
-#endif //! INCLUDED_GPSOPENCL_SETTINGS_H
+#endif

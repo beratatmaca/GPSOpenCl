@@ -80,6 +80,6 @@ class Profiler
     std::chrono::high_resolution_clock::time_point m_blockStart{};  ///< Block start time.
     std::shared_ptr<Sink> m_sink{nullptr};                          ///< Telemetry sink.
 };
-} // namespace GPSOpenCl
+}
 
-#endif //! INCLUDED_GPSOPENCL_PROFILER_H
+#endif

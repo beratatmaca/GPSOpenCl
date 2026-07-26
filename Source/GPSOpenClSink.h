@@ -116,6 +116,6 @@ class CompositeSink : public Sink
     std::vector<std::shared_ptr<Sink>> m_sinks; ///< Downstream sinks.
 };
 
-} // namespace GPSOpenCl
+}
 
-#endif //! INCLUDED_GPSOPENCL_SINK_H
+#endif

@@ -71,6 +71,10 @@ std::string NmeaGenerator::appendChecksum(const std::string &sentenceBody)
 
 std::string NmeaGenerator::formatLatitude(double latDegrees)
 {
+    if (!std::isfinite(latDegrees))
+    {
+        return "0000.0000,N";
+    }
     char hemisphere = (latDegrees >= 0.0) ? 'N' : 'S';
     double absLat = std::fabs(latDegrees);
     int degrees = static_cast<int>(absLat);
@@ -83,6 +87,10 @@ std::string NmeaGenerator::formatLatitude(double latDegrees)
 
 std::string NmeaGenerator::formatLongitude(double lonDegrees)
 {
+    if (!std::isfinite(lonDegrees))
+    {
+        return "00000.0000,E";
+    }
     char hemisphere = (lonDegrees >= 0.0) ? 'E' : 'W';
     double absLon = std::fabs(lonDegrees);
     int degrees = static_cast<int>(absLon);

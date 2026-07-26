@@ -43,6 +43,6 @@ class GpsSdrSimSource : public Source
     uint32_t m_underrunCount{0};    ///< FIFO underrun count.
     uint32_t m_overrunCount{0};     ///< FIFO overrun count.
 };
-} // namespace GPSOpenCl
+}
 
-#endif //! INCLUDED_GPSOPENCL_GPSSDRSIMSOURCE_H
+#endif

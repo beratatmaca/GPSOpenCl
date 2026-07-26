@@ -122,6 +122,6 @@ class PVTSolver
     PvtSolverInput m_inputConfig;     ///< Solver parameters.
     AtmosphericInput m_ionoParams{};  ///< Broadcast Klobuchar coefficients (zero until decoded).
 };
-} // namespace GPSOpenCl
+}
 
-#endif //! INCLUDED_GPSOPENCL_PVTSOLVER_H
+#endif

@@ -76,6 +76,6 @@ class Compute
     cl_int m_error;                         ///< Last OpenCL error.
     std::vector<float> m_allocatedMemory;   ///< Scratch memory buffer.
 };
-} // namespace GPSOpenCl
+}
 
-#endif //! INCLUDED_GPSOPENCL_COMPUTE_H
+#endif

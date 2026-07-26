@@ -24,6 +24,6 @@ class LockDetector
      *  @return Value near 1.0 when code phase is correctly aligned. */
     static double codeLockRatio(double Ie, double Ip, double Il);
 };
-} // namespace GPSOpenCl
+}
 
-#endif //! INCLUDED_GPSOPENCL_LOCKDETECTOR_H
+#endif

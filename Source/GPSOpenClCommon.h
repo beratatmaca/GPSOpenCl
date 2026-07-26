@@ -45,6 +45,6 @@ inline const std::string SOFTWARE_NAME = "GPSOpenCl";
 
 /** @brief Software version string. */
 inline const std::string SOFTWARE_VERSION = "v0.0.1";
-} // namespace GPSOpenCl
+}
 
-#endif //! INCLUDED_GPSOPENCL_COMMON_H
+#endif

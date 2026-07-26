@@ -168,5 +168,5 @@ class Tracking
     float m_codeLockEma;                      ///< Smoothed code lock ratio.
     uint32_t m_lastChannelState;              ///< Owning channel's state, for telemetry.
 };
-} // namespace GPSOpenCl
-#endif //! INCLUDED_GPSOPENCL_TRACKING_H
+}
+#endif

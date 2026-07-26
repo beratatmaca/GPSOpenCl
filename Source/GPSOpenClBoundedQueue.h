@@ -65,6 +65,6 @@ class BoundedQueue
     std::condition_variable m_cvPop;     ///< Pop condition variable.
     bool m_finished;                     ///< Finished flag.
 };
-} // namespace GPSOpenCl
+}
 
-#endif //! INCLUDED_GPSOPENCL_BOUNDEDQUEUE_H
+#endif

@@ -281,10 +281,24 @@ int Compute::complexMultiplier(const ComplexFloatVector &input1, const ComplexFl
 
         cl_kernel complexMultiplierKernel = m_gpu.m_acquisitionKernelList[GpuHandler::ComplexMultiplier];
         d_a = clCreateBuffer(m_gpu.m_context, CL_MEM_READ_WRITE, 2 * length * sizeof(float), NULL, &m_error);
+        if (m_error != CL_SUCCESS)
+        {
+            goto complexMultiplierCpuFallback;
+        }
         d_b = clCreateBuffer(m_gpu.m_context, CL_MEM_READ_WRITE, 2 * length * sizeof(float), NULL, &m_error);
+        if (m_error != CL_SUCCESS)
+        {
+            clReleaseMemObject(d_a);
+            goto complexMultiplierCpuFallback;
+        }
         d_c = clCreateBuffer(m_gpu.m_context, CL_MEM_READ_WRITE, 2 * length * sizeof(float), NULL, &m_error);
+        if (m_error != CL_SUCCESS)
+        {
+            clReleaseMemObject(d_a);
+            clReleaseMemObject(d_b);
+            goto complexMultiplierCpuFallback;
+        }
 
-        if (m_error == CL_SUCCESS)
         {
             clEnqueueWriteBuffer(m_queue, d_a, CL_TRUE, 0, 2 * length * sizeof(float), m_allocatedMemory.data(), 0, NULL, NULL);
             clEnqueueWriteBuffer(m_queue, d_b, CL_TRUE, 0, 2 * length * sizeof(float), &m_allocatedMemory[2 * length], 0, NULL, NULL);
@@ -341,6 +355,7 @@ int Compute::complexMultiplier(const ComplexFloatVector &input1, const ComplexFl
             clReleaseMemObject(d_b);
             clReleaseMemObject(d_c);
         }
+        complexMultiplierCpuFallback:;
     }
 
 
@@ -381,9 +396,17 @@ int Compute::absolute(const ComplexFloatVector &input1, FloatVector *output)
 
         cl_kernel absoluteKernel = m_gpu.m_acquisitionKernelList[GpuHandler::Absolute];
         d_a = clCreateBuffer(m_gpu.m_context, CL_MEM_READ_WRITE, 2 * length * sizeof(float), NULL, &m_error);
+        if (m_error != CL_SUCCESS)
+        {
+            goto absoluteCpuFallback;
+        }
         d_c = clCreateBuffer(m_gpu.m_context, CL_MEM_READ_WRITE, 2 * length * sizeof(float), NULL, &m_error);
+        if (m_error != CL_SUCCESS)
+        {
+            clReleaseMemObject(d_a);
+            goto absoluteCpuFallback;
+        }
 
-        if (m_error == CL_SUCCESS)
         {
             clEnqueueWriteBuffer(m_queue, d_a, CL_TRUE, 0, 2 * length * sizeof(float), m_allocatedMemory.data(), 0, NULL, NULL);
 
@@ -410,11 +433,6 @@ int Compute::absolute(const ComplexFloatVector &input1, FloatVector *output)
                     clSetKernelArg(absoluteKernel, 1, sizeof(cl_mem), &d_c);
                     clSetKernelArg(absoluteKernel, 2, sizeof(unsigned int), &points_per_group);
 
-
-
-
-
-
                     global_size = (length / points_per_group) * local_size;
                     m_error = clEnqueueNDRangeKernel(m_queue, absoluteKernel, 1, NULL, &global_size, &local_size, 0, NULL, NULL);
 
@@ -439,6 +457,7 @@ int Compute::absolute(const ComplexFloatVector &input1, FloatVector *output)
             clReleaseMemObject(d_a);
             clReleaseMemObject(d_c);
         }
+        absoluteCpuFallback:;
     }
 
 

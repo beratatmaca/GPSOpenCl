@@ -93,6 +93,6 @@ class AtmosphericCorrections
   private:
     AtmosphericInput m_inputConfig; ///< Klobuchar coefficients.
 };
-} // namespace GPSOpenCl
+}
 
-#endif //! INCLUDED_GPSOPENCL_ATMOSPHERICCORRECTIONS_H
+#endif

@@ -88,6 +88,6 @@ class Application
     std::shared_ptr<Source> m_source{nullptr}; ///< Sample source.
     Profiler m_profiler;                     ///< Processing time profiler.
 };
-} // namespace GPSOpenCl
+}
 
-#endif //! INCLUDED_GPSOPENCL_APPLICATION_H
+#endif

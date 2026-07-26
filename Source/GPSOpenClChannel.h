@@ -168,6 +168,6 @@ class Channel
     int m_confirmTimeoutBlocks;           ///< Blocks before abandoning an unconfirmed acquisition.
     int m_lossDebounceBlocks;             ///< Bad blocks needed to declare lock lost.
 };
-} // namespace GPSOpenCl
+}
 
-#endif //! INCLUDED_GPSOPENCL_CHANNEL_H
+#endif

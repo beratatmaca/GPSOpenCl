@@ -223,6 +223,6 @@ struct ProfilerOutput
 
 #pragma pack(pop)
 
-} // namespace GPSOpenCl
+}
 
-#endif //! INCLUDED_GPSOPENCL_STRUCTS_H
+#endif

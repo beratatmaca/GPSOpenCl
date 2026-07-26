@@ -38,6 +38,6 @@ class ZmqSink : public Sink
     void *m_publisher{nullptr}; ///< ZMQ PUB socket.
 #endif
 };
-} // namespace GPSOpenCl
+}
 
-#endif //! INCLUDED_GPSOPENCL_ZMQSINK_H
+#endif

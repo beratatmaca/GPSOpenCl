@@ -38,6 +38,6 @@ class Source
   protected:
     std::shared_ptr<Sink> m_sink{nullptr}; ///< Telemetry sink.
 };
-} // namespace GPSOpenCl
+}
 
-#endif //! INCLUDED_GPSOPENCL_SOURCE_H
+#endif

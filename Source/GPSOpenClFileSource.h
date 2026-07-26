@@ -42,6 +42,6 @@ class FileSource : public Source
     size_t m_currentBlockIndex;        ///< Current block index.
     size_t m_samplesPerBlock;          ///< Samples per block.
 };
-} // namespace GPSOpenCl
+}
 
-#endif //! INCLUDED_GPSOPENCL_FILESOURCE_H
+#endif

@@ -239,7 +239,8 @@ bool NavigationDecoder::decodeSubframe(const std::vector<uint32_t> &words30bit, 
 
         ephem.Crs = extractSignedBits(w3, 9, 16) * std::pow(2.0, -5);
         ephem.deltaN = extractSignedBits(w4, 1, 16) * std::pow(2.0, -43) * M_PI;
-        int32_t m0Raw = (extractSignedBits(w4, 17, 8) << 24) | extractUnsignedBits(w5, 1, 24);
+        uint32_t m0RawU = (static_cast<uint32_t>(extractSignedBits(w4, 17, 8)) << 24) | extractUnsignedBits(w5, 1, 24);
+        int32_t m0Raw = static_cast<int32_t>(m0RawU);
         ephem.M0 = m0Raw * std::pow(2.0, -31) * M_PI;
         ephem.Cuc = extractSignedBits(w6, 1, 16) * std::pow(2.0, -29);
         uint32_t eRaw = (extractUnsignedBits(w6, 17, 8) << 24) | extractUnsignedBits(w7, 1, 24);
@@ -256,13 +257,16 @@ bool NavigationDecoder::decodeSubframe(const std::vector<uint32_t> &words30bit, 
 
 
         ephem.Cic = extractSignedBits(w3, 1, 16) * std::pow(2.0, -29);
-        int32_t omega0Raw = (extractSignedBits(w3, 17, 8) << 24) | extractUnsignedBits(w4, 1, 24);
+        uint32_t omega0RawU = (static_cast<uint32_t>(extractSignedBits(w3, 17, 8)) << 24) | extractUnsignedBits(w4, 1, 24);
+        int32_t omega0Raw = static_cast<int32_t>(omega0RawU);
         ephem.omega0 = omega0Raw * std::pow(2.0, -31) * M_PI;
         ephem.Cis = extractSignedBits(w5, 1, 16) * std::pow(2.0, -29);
-        int32_t i0Raw = (extractSignedBits(w5, 17, 8) << 24) | extractUnsignedBits(w6, 1, 24);
+        uint32_t i0RawU = (static_cast<uint32_t>(extractSignedBits(w5, 17, 8)) << 24) | extractUnsignedBits(w6, 1, 24);
+        int32_t i0Raw = static_cast<int32_t>(i0RawU);
         ephem.i0 = i0Raw * std::pow(2.0, -31) * M_PI;
         ephem.Crc = extractSignedBits(w7, 1, 16) * std::pow(2.0, -5);
-        int32_t omegaRaw = (extractSignedBits(w7, 17, 8) << 24) | extractUnsignedBits(w8, 1, 24);
+        uint32_t omegaRawU = (static_cast<uint32_t>(extractSignedBits(w7, 17, 8)) << 24) | extractUnsignedBits(w8, 1, 24);
+        int32_t omegaRaw = static_cast<int32_t>(omegaRawU);
         ephem.omega = omegaRaw * std::pow(2.0, -31) * M_PI;
         ephem.omegaDot = extractSignedBits(w9, 1, 24) * std::pow(2.0, -43) * M_PI;
         ephem.idot = extractSignedBits(w10, 9, 14) * std::pow(2.0, -43) * M_PI;
