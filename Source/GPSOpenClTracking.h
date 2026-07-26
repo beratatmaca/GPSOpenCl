@@ -90,6 +90,12 @@ class Tracking
      *  @return Frequency error estimate (Hz). */
     float computeFllError() const;
 
+    /** @brief Check whether this block's prompt correlator sum is strong enough to trust for carrier
+     *   discrimination, guarding against nav-bit-transition blocks whose correlation partially cancels.
+     *   Updates the running magnitude average as a side effect when the block is judged reliable.
+     *  @return True if this block's carrier discriminators should be applied. */
+    bool isPromptSignalReliable();
+
     /** @brief Compute FLL-assisted pull-in frequency discriminator. */
     void fllDiscriminator();
 
@@ -133,6 +139,7 @@ class Tracking
     float m_fllNco;                           ///< FLL NCO output (Hz).
     float m_ipPrev;                           ///< Previous block's In-phase Prompt sum.
     float m_qpPrev;                           ///< Previous block's Quadrature Prompt sum.
+    float m_promptMagnitudeEma;                ///< Running average prompt correlator magnitude, for bit-transition gating.
     int m_blocksSinceInit;                    ///< Blocks processed since last initTrackingState().
     int m_fllPullInBlocks;                    ///< Blocks of FLL pull-in before PLL takes over.
 

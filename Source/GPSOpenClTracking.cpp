@@ -40,6 +40,7 @@ Tracking::Tracking(Settings::Configuration conf)
       m_fllNco(0.0f),
       m_ipPrev(0.0f),
       m_qpPrev(0.0f),
+      m_promptMagnitudeEma(0.0f),
       m_blocksSinceInit(0),
       m_fllPullInBlocks(conf.trackingInput.fllPullInBlocks),
       m_dllTau1(loopFilterTau1(conf.trackingInput.dllBandwidthHz)),
@@ -97,6 +98,7 @@ Tracking::Tracking(const TrackingInput &input)
       m_fllNco(0.0f),
       m_ipPrev(0.0f),
       m_qpPrev(0.0f),
+      m_promptMagnitudeEma(0.0f),
       m_blocksSinceInit(0),
       m_fllPullInBlocks(input.fllPullInBlocks),
       m_dllTau1(loopFilterTau1(input.dllBandwidthHz)),
@@ -162,6 +164,7 @@ void Tracking::initTrackingState(float initDopplerHz, float initCodePhaseChips)
     m_fllNco = 0.0f;
     m_ipPrev = 0.0f;
     m_qpPrev = 0.0f;
+    m_promptMagnitudeEma = 0.0f;
     m_blocksSinceInit = 0;
 
     m_remCodePhase = initCodePhaseChips;
@@ -202,8 +205,16 @@ void Tracking::doWork(const ComplexFloatVector &input, int prn, ComplexFloatVect
             m_carrNcoPrev = m_fllNco;
             m_carrErrorPrev = 0.0f;
         }
-        rateAidDiscriminator();
-        freqDiscriminator();
+
+        if (isPromptSignalReliable())
+        {
+            rateAidDiscriminator();
+            freqDiscriminator();
+        }
+        else
+        {
+            m_carrFreq = m_carrFreqBasis + m_carrNco;
+        }
     }
     codeDiscriminator();
     updateLockIndicators();
@@ -348,6 +359,19 @@ void Tracking::fllDiscriminator()
     m_qpPrev = m_Qp;
 
     m_carrFreq = m_carrFreqBasis + m_fllNco;
+}
+
+bool Tracking::isPromptSignalReliable()
+{
+    double currentMagnitude = std::sqrt(static_cast<double>(m_Ip) * m_Ip + static_cast<double>(m_Qp) * m_Qp);
+    bool reliable = (m_promptMagnitudeEma <= 0.0f) || (currentMagnitude >= 0.3 * m_promptMagnitudeEma);
+
+    if (reliable)
+    {
+        m_promptMagnitudeEma = static_cast<float>(0.05 * currentMagnitude + 0.95 * m_promptMagnitudeEma);
+    }
+
+    return reliable;
 }
 
 void Tracking::rateAidDiscriminator()
