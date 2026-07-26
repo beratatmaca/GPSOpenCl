@@ -86,8 +86,16 @@ class Tracking
      *  @param input Carrier-wiped IQ samples. */
     void accumulator(const ComplexFloatVector &input);
 
+    /** @brief Compute the cross/dot frequency discriminator from consecutive prompt correlator samples.
+     *  @return Frequency error estimate (Hz). */
+    float computeFllError() const;
+
     /** @brief Compute FLL-assisted pull-in frequency discriminator. */
     void fllDiscriminator();
+
+    /** @brief Continuously nudge the carrier basis to absorb slow Doppler rate, so the PLL only
+     *   ever has to correct a small residual instead of the whole ongoing ramp. */
+    void rateAidDiscriminator();
 
     /** @brief Compute PLL frequency discriminator. */
     void freqDiscriminator();
@@ -121,6 +129,7 @@ class Tracking
     float m_carrErrorPrev;                    ///< Previous PLL phase error (rad).
 
     float m_fllGain;                          ///< FLL 1st-order loop filter gain (per block).
+    float m_rateAidGain;                      ///< Continuous Doppler-rate-aiding gain (per block).
     float m_fllNco;                           ///< FLL NCO output (Hz).
     float m_ipPrev;                           ///< Previous block's In-phase Prompt sum.
     float m_qpPrev;                           ///< Previous block's Quadrature Prompt sum.

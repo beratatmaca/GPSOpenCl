@@ -36,6 +36,7 @@ Tracking::Tracking(Settings::Configuration conf)
       m_carrError(0.0f),
       m_carrErrorPrev(0.0f),
       m_fllGain(4.0f * static_cast<float>(conf.trackingInput.fllBandwidthHz) * static_cast<float>(GPS_CA_CODE_PERIOD_SEC)),
+      m_rateAidGain(4.0f * static_cast<float>(conf.trackingInput.rateAidBandwidthHz) * static_cast<float>(GPS_CA_CODE_PERIOD_SEC)),
       m_fllNco(0.0f),
       m_ipPrev(0.0f),
       m_qpPrev(0.0f),
@@ -92,6 +93,7 @@ Tracking::Tracking(const TrackingInput &input)
       m_carrError(0.0f),
       m_carrErrorPrev(0.0f),
       m_fllGain(4.0f * static_cast<float>(input.fllBandwidthHz) * static_cast<float>(GPS_CA_CODE_PERIOD_SEC)),
+      m_rateAidGain(4.0f * static_cast<float>(input.rateAidBandwidthHz) * static_cast<float>(GPS_CA_CODE_PERIOD_SEC)),
       m_fllNco(0.0f),
       m_ipPrev(0.0f),
       m_qpPrev(0.0f),
@@ -200,6 +202,7 @@ void Tracking::doWork(const ComplexFloatVector &input, int prn, ComplexFloatVect
             m_carrNcoPrev = m_fllNco;
             m_carrErrorPrev = 0.0f;
         }
+        rateAidDiscriminator();
         freqDiscriminator();
     }
     codeDiscriminator();
@@ -323,26 +326,37 @@ void Tracking::accumulator(const ComplexFloatVector &input)
     }
 }
 
+float Tracking::computeFllError() const
+{
+    double cross = static_cast<double>(m_ipPrev) * m_Qp - static_cast<double>(m_Ip) * m_qpPrev;
+    double dot = static_cast<double>(m_ipPrev) * m_Ip + static_cast<double>(m_qpPrev) * m_Qp;
+
+    if (cross == 0.0 && dot == 0.0)
+    {
+        return 0.0f;
+    }
+
+    return static_cast<float>(std::atan2(cross, dot) / (2.0 * M_PI * GPS_CA_CODE_PERIOD_SEC));
+}
+
 void Tracking::fllDiscriminator()
 {
-    if (m_blocksSinceInit > 0)
-    {
-        double cross = static_cast<double>(m_ipPrev) * m_Qp - static_cast<double>(m_Ip) * m_qpPrev;
-        double dot = static_cast<double>(m_ipPrev) * m_Ip + static_cast<double>(m_qpPrev) * m_Qp;
-
-        float fllError = 0.0f;
-        if (cross != 0.0 || dot != 0.0)
-        {
-            fllError = static_cast<float>(std::atan2(cross, dot) / (2.0 * M_PI * GPS_CA_CODE_PERIOD_SEC));
-        }
-
-        m_fllNco += fllError * m_fllGain;
-    }
+    float fllError = (m_blocksSinceInit > 0) ? computeFllError() : 0.0f;
+    m_fllNco += fllError * m_fllGain;
 
     m_ipPrev = m_Ip;
     m_qpPrev = m_Qp;
 
     m_carrFreq = m_carrFreqBasis + m_fllNco;
+}
+
+void Tracking::rateAidDiscriminator()
+{
+    float fllError = computeFllError();
+    m_carrFreqBasis += fllError * m_rateAidGain;
+
+    m_ipPrev = m_Ip;
+    m_qpPrev = m_Qp;
 }
 
 void Tracking::freqDiscriminator()

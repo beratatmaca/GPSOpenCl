@@ -64,18 +64,19 @@ struct AcquisitionOutput
 struct TrackingInput
 {
     uint32_t structVersion{STRUCT_VERSION_1}; ///< Struct version tag.
-    double pllBandwidthHz{25.0};             ///< PLL noise bandwidth (Hz).
+    double pllBandwidthHz{25.0};              ///< PLL noise bandwidth (Hz).
     double dllBandwidthHz{2.0};              ///< DLL noise bandwidth (Hz).
     double fllBandwidthHz{10.0};               ///< FLL pull-in noise bandwidth (Hz).
     int32_t fllPullInBlocks{75};               ///< Blocks of FLL-assisted pull-in before PLL takes over.
+    double rateAidBandwidthHz{1.0};            ///< Continuous slow Doppler-rate-aiding bandwidth (Hz).
     double samplingFrequency{4096000.0};     ///< Sampling rate (Hz).
     int32_t numberOfSamplesPerCode{4096};    ///< Samples per code period.
-    double carrierLockThreshold{0.5};        ///< Min carrier lock indicator to count as locked.
+    double carrierLockThreshold{0.3};        ///< Min carrier lock indicator to count as locked.
     double codeLockRatioTolerance{0.3};      ///< Max |codeLockRatio - 1.0| to count as locked.
-    double lockIndicatorEmaAlpha{0.1};       ///< EMA smoothing factor for lock indicators.
+    double lockIndicatorEmaAlpha{0.03};      ///< EMA smoothing factor for lock indicators.
     int32_t confirmDebounceBlocks{50};       ///< Good blocks needed to confirm tracking.
     int32_t confirmTimeoutBlocks{500};       ///< Blocks before abandoning an unconfirmed acquisition.
-    int32_t lossDebounceBlocks{100};         ///< Bad blocks needed to declare lock lost.
+    int32_t lossDebounceBlocks{200};         ///< Bad blocks needed to declare lock lost.
 };
 
 /** @brief Tracking module output results. */

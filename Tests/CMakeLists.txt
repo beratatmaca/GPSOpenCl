@@ -47,6 +47,7 @@ add_executable(
     StructsSourceSinkTest.cpp
     LockDetectorTest.cpp
     ChannelTest.cpp
+    GroundTruthVerificationTest.cpp
     E2ETest.cpp
 )
 

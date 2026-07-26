@@ -27,11 +27,11 @@ Channel::Channel()
       m_confirmProgress(0),
       m_lossProgress(0),
       m_blocksInConfirming(0),
-      m_carrierLockThreshold(0.5f),
+      m_carrierLockThreshold(0.3f),
       m_codeLockRatioTolerance(0.3f),
       m_confirmDebounceBlocks(50),
       m_confirmTimeoutBlocks(200),
-      m_lossDebounceBlocks(100)
+      m_lossDebounceBlocks(200)
 {
 }
 
