@@ -226,6 +226,7 @@ bool NavigationDecoder::decodeSubframe(const std::vector<uint32_t> &words30bit, 
 
 
         ephem.weekNumber = extractUnsignedBits(w3, 1, 10);
+        ephem.iodc = (extractUnsignedBits(w3, 23, 2) << 8) | extractUnsignedBits(w8, 9, 8);
         ephem.toc = extractUnsignedBits(w8, 9, 16) * std::pow(2.0, 4);
         ephem.af2 = extractSignedBits(w9, 1, 8) * std::pow(2.0, -55);
         ephem.af1 = extractSignedBits(w9, 9, 16) * std::pow(2.0, -43);
@@ -249,6 +250,7 @@ bool NavigationDecoder::decodeSubframe(const std::vector<uint32_t> &words30bit, 
         uint32_t sqrtARaw = (extractUnsignedBits(w8, 17, 8) << 24) | extractUnsignedBits(w9, 1, 24);
         ephem.sqrtA = sqrtARaw * std::pow(2.0, -19);
         ephem.toe = extractUnsignedBits(w10, 1, 16) * std::pow(2.0, 4);
+        ephem.iode2 = extractUnsignedBits(w3, 1, 8);
         ephem.isValid = true;
     }
     else if (ephem.subframeId == 3)
@@ -270,11 +272,36 @@ bool NavigationDecoder::decodeSubframe(const std::vector<uint32_t> &words30bit, 
         ephem.omega = omegaRaw * std::pow(2.0, -31) * M_PI;
         ephem.omegaDot = extractSignedBits(w9, 1, 24) * std::pow(2.0, -43) * M_PI;
         ephem.idot = extractSignedBits(w10, 9, 14) * std::pow(2.0, -43) * M_PI;
+        ephem.iode3 = extractUnsignedBits(w3, 1, 8);
         ephem.isValid = true;
     }
     else if (ephem.subframeId == 4)
     {
         decodeIonosphericParams(words30bit);
+    }
+
+    if (!ephem.isValid)
+    {
+        return false;
+    }
+
+    if (ephem.subframeId == 2 && ephem.iodc != 0)
+    {
+        int iodcLow8 = ephem.iodc & 0xFF;
+        if (ephem.iode2 != iodcLow8)
+        {
+            ephem.isValid = false;
+            return false;
+        }
+    }
+    if (ephem.subframeId == 3 && ephem.iodc != 0)
+    {
+        int iodcLow8 = ephem.iodc & 0xFF;
+        if (ephem.iode3 != iodcLow8)
+        {
+            ephem.isValid = false;
+            return false;
+        }
     }
 
     return ephem.isValid;
@@ -308,33 +335,37 @@ bool NavigationDecoder::processPromptSignal(int svId, const ComplexFloatVector &
     ephem.svId = svId;
     ephem.isValid = false;
 
-    std::vector<bool> allBits = promptToBits(promptHistory);
-    if (bitOffset > allBits.size())
+    size_t startSample = bitOffset * 20;
+    if (startSample > promptHistory.size())
     {
+        startSample = 0;
         bitOffset = 0;
     }
-    if (allBits.size() - bitOffset < 300)
+
+    ComplexFloatVector slicedHistory(promptHistory.begin() + startSample, promptHistory.end());
+    std::vector<bool> newBits = promptToBits(slicedHistory);
+
+    if (newBits.size() < 300)
     {
         return false;
     }
 
-    std::vector<bool> searchBits(allBits.begin() + bitOffset, allBits.end());
     size_t relPreambleIdx = 0;
     bool inverted = false;
-    if (!findPreamble(searchBits, relPreambleIdx, inverted))
+    if (!findPreamble(newBits, relPreambleIdx, inverted))
+    {
+        return false;
+    }
+
+    if (relPreambleIdx + 300 > newBits.size())
     {
         return false;
     }
 
     size_t preambleIdx = bitOffset + relPreambleIdx;
-    if (preambleIdx + 300 > allBits.size())
-    {
 
-        return false;
-    }
-
-    auto bitAt = [&](size_t idx) -> bool {
-        bool v = allBits[idx];
+    auto bitAt = [&](size_t relIdx) -> bool {
+        bool v = newBits[relIdx];
         return inverted ? !v : v;
     };
 
@@ -342,16 +373,16 @@ bool NavigationDecoder::processPromptSignal(int svId, const ComplexFloatVector &
 
     bool prevD29 = false;
     bool prevD30 = false;
-    if (preambleIdx >= 2)
+    if (relPreambleIdx >= 2)
     {
-        prevD29 = bitAt(preambleIdx - 2);
-        prevD30 = bitAt(preambleIdx - 1);
+        prevD29 = bitAt(relPreambleIdx - 2);
+        prevD30 = bitAt(relPreambleIdx - 1);
     }
 
     std::vector<uint32_t> words(10, 0);
     for (int w = 0; w < 10; w++)
     {
-        size_t wordStartBit = preambleIdx + static_cast<size_t>(w) * 30;
+        size_t wordStartBit = relPreambleIdx + static_cast<size_t>(w) * 30;
         uint32_t raw = 0;
         for (int b = 0; b < 30; b++)
         {
@@ -360,13 +391,9 @@ bool NavigationDecoder::processPromptSignal(int svId, const ComplexFloatVector &
 
         if (!checkParity(raw, prevD29, prevD30))
         {
-
             bitOffset = preambleIdx + 1;
             return false;
         }
-
-
-
 
         uint32_t dataWord = raw;
         if (prevD30)

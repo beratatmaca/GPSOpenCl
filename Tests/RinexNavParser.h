@@ -64,7 +64,7 @@ class RinexNavParser
             }
             if (!ok)
             {
-                break;
+                continue;
             }
 
             if (recordPrn != prn)
@@ -75,7 +75,7 @@ class RinexNavParser
             std::vector<double> values = extractDFields(recordLines);
             if (values.size() < 31)
             {
-                return false;
+                continue;
             }
 
             ephem->svId = recordPrn;

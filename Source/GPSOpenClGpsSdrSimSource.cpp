@@ -75,7 +75,7 @@ bool GpsSdrSimSource::readBlock(ComplexFloatVector &outputSamples, SourceOutput 
 
     size_t totalRead = 0;
     int retryCount = 0;
-    while (totalRead < bytesNeeded && retryCount < 100)
+    while (totalRead < bytesNeeded && retryCount < 50000)
     {
         ssize_t res = read(m_dataFd, buffer.data() + totalRead, bytesNeeded - totalRead);
         if (res > 0)
@@ -104,8 +104,9 @@ bool GpsSdrSimSource::readBlock(ComplexFloatVector &outputSamples, SourceOutput 
     }
 
     telemetry.structVersion = STRUCT_VERSION_1;
-    telemetry.blockIndex = m_blockIndex++;
+    telemetry.blockIndex = static_cast<uint32_t>(m_blockIndex);
     telemetry.timestamp = static_cast<double>(m_blockIndex) * 0.001;
+    m_blockIndex++;
     telemetry.fifoUnderrunCount = m_underrunCount;
     telemetry.fifoOverrunCount = m_overrunCount;
 

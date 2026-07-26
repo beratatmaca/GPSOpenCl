@@ -63,7 +63,7 @@ void Acquisition::exp(int length, float frequency, float samplingRate, float pha
     for (int sample = 0; sample < length; sample++)
     {
         float sampleFloating = static_cast<float>(sample);
-        value = std::exp((IMAGINARY_UNIT * 2.0f * pi * frequency * sampleFloating * (1.0f / samplingRate)) + phaseOffset);
+        value = std::exp(IMAGINARY_UNIT * (2.0f * pi * frequency * sampleFloating * (1.0f / samplingRate) + phaseOffset));
         output->push_back(value);
     }
 }

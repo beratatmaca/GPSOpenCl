@@ -124,38 +124,66 @@ void Settings::updateConfigurationStruct()
 
     if (m_configurationMap["SamplingFrequency"] != "")
     {
-        configuration.rawDataSettings.samplingFrequency = std::stof(m_configurationMap["SamplingFrequency"]);
-        configuration.rawDataSettings.numberOfSamplesPerCode = static_cast<int>(std::round(
-            configuration.rawDataSettings.samplingFrequency / (GPS_CA_CODE_FREQUENCY_HZ / GPS_CA_CODE_LENGTH)));
-        configuration.sourceInput.samplingRate = configuration.rawDataSettings.samplingFrequency;
-        configuration.acquisitionInput.samplingFrequency = configuration.rawDataSettings.samplingFrequency;
-        configuration.acquisitionInput.numberOfSamplesPerCode = configuration.rawDataSettings.numberOfSamplesPerCode;
-        configuration.trackingInput.samplingFrequency = configuration.rawDataSettings.samplingFrequency;
-        configuration.trackingInput.numberOfSamplesPerCode = configuration.rawDataSettings.numberOfSamplesPerCode;
+        try
+        {
+            configuration.rawDataSettings.samplingFrequency = std::stof(m_configurationMap["SamplingFrequency"]);
+            configuration.rawDataSettings.numberOfSamplesPerCode = static_cast<int>(std::round(
+                configuration.rawDataSettings.samplingFrequency / (GPS_CA_CODE_FREQUENCY_HZ / GPS_CA_CODE_LENGTH)));
+            configuration.sourceInput.samplingRate = configuration.rawDataSettings.samplingFrequency;
+            configuration.acquisitionInput.samplingFrequency = configuration.rawDataSettings.samplingFrequency;
+            configuration.acquisitionInput.numberOfSamplesPerCode = configuration.rawDataSettings.numberOfSamplesPerCode;
+            configuration.trackingInput.samplingFrequency = configuration.rawDataSettings.samplingFrequency;
+            configuration.trackingInput.numberOfSamplesPerCode = configuration.rawDataSettings.numberOfSamplesPerCode;
+        }
+        catch (const std::exception &)
+        {
+            std::cerr << "Invalid SamplingFrequency value in config, using default." << std::endl;
+        }
     }
 
     if (m_configurationMap["AcquisitionMinimumDoppler"] != "")
     {
-        configuration.acquisitionSettings.acquisitionDopplerMinimum =
-            std::stoi(m_configurationMap["AcquisitionMinimumDoppler"]);
-        configuration.acquisitionInput.acquisitionDopplerMinimum =
-            configuration.acquisitionSettings.acquisitionDopplerMinimum;
+        try
+        {
+            configuration.acquisitionSettings.acquisitionDopplerMinimum =
+                std::stoi(m_configurationMap["AcquisitionMinimumDoppler"]);
+            configuration.acquisitionInput.acquisitionDopplerMinimum =
+                configuration.acquisitionSettings.acquisitionDopplerMinimum;
+        }
+        catch (const std::exception &)
+        {
+            std::cerr << "Invalid AcquisitionMinimumDoppler value in config, using default." << std::endl;
+        }
     }
 
     if (m_configurationMap["AcquisitionMaximumDoppler"] != "")
     {
-        configuration.acquisitionSettings.acquisitionDopplerMaximum =
-            std::stoi(m_configurationMap["AcquisitionMaximumDoppler"]);
-        configuration.acquisitionInput.acquisitionDopplerMaximum =
-            configuration.acquisitionSettings.acquisitionDopplerMaximum;
+        try
+        {
+            configuration.acquisitionSettings.acquisitionDopplerMaximum =
+                std::stoi(m_configurationMap["AcquisitionMaximumDoppler"]);
+            configuration.acquisitionInput.acquisitionDopplerMaximum =
+                configuration.acquisitionSettings.acquisitionDopplerMaximum;
+        }
+        catch (const std::exception &)
+        {
+            std::cerr << "Invalid AcquisitionMaximumDoppler value in config, using default." << std::endl;
+        }
     }
 
     if (m_configurationMap["AcquisitionDopplerSearchRange"] != "")
     {
-        configuration.acquisitionSettings.acquisitionDopplerSearchRange =
-            std::stoi(m_configurationMap["AcquisitionDopplerSearchRange"]);
-        configuration.acquisitionInput.acquisitionDopplerSearchRange =
-            configuration.acquisitionSettings.acquisitionDopplerSearchRange;
+        try
+        {
+            configuration.acquisitionSettings.acquisitionDopplerSearchRange =
+                std::stoi(m_configurationMap["AcquisitionDopplerSearchRange"]);
+            configuration.acquisitionInput.acquisitionDopplerSearchRange =
+                configuration.acquisitionSettings.acquisitionDopplerSearchRange;
+        }
+        catch (const std::exception &)
+        {
+            std::cerr << "Invalid AcquisitionDopplerSearchRange value in config, using default." << std::endl;
+        }
     }
 }
 

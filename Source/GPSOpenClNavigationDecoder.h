@@ -29,6 +29,7 @@ struct GpsEphemeris
     double af0;        ///< Clock bias (s).
     double af1;        ///< Clock drift (s/s).
     double af2;        ///< Clock drift rate (s/s^2).
+    int iodc;          ///< Issue of Data, Clock (10-bit, subframe 1).
 
     double toe;        ///< Ephemeris reference time (s).
     double sqrtA;      ///< Sqrt of semi-major axis (m^1/2).
@@ -41,6 +42,8 @@ struct GpsEphemeris
     double omegaDot;   ///< Rate of right ascension (rad/s).
     double idot;       ///< Rate of inclination (rad/s).
     double Cuc, Cus, Crc, Crs, Cic, Cis; ///< Harmonic correction terms.
+    int iode2;         ///< Issue of Data, Ephemeris from subframe 2.
+    int iode3;         ///< Issue of Data, Ephemeris from subframe 3.
 };
 
 /** @brief GPS L1 C/A navigation message decoder. */

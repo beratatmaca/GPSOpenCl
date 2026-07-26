@@ -248,11 +248,17 @@ TEST(GroundTruthVerificationTest, AcquisitionAndTrackingMatchSimulatorTruth)
         lastTrackingByPrn[trk.prn] = trk;
     }
 
+    std::map<int32_t, GroundTruthRecord> lastTruthByPrn;
+    for (const GroundTruthRecord &record : truth)
+    {
+        lastTruthByPrn[record.prn] = record;
+    }
+
     int convergedCount = 0;
     for (const auto &entry : lastTrackingByPrn)
     {
-        auto it = firstTruthByPrn.find(entry.first);
-        if (it == firstTruthByPrn.end())
+        auto it = lastTruthByPrn.find(entry.first);
+        if (it == lastTruthByPrn.end())
         {
             continue;
         }

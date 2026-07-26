@@ -38,8 +38,17 @@ void ZmqSink::publish(const std::string &identifier, const void *data, size_t si
 #ifdef GPSOPENCL_ENABLE_ZMQ
     if (!m_publisher) return;
 
-    zmq_send(m_publisher, identifier.data(), identifier.size(), ZMQ_SNDMORE);
-    zmq_send(m_publisher, data, size, 0);
+    int rc = zmq_send(m_publisher, identifier.data(), identifier.size(), ZMQ_SNDMORE);
+    if (rc < 0)
+    {
+        std::cerr << "ZmqSink: identifier frame send failed: " << zmq_strerror(zmq_errno()) << std::endl;
+        return;
+    }
+    rc = zmq_send(m_publisher, data, size, 0);
+    if (rc < 0)
+    {
+        std::cerr << "ZmqSink: data frame send failed: " << zmq_strerror(zmq_errno()) << std::endl;
+    }
 #else
     (void)identifier;
     (void)data;

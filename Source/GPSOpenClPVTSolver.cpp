@@ -275,8 +275,27 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
 
         for (int i = 0; i < 4; i++)
         {
+            int pivotRow = i;
+            double pivotAbs = std::fabs(A[i][i]);
+            for (int k = i + 1; k < 4; k++)
+            {
+                if (std::fabs(A[k][i]) > pivotAbs)
+                {
+                    pivotAbs = std::fabs(A[k][i]);
+                    pivotRow = k;
+                }
+            }
+            if (pivotAbs < 1e-12) return false;
+            if (pivotRow != i)
+            {
+                for (int j = 0; j < 8; j++)
+                {
+                    double tmp = A[i][j];
+                    A[i][j] = A[pivotRow][j];
+                    A[pivotRow][j] = tmp;
+                }
+            }
             double pivot = A[i][i];
-            if (std::fabs(pivot) < 1e-12) return false;
             for (int j = 0; j < 8; j++) A[i][j] /= pivot;
             for (int k = 0; k < 4; k++)
             {
