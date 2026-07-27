@@ -77,6 +77,13 @@ class Channel
      *  @return Prompt I/Q history. */
     const ComplexFloatVector &getPromptHistory() const { return m_promptHistory; }
 
+    /** @brief Get this channel's most recent block's tracking sub-stage timings (ms), or zero if not
+     *   currently tracking.
+     *  @param earlyLatePromptGenMs Output: earlyLatePromptGen duration (ms).
+     *  @param numericOscillatorMs  Output: numericOscillator duration (ms).
+     *  @param accumulatorMs        Output: accumulator duration (ms). */
+    void getTrackingSubStageTimings(float *earlyLatePromptGenMs, float *numericOscillatorMs, float *accumulatorMs) const;
+
     /** @brief Set telemetry sink.
      *  @param sink Sink implementation. */
     void setSink(std::shared_ptr<Sink> sink);

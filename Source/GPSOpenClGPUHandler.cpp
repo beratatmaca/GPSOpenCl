@@ -27,15 +27,6 @@ GpuHandler::~GpuHandler()
     }
     m_acquisitionKernelList.clear();
 
-    for (auto kernel : m_trackingKernelList)
-    {
-        if (kernel)
-        {
-            clReleaseKernel(kernel);
-        }
-    }
-    m_trackingKernelList.clear();
-
     for (auto program : m_programList)
     {
         if (program)
@@ -208,22 +199,6 @@ int GpuHandler::initKernels()
         else
         {
             m_acquisitionKernelList.push_back(kernel);
-        }
-    }
-
-    for (int i = 0; i < TrackingKernelCount; i++)
-    {
-        auto kernelChar = GPSOpenClTrackingKernelCharList[i].data();
-        auto program = m_programList[GPSOpenClTracking];
-        auto kernel = clCreateKernel(program, kernelChar, &m_error);
-        if (m_error < 0)
-        {
-            std::cout << "Couldn't create the kernel" << i << std::endl;
-            return m_error;
-        }
-        else
-        {
-            m_trackingKernelList.push_back(kernel);
         }
     }
 

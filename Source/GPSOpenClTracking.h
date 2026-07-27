@@ -45,6 +45,13 @@ class Tracking
      *  @return Tracking output struct. */
     TrackingOutput getTrackingOutput(int prn) const;
 
+    /** @brief Get this instance's most recent doWork() sub-stage timings (ms), for aggregation into
+     *   ProfilerOutput. Values reflect only the last call, not accumulated across blocks.
+     *  @param earlyLatePromptGenMs Output: earlyLatePromptGen duration (ms).
+     *  @param numericOscillatorMs  Output: numericOscillator duration (ms).
+     *  @param accumulatorMs        Output: accumulator duration (ms). */
+    void getSubStageTimings(float *earlyLatePromptGenMs, float *numericOscillatorMs, float *accumulatorMs) const;
+
     /** @brief Set telemetry sink.
      *  @param sink Sink implementation. */
     void setSink(std::shared_ptr<Sink> sink) { m_sink = sink; }
@@ -170,6 +177,10 @@ class Tracking
     float m_carrierLockEma;                   ///< Smoothed carrier lock indicator.
     float m_codeLockEma;                      ///< Smoothed code lock ratio.
     uint32_t m_lastChannelState;              ///< Owning channel's state, for telemetry.
+
+    float m_earlyLatePromptGenTimeMs{0.0f};   ///< Last doWork() call's earlyLatePromptGen duration (ms).
+    float m_numericOscillatorTimeMs{0.0f};    ///< Last doWork() call's numericOscillator duration (ms).
+    float m_accumulatorTimeMs{0.0f};          ///< Last doWork() call's accumulator duration (ms).
 };
 }
 #endif

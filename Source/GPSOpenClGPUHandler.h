@@ -23,7 +23,6 @@ class GpuHandler
     typedef enum GPUProgramList
     {
         GPSOpenClAcquistion = 0,  ///< Acquisition kernel program.
-        GPSOpenClTracking,        ///< Tracking kernel program.
         GPSOpenClProgramCount     ///< Total program count.
     } GPUProgramListType;
 
@@ -38,13 +37,6 @@ class GpuHandler
         Sum,                  ///< Reduction sum kernel.
         AcquisitionKernelCount ///< Total acquisition kernel count.
     } GPSOpenClAcquisitionKernelListType;
-
-    /** @brief Tracking kernel index. */
-    typedef enum GPSOpenClTrackingKernelList
-    {
-        NCOMultiplicate = 0,   ///< NCO carrier wipe kernel.
-        TrackingKernelCount    ///< Total tracking kernel count.
-    } GPSOpenClTrackingKernelListListType;
 
     /** @brief Create OpenCL device and context.
      *  @return 0 on success. */
@@ -68,19 +60,16 @@ class GpuHandler
     cl_context m_context;                              ///< OpenCL context.
     std::vector<cl_program> m_programList;              ///< Compiled programs.
     std::vector<cl_kernel> m_acquisitionKernelList;     ///< Acquisition kernels.
-    std::vector<cl_kernel> m_trackingKernelList;        ///< Tracking kernels.
     cl_device_id m_device;                              ///< OpenCL device ID.
     cl_ulong m_localMemorySize;                         ///< Device local memory (bytes).
 
   private:
     cl_platform_id m_platform;                          ///< OpenCL platform ID.
     cl_int m_error;                                     ///< Last OpenCL error code.
-    std::string ProgramCharList[GPSOpenClProgramCount]{"Acquisition.cl", "Tracking.cl"};
+    std::string ProgramCharList[GPSOpenClProgramCount]{"Acquisition.cl"};
 
     std::string GPSOpenClAcquisitionKernelCharList[AcquisitionKernelCount]{
         "fft_init", "fft_stage", "fft_scale", "complexMultiplier", "absolute", "sum"};
-
-    std::string GPSOpenClTrackingKernelCharList[TrackingKernelCount]{"ncoMultiplicate"};
 };
 }
 

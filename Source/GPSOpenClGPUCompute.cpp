@@ -65,8 +65,6 @@ Compute::~Compute()
     releaseIfSet(m_absBufferC);
     releaseIfSet(m_sumBufferInput);
     releaseIfSet(m_sumBufferOutput);
-    releaseIfSet(m_ncoBufferData);
-    releaseIfSet(m_ncoBufferPhase);
 
     if (m_queue)
     {
@@ -105,10 +103,6 @@ void Compute::cacheDeviceInfo()
     if (m_gpu.m_acquisitionKernelList.size() > GpuHandler::Sum)
     {
         m_sumLocalSize = queryLocalSize(m_gpu.m_acquisitionKernelList[GpuHandler::Sum]);
-    }
-    if (m_gpu.m_trackingKernelList.size() > GpuHandler::NCOMultiplicate)
-    {
-        m_ncoLocalSize = queryLocalSize(m_gpu.m_trackingKernelList[GpuHandler::NCOMultiplicate]);
     }
 
     m_deviceInfoCached = true;
@@ -447,7 +441,7 @@ int Compute::absolute(const ComplexFloatVector &input1, FloatVector *output)
 
         cl_kernel absoluteKernel = m_gpu.m_acquisitionKernelList[GpuHandler::Absolute];
         cl_mem d_a = ensureBuffer(m_absBufferA, m_absBufferCapacityA, 2 * length);
-        cl_mem d_c = (d_a && m_error == CL_SUCCESS) ? ensureBuffer(m_absBufferC, m_absBufferCapacityC, 2 * length) : nullptr;
+        cl_mem d_c = (d_a && m_error == CL_SUCCESS) ? ensureBuffer(m_absBufferC, m_absBufferCapacityC, length) : nullptr;
 
         if (d_a && d_c && m_error == CL_SUCCESS)
         {
@@ -474,18 +468,11 @@ int Compute::absolute(const ComplexFloatVector &input1, FloatVector *output)
 
             if (m_error == CL_SUCCESS)
             {
-                m_error = clEnqueueReadBuffer(m_queue, d_c, CL_TRUE, 0, 2 * length * sizeof(float), m_allocatedMemory.data(), 0, NULL, NULL);
+                m_error = clEnqueueReadBuffer(m_queue, d_c, CL_TRUE, 0, length * sizeof(float), m_allocatedMemory.data(), 0, NULL, NULL);
 
                 if (m_error == CL_SUCCESS)
                 {
-                    output->clear();
-                    output->reserve(length);
-                    for (unsigned int j = 0; j < length; j++)
-                    {
-                        float value = m_allocatedMemory[2 * j];
-                        output->push_back(value);
-                    }
-
+                    output->assign(m_allocatedMemory.begin(), m_allocatedMemory.begin() + length);
                     return 0;
                 }
             }
@@ -586,103 +573,3 @@ int Compute::sum(const FloatVector &input, float *sumValue)
     return 0;
 }
 
-int Compute::ncoMultiplication(const ComplexFloatVector &input, const FloatVector &phaseVector,
-                               ComplexFloatVector *output)
-{
-    if (m_queue && m_gpu.m_trackingKernelList.size() > GpuHandler::NCOMultiplicate)
-    {
-        size_t global_size = 0;
-        unsigned int points_per_group = 0;
-        unsigned int length = input.size();
-
-        cl_kernel ncoMultiplicationKernel = m_gpu.m_trackingKernelList[GpuHandler::NCOMultiplicate];
-
-        cacheDeviceInfo();
-
-        if (m_allocatedMemory.size() < 3 * length)
-        {
-            m_allocatedMemory.resize(3 * length);
-        }
-
-        for (unsigned int j = 0; j < length; j++)
-        {
-            float realVal = std::real(input.at(j));
-            float imagVal = std::imag(input.at(j));
-
-            m_allocatedMemory[2 * j] = realVal;
-            m_allocatedMemory[2 * j + 1] = imagVal;
-        }
-
-        for (unsigned int j = 0; j < length; j++)
-        {
-            m_allocatedMemory[2 * length + j] = phaseVector.at(j);
-        }
-
-        cl_mem dataBuffer = ensureBuffer(m_ncoBufferData, m_ncoBufferDataCapacity, 2 * length);
-        cl_mem phaseBuffer =
-            (dataBuffer && m_error == CL_SUCCESS) ? ensureBuffer(m_ncoBufferPhase, m_ncoBufferPhaseCapacity, length) : nullptr;
-
-        if (dataBuffer && phaseBuffer && m_error == CL_SUCCESS)
-        {
-            m_error = clEnqueueWriteBuffer(m_queue, dataBuffer, CL_FALSE, 0, 2 * length * sizeof(float),
-                                           m_allocatedMemory.data(), 0, NULL, NULL);
-            m_error |= clEnqueueWriteBuffer(m_queue, phaseBuffer, CL_FALSE, 0, length * sizeof(float),
-                                            &m_allocatedMemory[2 * length], 0, NULL, NULL);
-
-            if (m_error == CL_SUCCESS)
-            {
-                size_t local_size = m_ncoLocalSize;
-                cl_ulong localMemorySize = m_localMemorySize;
-                points_per_group = localMemorySize / (2 * sizeof(float));
-
-
-                points_per_group = roundDownToPowerOfTwo(points_per_group);
-                points_per_group = (points_per_group > length) ? length : points_per_group;
-
-
-
-
-                local_size = clampLocalSizeForMinPointsPerItem(static_cast<unsigned int>(local_size), points_per_group, 4);
-
-                clSetKernelArg(ncoMultiplicationKernel, 0, sizeof(cl_mem), &dataBuffer);
-                clSetKernelArg(ncoMultiplicationKernel, 1, sizeof(cl_mem), &phaseBuffer);
-                clSetKernelArg(ncoMultiplicationKernel, 2, localMemorySize, NULL);
-                clSetKernelArg(ncoMultiplicationKernel, 3, sizeof(unsigned int), &points_per_group);
-
-                global_size = (length / points_per_group) * local_size;
-                m_error = clEnqueueNDRangeKernel(m_queue, ncoMultiplicationKernel, 1, NULL, &global_size, &local_size, 0, NULL, NULL);
-
-                if (m_error == CL_SUCCESS)
-                {
-                    m_error = clEnqueueReadBuffer(m_queue, dataBuffer, CL_TRUE, 0, 2 * length * sizeof(float), m_allocatedMemory.data(), 0,
-                                                  NULL, NULL);
-                    if (m_error == CL_SUCCESS)
-                    {
-                        output->clear();
-                        output->reserve(length);
-                        for (unsigned int j = 0; j < length; j++)
-                        {
-                            float realVal = m_allocatedMemory[2 * j];
-                            float imagVal = m_allocatedMemory[2 * j + 1];
-
-                            output->push_back(std::complex<float>(realVal, imagVal));
-                        }
-
-                        return 0;
-                    }
-                }
-            }
-        }
-    }
-
-
-    output->clear();
-    output->reserve(input.size());
-    for (size_t j = 0; j < input.size(); j++)
-    {
-        float p = phaseVector[j];
-        std::complex<float> nco(std::cos(p), std::sin(p));
-        output->push_back(input[j] * nco);
-    }
-    return 0;
-}

@@ -50,13 +50,6 @@ class Compute
      *  @return 0 on success. */
     int sum(const FloatVector &input, float *sumValue);
 
-    /** @brief NCO carrier multiplication.
-     *  @param input       Complex IQ samples.
-     *  @param phaseVector NCO phase ramp (rad).
-     *  @param output      Carrier-wiped output.
-     *  @return 0 on success. */
-    int ncoMultiplication(const ComplexFloatVector &input, const FloatVector &phaseVector, ComplexFloatVector *output);
-
     /** @brief Round down to the nearest power of two.
      *  @param value Input value (0 stays 0).
      *  @return Nearest power of two not greater than value. */
@@ -94,7 +87,6 @@ class Compute
     size_t m_complexMultiplierLocalSize{0};       ///< Cached complexMultiplier kernel work-group size.
     size_t m_absoluteLocalSize{0};                ///< Cached absolute kernel work-group size.
     size_t m_sumLocalSize{0};                     ///< Cached sum kernel work-group size.
-    size_t m_ncoLocalSize{0};                     ///< Cached ncoMultiplicate kernel work-group size.
 
     cl_mem m_fftBuffer{nullptr};                  ///< Persistent FFT data buffer.
     size_t m_fftBufferCapacity{0};                ///< FFT buffer capacity (floats).
@@ -115,11 +107,6 @@ class Compute
     cl_mem m_sumBufferOutput{nullptr};              ///< Persistent sum() partial-sum output buffer.
     size_t m_sumBufferInputCapacity{0};            ///< sum() input buffer capacity (floats).
     size_t m_sumBufferOutputCapacity{0};           ///< sum() output buffer capacity (floats, one per work-group).
-
-    cl_mem m_ncoBufferData{nullptr};               ///< Persistent ncoMultiplication() IQ data buffer.
-    cl_mem m_ncoBufferPhase{nullptr};              ///< Persistent ncoMultiplication() phase buffer.
-    size_t m_ncoBufferDataCapacity{0};             ///< ncoMultiplication() data buffer capacity (floats).
-    size_t m_ncoBufferPhaseCapacity{0};            ///< ncoMultiplication() phase buffer capacity (floats).
 };
 }
 

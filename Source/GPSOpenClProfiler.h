@@ -38,6 +38,14 @@ class Profiler
      *  @param timeMs    Stage duration (ms). */
     void recordStageTimeMs(const std::string &stageName, double timeMs);
 
+    /** @brief Record tracking sub-stage timings for this block.
+     *  @param earlyLatePromptGenMs Aggregate earlyLatePromptGen time across active channels (ms).
+     *  @param numericOscillatorMs  Aggregate numericOscillator time across active channels (ms).
+     *  @param accumulatorMs        Aggregate correlator-accumulation time across active channels (ms).
+     *  @param maxWorkerMs          Slowest tracking worker's own wall-clock time this block (ms). */
+    void recordTrackingSubStageTimings(double earlyLatePromptGenMs, double numericOscillatorMs, double accumulatorMs,
+                                       double maxWorkerMs);
+
     /** @brief Finish block and return output.
      *  @return Profiler output struct. */
     ProfilerOutput finishBlock();

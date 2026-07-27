@@ -221,6 +221,11 @@ struct ProfilerOutput
     double navDecodeTimeMs{0.0};             ///< Nav decode stage time (ms).
     double pvtSolveTimeMs{0.0};              ///< PVT solve stage time (ms).
     double totalTimeMs{0.0};                 ///< Total block time (ms).
+    double earlyLatePromptGenTimeMs{0.0};    ///< Aggregate earlyLatePromptGen time across active channels (ms).
+    double numericOscillatorTimeMs{0.0};     ///< Aggregate numericOscillator time across active channels (ms).
+    double accumulatorTimeMs{0.0};           ///< Aggregate correlator-accumulation time across active channels (ms).
+    double trackingMaxWorkerTimeMs{0.0};     ///< Slowest tracking worker's own wall-clock time this block (ms);
+                                              ///< compare against trackingTimeMs for barrier/imbalance overhead.
 };
 
 #pragma pack(pop)

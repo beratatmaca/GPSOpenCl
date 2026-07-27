@@ -167,6 +167,7 @@ double AtmosphericCorrections::saastamoinenTroposphericDelay(double rxAltitudeMe
 
     double h = rxAltitudeMeters;
     if (h < 0.0) h = 0.0;
+    if (h > 10000.0) h = 10000.0;
 
 
     double p0 = 1013.25;

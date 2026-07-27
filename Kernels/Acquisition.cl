@@ -210,7 +210,7 @@ __kernel void complexMultiplier(__global float2 *a, __global float2 *b,
 /**
  * @brief Computes magnitude squared of complex numbers: c = Re^2 + Im^2
  */
-__kernel void absolute(__global float2 *a, __global float2 *c,
+__kernel void absolute(__global float2 *a, __global float *c,
                        unsigned int points_per_group) {
   uint points_per_item, addr, i;
 
@@ -218,7 +218,7 @@ __kernel void absolute(__global float2 *a, __global float2 *c,
   addr = get_group_id(0) * points_per_group + get_local_id(0) * points_per_item;
 
   for (i = addr; i < addr + points_per_item; i++) {
-    c[i].x = (a[i].x * a[i].x) + (a[i].y * a[i].y);
+    c[i] = (a[i].x * a[i].x) + (a[i].y * a[i].y);
   }
 }
 

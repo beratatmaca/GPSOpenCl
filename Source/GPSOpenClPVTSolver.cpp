@@ -197,7 +197,7 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
     }
 
 
-    double state[4] = {4180483.4, 851798.0, 4725999.8, 0.0};
+    double state[4] = {m_referenceEcef.x, m_referenceEcef.y, m_referenceEcef.z, 0.0};
 
     std::vector<std::vector<double>> H(numSats, std::vector<double>(4, 0.0));
     std::vector<double> deltaRho(numSats, 0.0);
@@ -213,6 +213,10 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
 
         EcefPosition rxEcefEstimate{state[0], state[1], state[2]};
         GeodeticPosition rxGeodeticEstimate = ecefToWgs84(rxEcefEstimate);
+        if (iter < 3)
+        {
+            std::cerr << "  DEBUG iter=" << iter << " altitude=" << rxGeodeticEstimate.altitude << std::endl;
+        }
 
         for (size_t i = 0; i < numSats; i++)
         {
@@ -234,6 +238,10 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
             AtmosphericOutput atmo = AtmosphericCorrections::computeCorrections(
                 orbits[i].svId, rxGeodeticEstimate, rxEcefEstimate, orbits[i].position,
                 transmitTimesSeconds[i], m_ionoParams);
+            if (iter < 3 && i == 0)
+            {
+                std::cerr << "  DEBUG iter=" << iter << " tropoDelayMeters=" << atmo.tropoDelayMeters << std::endl;
+            }
 
             double predictedPseudorange = range + state[3];
             deltaRho[i] = (correctedRanges[i] - atmo.ionoDelayMeters - atmo.tropoDelayMeters) - predictedPseudorange;
@@ -340,6 +348,11 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
             {
                 std::cerr << "  DEBUG converged at iter=" << iter << " maxAbsResidual=" << maxAbsResidual
                           << " limit=" << m_inputConfig.maxPseudorangeErrMeters << std::endl;
+                for (size_t i = 0; i < numSats; i++)
+                {
+                    std::cerr << "    DEBUG deltaRho svId=" << orbits[i].svId << " residual=" << deltaRho[i]
+                              << std::endl;
+                }
             }
             debugSolveCount++;
 
@@ -398,6 +411,7 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
             solution.dopVDOP = std::sqrt(enuCovariance[2][2]);
 
             solution.isValid = true;
+            m_referenceEcef = solution.ecefPosition;
             return true;
         }
     }

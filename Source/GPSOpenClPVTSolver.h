@@ -118,9 +118,16 @@ class PVTSolver
      *  @param params Alpha/beta coefficients (e.g. from NavigationDecoder::getIonosphericParams). */
     void setIonosphericParams(const AtmosphericInput &params) { m_ionoParams = params; }
 
+    /** @brief Get the current coarse receiver position estimate, used to seed the Newton-Raphson
+     *   solve and to derive per-satellite transit-time estimates before a fix has converged.
+     *   Updated to the converged position after every successful solvePosition() call.
+     *  @return Best-known ECEF receiver position (m). */
+    EcefPosition getReferenceEcef() const { return m_referenceEcef; }
+
   private:
     PvtSolverInput m_inputConfig;     ///< Solver parameters.
     AtmosphericInput m_ionoParams{};  ///< Broadcast Klobuchar coefficients (zero until decoded).
+    EcefPosition m_referenceEcef{4180483.4, 851798.0, 4725999.8}; ///< Coarse receiver position estimate (m), seeds the solve and transit-time estimates.
 };
 }
 

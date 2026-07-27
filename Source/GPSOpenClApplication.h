@@ -126,6 +126,8 @@ class Application
     std::condition_variable m_startCv;              ///< Signals workers that a new range is ready.
     std::condition_variable m_doneCv;                ///< Signals the dispatcher that all workers finished.
     const ComplexFloatVector *m_currentTrackInput{nullptr}; ///< Block being tracked by the current dispatch.
+    std::vector<double> m_workerDurationMs;         ///< Per-worker wall-clock time in trackChannelRange this
+                                                     ///< block (ms); each worker writes only its own index.
     int m_generation{0};                            ///< Incremented on each new dispatch; workers compare against their last-seen value.
     int m_pendingWorkers{0};                        ///< Workers still processing the current dispatch.
     bool m_shutdownWorkers{false};                  ///< Set to stop all workers during destruction.

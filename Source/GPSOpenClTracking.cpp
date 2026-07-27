@@ -3,6 +3,7 @@
 #include "GPSOpenClLockDetector.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 
 using namespace GPSOpenCl;
@@ -178,9 +179,17 @@ void Tracking::doWork(const ComplexFloatVector &input, int prn, ComplexFloatVect
 {
     m_lastChannelState = channelState;
 
+    auto subStageT0 = std::chrono::high_resolution_clock::now();
     earlyLatePromptGen(prn);
+    auto subStageT1 = std::chrono::high_resolution_clock::now();
     numericOscillator();
+    auto subStageT2 = std::chrono::high_resolution_clock::now();
     accumulator(input);
+    auto subStageT3 = std::chrono::high_resolution_clock::now();
+
+    m_earlyLatePromptGenTimeMs = std::chrono::duration<float, std::milli>(subStageT1 - subStageT0).count();
+    m_numericOscillatorTimeMs = std::chrono::duration<float, std::milli>(subStageT2 - subStageT1).count();
+    m_accumulatorTimeMs = std::chrono::duration<float, std::milli>(subStageT3 - subStageT2).count();
 
     if (m_blocksSinceInit < m_fllPullInBlocks)
     {
@@ -249,6 +258,13 @@ TrackingOutput Tracking::getTrackingOutput(int prn) const
     out.carrierLockIndicator = static_cast<double>(m_carrierLockEma);
     out.codeLockRatio = static_cast<double>(m_codeLockEma);
     return out;
+}
+
+void Tracking::getSubStageTimings(float *earlyLatePromptGenMs, float *numericOscillatorMs, float *accumulatorMs) const
+{
+    *earlyLatePromptGenMs = m_earlyLatePromptGenTimeMs;
+    *numericOscillatorMs = m_numericOscillatorTimeMs;
+    *accumulatorMs = m_accumulatorTimeMs;
 }
 
 void Tracking::earlyLatePromptGen(int prn)

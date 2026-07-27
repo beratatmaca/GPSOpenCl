@@ -40,6 +40,15 @@ void Profiler::recordStageTimeMs(const std::string &stageName, double timeMs)
     }
 }
 
+void Profiler::recordTrackingSubStageTimings(double earlyLatePromptGenMs, double numericOscillatorMs,
+                                             double accumulatorMs, double maxWorkerMs)
+{
+    m_currentOutput.earlyLatePromptGenTimeMs = earlyLatePromptGenMs;
+    m_currentOutput.numericOscillatorTimeMs = numericOscillatorMs;
+    m_currentOutput.accumulatorTimeMs = accumulatorMs;
+    m_currentOutput.trackingMaxWorkerTimeMs = maxWorkerMs;
+}
+
 ProfilerOutput Profiler::finishBlock()
 {
     auto end = std::chrono::high_resolution_clock::now();

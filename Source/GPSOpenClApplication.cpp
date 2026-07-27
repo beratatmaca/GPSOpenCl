@@ -1,6 +1,7 @@
 #include "GPSOpenClApplication.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <fstream>
@@ -138,7 +139,11 @@ void Application::workerLoop(int workerIndex)
         const ComplexFloatVector *input = m_currentTrackInput;
         lock.unlock();
 
+        auto workStart = std::chrono::high_resolution_clock::now();
         trackChannelRange(*input, startIdx, endIdx);
+        auto workEnd = std::chrono::high_resolution_clock::now();
+        m_workerDurationMs[static_cast<size_t>(workerIndex)] =
+            std::chrono::duration<double, std::milli>(workEnd - workStart).count();
 
         lock.lock();
         m_pendingWorkers--;
@@ -157,6 +162,7 @@ void Application::startWorkerPool()
     if (m_numWorkers <= 1)
     {
         m_numWorkers = 1;
+        m_workerDurationMs.assign(1, 0.0);
         return;
     }
 
@@ -167,6 +173,7 @@ void Application::startWorkerPool()
     int channelsPerWorker = (GPS_CA_SV_COUNT + m_numWorkers - 1) / m_numWorkers;
     m_numWorkers = (GPS_CA_SV_COUNT + channelsPerWorker - 1) / channelsPerWorker;
 
+    m_workerDurationMs.assign(static_cast<size_t>(m_numWorkers), 0.0);
     m_workers.reserve(static_cast<size_t>(m_numWorkers));
     for (int i = 0; i < m_numWorkers; i++)
     {
@@ -201,7 +208,13 @@ void Application::trackSatellites(const ComplexFloatVector &input)
 {
     if (m_numWorkers <= 1)
     {
+        auto workStart = std::chrono::high_resolution_clock::now();
         trackChannelRange(input, 0, GPS_CA_SV_COUNT);
+        auto workEnd = std::chrono::high_resolution_clock::now();
+        if (!m_workerDurationMs.empty())
+        {
+            m_workerDurationMs[0] = std::chrono::duration<double, std::milli>(workEnd - workStart).count();
+        }
         return;
     }
 
@@ -236,7 +249,6 @@ bool Application::computeNavigationSolution(ReceiverPvtSolution &solution)
     std::vector<int> activePrns;
 
     const double c = 299792458.0;
-    const double nominalTransitTimeSec = 0.075;
 
     for (int i = 0; i < GPS_CA_SV_COUNT; i++)
     {
@@ -273,7 +285,23 @@ bool Application::computeNavigationSolution(ReceiverPvtSolution &solution)
 
 
 
-    double receiverTime = *std::max_element(transmitTimes.begin(), transmitTimes.end()) + nominalTransitTimeSec;
+    EcefPosition referenceEcef = m_pvtSolver.getReferenceEcef();
+    double averageTransmitTime = 0.0;
+    double averageTransitTimeSec = 0.0;
+    for (size_t i = 0; i < transmitTimes.size(); i++)
+    {
+        SatelliteOrbit orbit = PVTSolver::computeSatelliteOrbit(ephemerides[i], transmitTimes[i]);
+        double dx = orbit.position.x - referenceEcef.x;
+        double dy = orbit.position.y - referenceEcef.y;
+        double dz = orbit.position.z - referenceEcef.z;
+
+        averageTransmitTime += transmitTimes[i];
+        averageTransitTimeSec += std::sqrt(dx * dx + dy * dy + dz * dz) / c;
+    }
+    averageTransmitTime /= static_cast<double>(transmitTimes.size());
+    averageTransitTimeSec /= static_cast<double>(transmitTimes.size());
+
+    double receiverTime = averageTransmitTime + averageTransitTimeSec;
 
     std::vector<double> measuredPseudoranges(transmitTimes.size());
     for (size_t i = 0; i < transmitTimes.size(); i++)
@@ -427,6 +455,24 @@ void Application::processBlock(const ComplexFloatVector &input, uint32_t blockIn
     {
         Profiler::ScopedTimer trackTimer(m_profiler, "tracking");
         trackSatellites(input);
+    }
+    {
+        double earlyLatePromptGenTotalMs = 0.0, numericOscillatorTotalMs = 0.0, accumulatorTotalMs = 0.0;
+        for (int i = 0; i < GPS_CA_SV_COUNT; i++)
+        {
+            float earlyLatePromptGenMs = 0.0f, numericOscillatorMs = 0.0f, accumulatorMs = 0.0f;
+            m_channels[i].getTrackingSubStageTimings(&earlyLatePromptGenMs, &numericOscillatorMs, &accumulatorMs);
+            earlyLatePromptGenTotalMs += earlyLatePromptGenMs;
+            numericOscillatorTotalMs += numericOscillatorMs;
+            accumulatorTotalMs += accumulatorMs;
+        }
+        double maxWorkerMs = 0.0;
+        for (double workerMs : m_workerDurationMs)
+        {
+            maxWorkerMs = std::max(maxWorkerMs, workerMs);
+        }
+        m_profiler.recordTrackingSubStageTimings(earlyLatePromptGenTotalMs, numericOscillatorTotalMs,
+                                                 accumulatorTotalMs, maxWorkerMs);
     }
     {
         Profiler::ScopedTimer navTimer(m_profiler, "navDecode");
