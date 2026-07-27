@@ -1,0 +1,26 @@
+# Minimal Doxyfile. Unset options use Doxygen's built-in defaults.
+
+PROJECT_NAME     = "GPSOpenCl"
+PROJECT_BRIEF    = "OpenCL-accelerated GPS L1 C/A software receiver"
+OUTPUT_DIRECTORY = docs
+
+# Kernels/*.cl carries Doxygen comments but no distinct OpenCL parser exists; map it to C.
+EXTENSION_MAPPING = cl=C
+INPUT             = README.md Source Kernels
+FILE_PATTERNS     = *.h *.cpp *.cl
+RECURSIVE         = YES
+USE_MDFILE_AS_MAINPAGE = README.md
+TAB_SIZE          = 4
+
+EXTRACT_ALL     = NO
+EXTRACT_PRIVATE = YES
+EXTRACT_STATIC  = YES
+
+WARN_IF_UNDOCUMENTED = YES
+WARN_NO_PARAMDOC     = YES
+
+SOURCE_BROWSER = YES
+GENERATE_HTML  = YES
+HTML_OUTPUT    = html
+GENERATE_LATEX = NO
+QUIET          = YES

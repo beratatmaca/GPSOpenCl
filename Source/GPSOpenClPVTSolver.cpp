@@ -213,10 +213,6 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
 
         EcefPosition rxEcefEstimate{state[0], state[1], state[2]};
         GeodeticPosition rxGeodeticEstimate = ecefToWgs84(rxEcefEstimate);
-        if (iter < 3)
-        {
-            std::cerr << "  DEBUG iter=" << iter << " altitude=" << rxGeodeticEstimate.altitude << std::endl;
-        }
 
         for (size_t i = 0; i < numSats; i++)
         {
@@ -238,10 +234,6 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
             AtmosphericOutput atmo = AtmosphericCorrections::computeCorrections(
                 orbits[i].svId, rxGeodeticEstimate, rxEcefEstimate, orbits[i].position,
                 transmitTimesSeconds[i], m_ionoParams);
-            if (iter < 3 && i == 0)
-            {
-                std::cerr << "  DEBUG iter=" << iter << " tropoDelayMeters=" << atmo.tropoDelayMeters << std::endl;
-            }
 
             double predictedPseudorange = range + state[3];
             deltaRho[i] = (correctedRanges[i] - atmo.ionoDelayMeters - atmo.tropoDelayMeters) - predictedPseudorange;

@@ -64,6 +64,13 @@ class Tracking
      *  @return Value near 1.0 when code phase is correctly aligned. */
     float getCodeLockRatio() const { return m_codeLockEma; }
 
+    /** @brief Get the residual DLL code phase left over after this block's whole-chip early/prompt/late
+     *   generation. Consecutive readings, differenced and unwrapped mod 1023 chips, give the code-phase
+     *   drift accumulated between them - the sub-millisecond correction the coarse block-count-based
+     *   transmit-time estimate is missing.
+     *  @return Code phase (chips, 0-1023). */
+    float getCodePhaseChips() const { return m_remCodePhase; }
+
     /** @brief Compute PLL loop filter tau1 time constant.
      *  @param noiseBandwidthHz Loop noise bandwidth (Hz).
      *  @return Tau1 value (s). */

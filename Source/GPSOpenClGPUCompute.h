@@ -44,6 +44,26 @@ class Compute
      *  @return 0 on success. */
     int absolute(const ComplexFloatVector &input1, FloatVector *output);
 
+    /** @brief Complex-multiply then FFT, keeping the product on-device between the two kernel
+     *   stages instead of a host round-trip in between.
+     *  @param input1    First complex vector.
+     *  @param input2    Second complex vector.
+     *  @param direction Forward or inverse FFT.
+     *  @param output    FFT of the product.
+     *  @return 0 on success. */
+    int complexMultiplyThenFft(const ComplexFloatVector &input1, const ComplexFloatVector &input2,
+                               FFTDirectionType direction, ComplexFloatVector *output);
+
+    /** @brief Complex-multiply, FFT, then magnitude-squared, keeping both intermediates on-device
+     *   between kernel stages instead of a host round-trip after each one.
+     *  @param input1    First complex vector.
+     *  @param input2    Second complex vector.
+     *  @param direction Forward or inverse FFT.
+     *  @param output    Magnitude squared of the FFT of the product.
+     *  @return 0 on success. */
+    int complexMultiplyThenFftThenAbsolute(const ComplexFloatVector &input1, const ComplexFloatVector &input2,
+                                           FFTDirectionType direction, FloatVector *output);
+
     /** @brief Parallel reduction sum.
      *  @param input    Float vector.
      *  @param sumValue Output sum.
@@ -74,6 +94,32 @@ class Compute
      *  @param neededFloats   Required capacity in floats.
      *  @return Buffer handle, or nullptr on allocation failure. */
     cl_mem ensureBuffer(cl_mem &buffer, size_t &capacityFloats, size_t neededFloats);
+
+    /** @brief GPU complexMultiplier stage, leaving the product on-device instead of reading it
+     *   back to host. Used both by complexMultiplier() and by the on-device chained calls.
+     *  @param input1 First complex vector.
+     *  @param input2 Second complex vector.
+     *  @param length Element count (equal for both inputs).
+     *  @return The device output buffer (m_cmBufferC), or nullptr on failure. */
+    cl_mem complexMultiplierDevice(const ComplexFloatVector &input1, const ComplexFloatVector &input2,
+                                   unsigned int length);
+
+    /** @brief GPU FFT stage, operating in place on a caller-supplied device buffer instead of
+     *   uploading from or reading back to host. Used both by fft() and by the on-device chained
+     *   calls.
+     *  @param buffer    Device buffer holding length interleaved complex floats (in/out).
+     *  @param length    Element count.
+     *  @param direction Forward or inverse FFT.
+     *  @return 0 on success. */
+    int fftDeviceInPlace(cl_mem buffer, unsigned int length, FFTDirectionType direction);
+
+    /** @brief GPU absolute stage, reading its input directly from a caller-supplied device buffer
+     *   instead of uploading from host. Used both by absolute() and by the on-device chained calls.
+     *  @param inputBuffer Device buffer holding length interleaved complex floats.
+     *  @param length      Element count.
+     *  @param output      Magnitude squared output (host).
+     *  @return 0 on success. */
+    int absoluteDeviceToHost(cl_mem inputBuffer, unsigned int length, FloatVector *output);
 
     GpuHandler m_gpu;                      ///< OpenCL handler.
     cl_command_queue m_queue;               ///< OpenCL command queue.

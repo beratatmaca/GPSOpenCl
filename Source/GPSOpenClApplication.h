@@ -7,6 +7,7 @@
 
 #include "GPSOpenClAcquisition.h"
 #include "GPSOpenClAtmosphericCorrections.h"
+#include "GPSOpenClBoundedQueue.h"
 #include "GPSOpenClChannel.h"
 #include "GPSOpenClCode.h"
 #include "GPSOpenClGPUCompute.h"
@@ -20,6 +21,7 @@
 #include "GPSOpenClStructs.h"
 #include "GPSOpenClTracking.h"
 
+#include <atomic>
 #include <condition_variable>
 #include <memory>
 #include <mutex>
@@ -75,6 +77,31 @@ class Application
     void processBlock(const ComplexFloatVector &input, uint32_t blockIndex);
 
   private:
+    /** @brief One pending background acquisition search: a snapshot of the block's samples plus the
+     *   channel to search, handed off to the acquisition worker thread. */
+    struct AcquisitionJob
+    {
+        ComplexFloatVector input; ///< Snapshot of the block's IQ samples.
+        int channelIndex{0};      ///< Channel index (0-based, PRN - 1) to search.
+    };
+
+    /** @brief Result of a completed background acquisition search, handed back to the consumer
+     *   thread for channel-state finalization. */
+    struct AcquisitionResult
+    {
+        int channelIndex{0};    ///< Channel index (0-based, PRN - 1) that was searched.
+        double correlateMs{0.0}; ///< Wall-clock duration of the correlate() call (ms).
+    };
+
+    /** @brief One pending asynchronous text write: either a full file overwrite or a console print,
+     *   so the consumer thread never blocks on disk or stdout I/O. */
+    struct AsyncOutputJob
+    {
+        bool isConsole{false};    ///< True: write content to stdout. False: overwrite filePath.
+        std::string filePath;     ///< Target file path (unused if isConsole).
+        std::string content;      ///< Text to write.
+    };
+
     /** @brief Initialize all 32 satellite channels. */
     void initializeChannels();
 
@@ -83,6 +110,21 @@ class Application
      *  @param input        IQ samples for one code period.
      *  @param channelIndex Channel index (0-based, PRN - 1). */
     void searchOneChannel(const ComplexFloatVector &input, int channelIndex);
+
+    /** @brief Apply a completed acquisition search's results: C/N0 threshold check, tracking
+     *   initialization on success, and telemetry publish. Must run on the consumer thread only,
+     *   since it mutates channel lifecycle state that the tracking worker pool also touches.
+     *  @param channelIndex Channel index (0-based, PRN - 1) whose search just completed. */
+    void finalizeAcquisition(int channelIndex);
+
+    /** @brief Persistent background acquisition thread body: waits for a job, runs the correlation
+     *   search, and reports completion. Keeps the ~tens-of-ms Doppler search off the consumer
+     *   thread so it never stalls tracking/nav-decode/PVT for the current block. */
+    void acquisitionWorkerLoop();
+
+    /** @brief Persistent background writer thread body: drains m_outputQueue and performs the
+     *   actual file/console write, so a slow disk or stdout never stalls the consumer thread. */
+    void outputWriterLoop();
 
     /** @brief Decode navigation bits for all confirmed-tracking channels. Must run every block
      *   regardless of the PVT fix-output cadence, since nav-bit decode needs to consume newly
@@ -132,6 +174,16 @@ class Application
     int m_pendingWorkers{0};                        ///< Workers still processing the current dispatch.
     bool m_shutdownWorkers{false};                  ///< Set to stop all workers during destruction.
     int m_numWorkers{0};                            ///< Active worker count (0 or 1 disables the pool).
+
+    std::thread m_acquisitionThread;                        ///< Background acquisition worker thread.
+    BoundedQueue<AcquisitionJob> m_acquisitionJobQueue{1};   ///< Consumer-to-worker job handoff (one in flight).
+    BoundedQueue<AcquisitionResult> m_acquisitionResultQueue{4}; ///< Worker-to-consumer result handoff.
+    std::atomic<bool> m_acquisitionBusy{false};              ///< True while a background search is in flight.
+    int m_nextAcquisitionChannel{0};                         ///< Cursor for the cold-start sweep.
+    bool m_coldStartSweepDone{false};                        ///< True once every channel has been searched once.
+
+    std::thread m_outputWriterThread;                 ///< Background telemetry JSON/console writer thread.
+    BoundedQueue<AsyncOutputJob> m_outputQueue{32};    ///< Handoff queue for async file/console writes.
 };
 }
 

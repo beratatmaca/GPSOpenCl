@@ -144,19 +144,79 @@ cl_mem Compute::ensureBuffer(cl_mem &buffer, size_t &capacityFloats, size_t need
 
 
 
+int Compute::fftDeviceInPlace(cl_mem buffer, unsigned int length, FFTDirectionType direction)
+{
+    if (!m_queue || m_gpu.m_acquisitionKernelList.size() <= GpuHandler::FFTScale)
+    {
+        return -1;
+    }
+
+    cacheDeviceInfo();
+
+    cl_kernel initKernel = m_gpu.m_acquisitionKernelList[GpuHandler::FFTInit];
+    cl_kernel stageKernel = m_gpu.m_acquisitionKernelList[GpuHandler::FFTStage];
+    cl_kernel scaleKernel = m_gpu.m_acquisitionKernelList[GpuHandler::FFTScale];
+
+    int dir = static_cast<int>(direction);
+    size_t local_size = m_fftLocalSize;
+    cl_ulong localMemorySize = m_localMemorySize;
+    unsigned int points_per_group = localMemorySize / (2 * sizeof(float));
+
+    points_per_group = roundDownToPowerOfTwo(points_per_group);
+    if (points_per_group > length)
+    {
+        points_per_group = length;
+    }
+
+    local_size = clampLocalSizeForMinPointsPerItem(static_cast<unsigned int>(local_size), points_per_group, 4);
+
+    m_error = clSetKernelArg(initKernel, 0, sizeof(cl_mem), &buffer);
+    m_error |= clSetKernelArg(initKernel, 1, localMemorySize, NULL);
+    m_error |= clSetKernelArg(initKernel, 2, sizeof(points_per_group), &points_per_group);
+    m_error |= clSetKernelArg(initKernel, 3, sizeof(length), &length);
+    m_error |= clSetKernelArg(initKernel, 4, sizeof(dir), &dir);
+
+    if (m_error != CL_SUCCESS)
+    {
+        return -1;
+    }
+
+    size_t global_size = (length / points_per_group) * local_size;
+    m_error = clEnqueueNDRangeKernel(m_queue, initKernel, 1, NULL, &global_size, &local_size, 0, NULL, NULL);
+
+    if (m_error == CL_SUCCESS && length > points_per_group)
+    {
+        m_error = clSetKernelArg(stageKernel, 0, sizeof(cl_mem), &buffer);
+        m_error |= clSetKernelArg(stageKernel, 2, sizeof(points_per_group), &points_per_group);
+        m_error |= clSetKernelArg(stageKernel, 3, sizeof(dir), &dir);
+
+        for (unsigned int stage = 2; m_error == CL_SUCCESS && stage <= length / points_per_group; stage <<= 1)
+        {
+            clSetKernelArg(stageKernel, 1, sizeof(stage), &stage);
+            m_error = clEnqueueNDRangeKernel(m_queue, stageKernel, 1, NULL, &global_size, &local_size, 0, NULL, NULL);
+        }
+    }
+
+    if (m_error == CL_SUCCESS && dir < 0)
+    {
+        m_error = clSetKernelArg(scaleKernel, 0, sizeof(cl_mem), &buffer);
+        m_error |= clSetKernelArg(scaleKernel, 1, sizeof(points_per_group), &points_per_group);
+        m_error |= clSetKernelArg(scaleKernel, 2, sizeof(length), &length);
+
+        if (m_error == CL_SUCCESS)
+        {
+            m_error = clEnqueueNDRangeKernel(m_queue, scaleKernel, 1, NULL, &global_size, &local_size, 0, NULL, NULL);
+        }
+    }
+
+    return (m_error == CL_SUCCESS) ? 0 : -1;
+}
+
 int Compute::fft(const ComplexFloatVector &input, ComplexFloatVector *output, FFTDirectionType direction)
 {
     if (m_queue && m_gpu.m_acquisitionKernelList.size() > GpuHandler::FFTScale)
     {
-        size_t global_size = 0;
-        unsigned int points_per_group = 0;
-        unsigned int stage = 0;
         unsigned int length = input.size();
-        int dir = static_cast<int>(direction);
-
-        cl_kernel initKernel = m_gpu.m_acquisitionKernelList[GpuHandler::FFTInit];
-        cl_kernel stageKernel = m_gpu.m_acquisitionKernelList[GpuHandler::FFTStage];
-        cl_kernel scaleKernel = m_gpu.m_acquisitionKernelList[GpuHandler::FFTScale];
 
         cacheDeviceInfo();
 
@@ -180,83 +240,23 @@ int Compute::fft(const ComplexFloatVector &input, ComplexFloatVector *output, FF
         {
             m_error = clEnqueueWriteBuffer(m_queue, dataBuffer, CL_FALSE, 0, 2 * length * sizeof(float),
                                            m_allocatedMemory.data(), 0, NULL, NULL);
-            if (m_error == CL_SUCCESS)
+            if (m_error == CL_SUCCESS && fftDeviceInPlace(dataBuffer, length, direction) == 0)
             {
-                size_t local_size = m_fftLocalSize;
-                cl_ulong localMemorySize = m_localMemorySize;
-                points_per_group = localMemorySize / (2 * sizeof(float));
-
-
-
-
-                points_per_group = roundDownToPowerOfTwo(points_per_group);
-                if (points_per_group > length)
-                {
-                    points_per_group = length;
-                }
-
-
-
-
-
-
-                local_size = clampLocalSizeForMinPointsPerItem(static_cast<unsigned int>(local_size), points_per_group, 4);
-
-                m_error = clSetKernelArg(initKernel, 0, sizeof(cl_mem), &dataBuffer);
-                m_error |= clSetKernelArg(initKernel, 1, localMemorySize, NULL);
-                m_error |= clSetKernelArg(initKernel, 2, sizeof(points_per_group), &points_per_group);
-                m_error |= clSetKernelArg(initKernel, 3, sizeof(length), &length);
-                m_error |= clSetKernelArg(initKernel, 4, sizeof(dir), &dir);
-
+                m_error = clEnqueueReadBuffer(m_queue, dataBuffer, CL_TRUE, 0, 2 * length * sizeof(float),
+                                              m_allocatedMemory.data(), 0, NULL, NULL);
                 if (m_error == CL_SUCCESS)
                 {
-                    global_size = (length / points_per_group) * local_size;
-                    m_error = clEnqueueNDRangeKernel(m_queue, initKernel, 1, NULL, &global_size, &local_size, 0, NULL, NULL);
-
-                    if (m_error == CL_SUCCESS && length > points_per_group)
+                    output->clear();
+                    output->reserve(length);
+                    for (unsigned int j = 0; j < length; j++)
                     {
-                        m_error = clSetKernelArg(stageKernel, 0, sizeof(cl_mem), &dataBuffer);
-                        m_error |= clSetKernelArg(stageKernel, 2, sizeof(points_per_group), &points_per_group);
-                        m_error |= clSetKernelArg(stageKernel, 3, sizeof(dir), &dir);
+                        float realVal = m_allocatedMemory[2 * j];
+                        float imagVal = m_allocatedMemory[2 * j + 1];
 
-                        for (stage = 2; m_error == CL_SUCCESS && stage <= length / points_per_group; stage <<= 1)
-                        {
-                            clSetKernelArg(stageKernel, 1, sizeof(stage), &stage);
-                            m_error = clEnqueueNDRangeKernel(m_queue, stageKernel, 1, NULL, &global_size, &local_size, 0, NULL, NULL);
-                        }
+                        output->push_back(std::complex<float>(realVal, imagVal));
                     }
 
-                    if (m_error == CL_SUCCESS && dir < 0)
-                    {
-                        m_error = clSetKernelArg(scaleKernel, 0, sizeof(cl_mem), &dataBuffer);
-                        m_error |= clSetKernelArg(scaleKernel, 1, sizeof(points_per_group), &points_per_group);
-                        m_error |= clSetKernelArg(scaleKernel, 2, sizeof(length), &length);
-
-                        if (m_error == CL_SUCCESS)
-                        {
-                            m_error = clEnqueueNDRangeKernel(m_queue, scaleKernel, 1, NULL, &global_size, &local_size, 0, NULL, NULL);
-                        }
-                    }
-
-                    if (m_error == CL_SUCCESS)
-                    {
-                        m_error = clEnqueueReadBuffer(m_queue, dataBuffer, CL_TRUE, 0, 2 * length * sizeof(float),
-                                                      m_allocatedMemory.data(), 0, NULL, NULL);
-                        if (m_error == CL_SUCCESS)
-                        {
-                            output->clear();
-                            output->reserve(length);
-                            for (unsigned int j = 0; j < length; j++)
-                            {
-                                float realVal = m_allocatedMemory[2 * j];
-                                float imagVal = m_allocatedMemory[2 * j + 1];
-
-                                output->push_back(std::complex<float>(realVal, imagVal));
-                            }
-
-                            return 0;
-                        }
-                    }
+                    return 0;
                 }
             }
         }
@@ -319,88 +319,94 @@ int Compute::fft(const ComplexFloatVector &input, ComplexFloatVector *output, FF
     return 0;
 }
 
+cl_mem Compute::complexMultiplierDevice(const ComplexFloatVector &input1, const ComplexFloatVector &input2,
+                                        unsigned int length)
+{
+    cacheDeviceInfo();
+
+    if (m_allocatedMemory.size() < 4 * length)
+    {
+        m_allocatedMemory.resize(4 * length);
+    }
+
+    for (unsigned int j = 0; j < length; j++)
+    {
+        float realVal = std::real(input1.at(j));
+        float imagVal = std::imag(input1.at(j));
+
+        m_allocatedMemory[2 * j] = realVal;
+        m_allocatedMemory[2 * j + 1] = imagVal;
+    }
+
+    for (unsigned int j = 0; j < length; j++)
+    {
+        float realVal = std::real(input2.at(j));
+        float imagVal = std::imag(input2.at(j));
+
+        m_allocatedMemory[(2 * length) + 2 * j] = realVal;
+        m_allocatedMemory[(2 * length) + 2 * j + 1] = imagVal;
+    }
+
+    cl_kernel complexMultiplierKernel = m_gpu.m_acquisitionKernelList[GpuHandler::ComplexMultiplier];
+    cl_mem d_a = ensureBuffer(m_cmBufferA, m_cmBufferCapacityA, 2 * length);
+    cl_mem d_b = (d_a && m_error == CL_SUCCESS) ? ensureBuffer(m_cmBufferB, m_cmBufferCapacityB, 2 * length) : nullptr;
+    cl_mem d_c = (d_b && m_error == CL_SUCCESS) ? ensureBuffer(m_cmBufferC, m_cmBufferCapacityC, 2 * length) : nullptr;
+
+    if (!d_a || !d_b || !d_c || m_error != CL_SUCCESS)
+    {
+        return nullptr;
+    }
+
+    clEnqueueWriteBuffer(m_queue, d_a, CL_FALSE, 0, 2 * length * sizeof(float), m_allocatedMemory.data(), 0, NULL, NULL);
+    clEnqueueWriteBuffer(m_queue, d_b, CL_FALSE, 0, 2 * length * sizeof(float), &m_allocatedMemory[2 * length], 0, NULL, NULL);
+
+    size_t local_size = m_complexMultiplierLocalSize;
+    cl_ulong localMemorySize = m_localMemorySize;
+    unsigned int points_per_group = localMemorySize / (2 * sizeof(float));
+
+    points_per_group = roundDownToPowerOfTwo(points_per_group);
+    if (points_per_group > length)
+    {
+        points_per_group = length;
+    }
+    local_size = clampLocalSizeForMinPointsPerItem(static_cast<unsigned int>(local_size), points_per_group, 1);
+
+    clSetKernelArg(complexMultiplierKernel, 0, sizeof(cl_mem), &d_a);
+    clSetKernelArg(complexMultiplierKernel, 1, sizeof(cl_mem), &d_b);
+    clSetKernelArg(complexMultiplierKernel, 2, sizeof(cl_mem), &d_c);
+    clSetKernelArg(complexMultiplierKernel, 3, sizeof(unsigned int), &points_per_group);
+
+    size_t global_size = (length / points_per_group) * local_size;
+    m_error = clEnqueueNDRangeKernel(m_queue, complexMultiplierKernel, 1, NULL, &global_size, &local_size, 0, NULL, NULL);
+
+    return (m_error == CL_SUCCESS) ? d_c : nullptr;
+}
+
 int Compute::complexMultiplier(const ComplexFloatVector &input1, const ComplexFloatVector &input2,
                                ComplexFloatVector *output)
 {
     if (m_queue && m_gpu.m_acquisitionKernelList.size() > GpuHandler::ComplexMultiplier)
     {
-        size_t global_size = 0;
         unsigned int length = static_cast<unsigned int>(input1.size());
-        unsigned int points_per_group = 0;
+        cl_mem d_c = complexMultiplierDevice(input1, input2, length);
 
-        cacheDeviceInfo();
-
-        if (m_allocatedMemory.size() < 4 * length)
+        if (d_c && m_error == CL_SUCCESS)
         {
-            m_allocatedMemory.resize(4 * length);
-        }
-
-        for (unsigned int j = 0; j < length; j++)
-        {
-            float realVal = std::real(input1.at(j));
-            float imagVal = std::imag(input1.at(j));
-
-            m_allocatedMemory[2 * j] = realVal;
-            m_allocatedMemory[2 * j + 1] = imagVal;
-        }
-
-        for (unsigned int j = 0; j < length; j++)
-        {
-            float realVal = std::real(input2.at(j));
-            float imagVal = std::imag(input2.at(j));
-
-            m_allocatedMemory[(2 * length) + 2 * j] = realVal;
-            m_allocatedMemory[(2 * length) + 2 * j + 1] = imagVal;
-        }
-
-        cl_kernel complexMultiplierKernel = m_gpu.m_acquisitionKernelList[GpuHandler::ComplexMultiplier];
-        cl_mem d_a = ensureBuffer(m_cmBufferA, m_cmBufferCapacityA, 2 * length);
-        cl_mem d_b = (d_a && m_error == CL_SUCCESS) ? ensureBuffer(m_cmBufferB, m_cmBufferCapacityB, 2 * length) : nullptr;
-        cl_mem d_c = (d_b && m_error == CL_SUCCESS) ? ensureBuffer(m_cmBufferC, m_cmBufferCapacityC, 2 * length) : nullptr;
-
-        if (d_a && d_b && d_c && m_error == CL_SUCCESS)
-        {
-            clEnqueueWriteBuffer(m_queue, d_a, CL_FALSE, 0, 2 * length * sizeof(float), m_allocatedMemory.data(), 0, NULL, NULL);
-            clEnqueueWriteBuffer(m_queue, d_b, CL_FALSE, 0, 2 * length * sizeof(float), &m_allocatedMemory[2 * length], 0, NULL, NULL);
-
-            size_t local_size = m_complexMultiplierLocalSize;
-            cl_ulong localMemorySize = m_localMemorySize;
-            points_per_group = localMemorySize / (2 * sizeof(float));
-
-
-            points_per_group = roundDownToPowerOfTwo(points_per_group);
-            if (points_per_group > length)
-            {
-                points_per_group = length;
-            }
-            local_size = clampLocalSizeForMinPointsPerItem(static_cast<unsigned int>(local_size), points_per_group, 1);
-
-            clSetKernelArg(complexMultiplierKernel, 0, sizeof(cl_mem), &d_a);
-            clSetKernelArg(complexMultiplierKernel, 1, sizeof(cl_mem), &d_b);
-            clSetKernelArg(complexMultiplierKernel, 2, sizeof(cl_mem), &d_c);
-            clSetKernelArg(complexMultiplierKernel, 3, sizeof(unsigned int), &points_per_group);
-
-            global_size = (length / points_per_group) * local_size;
-            m_error = clEnqueueNDRangeKernel(m_queue, complexMultiplierKernel, 1, NULL, &global_size, &local_size, 0, NULL, NULL);
+            m_error = clEnqueueReadBuffer(m_queue, d_c, CL_TRUE, 0, 2 * length * sizeof(float), m_allocatedMemory.data(), 0, NULL, NULL);
 
             if (m_error == CL_SUCCESS)
             {
-                m_error = clEnqueueReadBuffer(m_queue, d_c, CL_TRUE, 0, 2 * length * sizeof(float), m_allocatedMemory.data(), 0, NULL, NULL);
-
-                if (m_error == CL_SUCCESS)
+                output->clear();
+                output->reserve(length);
+                for (unsigned int j = 0; j < length; j++)
                 {
-                    output->clear();
-                    output->reserve(length);
-                    for (unsigned int j = 0; j < length; j++)
-                    {
-                        float realVal = m_allocatedMemory[2 * j];
-                        float imagVal = m_allocatedMemory[2 * j + 1];
+                    float realVal = m_allocatedMemory[2 * j];
+                    float imagVal = m_allocatedMemory[2 * j + 1];
 
-                        output->push_back(std::complex<float>(realVal, imagVal));
-                    }
-
-                    return 0;
+                    output->push_back(std::complex<float>(realVal, imagVal));
                 }
+
+                return 0;
             }
         }
     }
@@ -415,13 +421,60 @@ int Compute::complexMultiplier(const ComplexFloatVector &input1, const ComplexFl
     return 0;
 }
 
+int Compute::absoluteDeviceToHost(cl_mem inputBuffer, unsigned int length, FloatVector *output)
+{
+    if (!m_queue || m_gpu.m_acquisitionKernelList.size() <= GpuHandler::Absolute)
+    {
+        return -1;
+    }
+
+    cacheDeviceInfo();
+
+    cl_kernel absoluteKernel = m_gpu.m_acquisitionKernelList[GpuHandler::Absolute];
+    cl_mem d_c = ensureBuffer(m_absBufferC, m_absBufferCapacityC, length);
+
+    if (!d_c || m_error != CL_SUCCESS)
+    {
+        return -1;
+    }
+
+    size_t local_size = m_absoluteLocalSize;
+    cl_ulong localMemorySize = m_localMemorySize;
+    unsigned int points_per_group = localMemorySize / (2 * sizeof(float));
+
+    points_per_group = roundDownToPowerOfTwo(points_per_group);
+    if (points_per_group > length)
+    {
+        points_per_group = length;
+    }
+    local_size = clampLocalSizeForMinPointsPerItem(static_cast<unsigned int>(local_size), points_per_group, 1);
+
+    clSetKernelArg(absoluteKernel, 0, sizeof(cl_mem), &inputBuffer);
+    clSetKernelArg(absoluteKernel, 1, sizeof(cl_mem), &d_c);
+    clSetKernelArg(absoluteKernel, 2, sizeof(unsigned int), &points_per_group);
+
+    size_t global_size = (length / points_per_group) * local_size;
+    m_error = clEnqueueNDRangeKernel(m_queue, absoluteKernel, 1, NULL, &global_size, &local_size, 0, NULL, NULL);
+
+    if (m_error == CL_SUCCESS)
+    {
+        m_error = clEnqueueReadBuffer(m_queue, d_c, CL_TRUE, 0, length * sizeof(float), m_allocatedMemory.data(), 0, NULL, NULL);
+
+        if (m_error == CL_SUCCESS)
+        {
+            output->assign(m_allocatedMemory.begin(), m_allocatedMemory.begin() + length);
+            return 0;
+        }
+    }
+
+    return -1;
+}
+
 int Compute::absolute(const ComplexFloatVector &input1, FloatVector *output)
 {
     if (m_queue && m_gpu.m_acquisitionKernelList.size() > GpuHandler::Absolute)
     {
-        size_t global_size = 0;
         unsigned int length = static_cast<unsigned int>(input1.size());
-        unsigned int points_per_group = 0;
 
         cacheDeviceInfo();
 
@@ -439,42 +492,15 @@ int Compute::absolute(const ComplexFloatVector &input1, FloatVector *output)
             m_allocatedMemory[2 * j + 1] = imagVal;
         }
 
-        cl_kernel absoluteKernel = m_gpu.m_acquisitionKernelList[GpuHandler::Absolute];
         cl_mem d_a = ensureBuffer(m_absBufferA, m_absBufferCapacityA, 2 * length);
-        cl_mem d_c = (d_a && m_error == CL_SUCCESS) ? ensureBuffer(m_absBufferC, m_absBufferCapacityC, length) : nullptr;
 
-        if (d_a && d_c && m_error == CL_SUCCESS)
+        if (d_a && m_error == CL_SUCCESS)
         {
             clEnqueueWriteBuffer(m_queue, d_a, CL_FALSE, 0, 2 * length * sizeof(float), m_allocatedMemory.data(), 0, NULL, NULL);
 
-            size_t local_size = m_absoluteLocalSize;
-            cl_ulong localMemorySize = m_localMemorySize;
-            points_per_group = localMemorySize / (2 * sizeof(float));
-
-
-            points_per_group = roundDownToPowerOfTwo(points_per_group);
-            if (points_per_group > length)
+            if (absoluteDeviceToHost(d_a, length, output) == 0)
             {
-                points_per_group = length;
-            }
-            local_size = clampLocalSizeForMinPointsPerItem(static_cast<unsigned int>(local_size), points_per_group, 1);
-
-            clSetKernelArg(absoluteKernel, 0, sizeof(cl_mem), &d_a);
-            clSetKernelArg(absoluteKernel, 1, sizeof(cl_mem), &d_c);
-            clSetKernelArg(absoluteKernel, 2, sizeof(unsigned int), &points_per_group);
-
-            global_size = (length / points_per_group) * local_size;
-            m_error = clEnqueueNDRangeKernel(m_queue, absoluteKernel, 1, NULL, &global_size, &local_size, 0, NULL, NULL);
-
-            if (m_error == CL_SUCCESS)
-            {
-                m_error = clEnqueueReadBuffer(m_queue, d_c, CL_TRUE, 0, length * sizeof(float), m_allocatedMemory.data(), 0, NULL, NULL);
-
-                if (m_error == CL_SUCCESS)
-                {
-                    output->assign(m_allocatedMemory.begin(), m_allocatedMemory.begin() + length);
-                    return 0;
-                }
+                return 0;
             }
         }
     }
@@ -489,6 +515,62 @@ int Compute::absolute(const ComplexFloatVector &input1, FloatVector *output)
         output->push_back(realVal * realVal + imagVal * imagVal);
     }
     return 0;
+}
+
+int Compute::complexMultiplyThenFft(const ComplexFloatVector &input1, const ComplexFloatVector &input2,
+                                    FFTDirectionType direction, ComplexFloatVector *output)
+{
+    unsigned int length = static_cast<unsigned int>(input1.size());
+    if (m_queue && m_gpu.m_acquisitionKernelList.size() > GpuHandler::FFTScale &&
+        m_gpu.m_acquisitionKernelList.size() > GpuHandler::ComplexMultiplier)
+    {
+        cl_mem product = complexMultiplierDevice(input1, input2, length);
+        if (product && m_error == CL_SUCCESS && fftDeviceInPlace(product, length, direction) == 0)
+        {
+            m_error = clEnqueueReadBuffer(m_queue, product, CL_TRUE, 0, 2 * length * sizeof(float),
+                                          m_allocatedMemory.data(), 0, NULL, NULL);
+            if (m_error == CL_SUCCESS)
+            {
+                output->clear();
+                output->reserve(length);
+                for (unsigned int j = 0; j < length; j++)
+                {
+                    output->push_back(std::complex<float>(m_allocatedMemory[2 * j], m_allocatedMemory[2 * j + 1]));
+                }
+                return 0;
+            }
+        }
+    }
+
+    ComplexFloatVector product;
+    complexMultiplier(input1, input2, &product);
+    return fft(product, output, direction);
+}
+
+int Compute::complexMultiplyThenFftThenAbsolute(const ComplexFloatVector &input1, const ComplexFloatVector &input2,
+                                                FFTDirectionType direction, FloatVector *output)
+{
+    unsigned int length = static_cast<unsigned int>(input1.size());
+    if (m_queue && m_gpu.m_acquisitionKernelList.size() > GpuHandler::FFTScale &&
+        m_gpu.m_acquisitionKernelList.size() > GpuHandler::ComplexMultiplier &&
+        m_gpu.m_acquisitionKernelList.size() > GpuHandler::Absolute)
+    {
+        cl_mem product = complexMultiplierDevice(input1, input2, length);
+        if (product && m_error == CL_SUCCESS && fftDeviceInPlace(product, length, direction) == 0 &&
+            absoluteDeviceToHost(product, length, output) == 0)
+        {
+            return 0;
+        }
+    }
+
+    ComplexFloatVector product;
+    complexMultiplier(input1, input2, &product);
+    ComplexFloatVector fftResult;
+    if (fft(product, &fftResult, direction) != 0)
+    {
+        return -1;
+    }
+    return absolute(fftResult, output);
 }
 
 int Compute::sum(const FloatVector &input, float *sumValue)

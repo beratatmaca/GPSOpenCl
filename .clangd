@@ -1,0 +1,44 @@
+CompileFlags:
+  CompilationDatabase: build
+  Add:
+    - -Wno-unknown-warning-option
+
+Index:
+  Background: Build
+  StandardLibrary: Yes
+
+Diagnostics:
+  UnusedIncludes: None
+  MissingIncludes: None
+
+InlayHints:
+  Enabled: true
+  ParameterNames: true
+  DeducedTypes: true
+  Designators: true
+
+---
+If:
+  PathMatch: .*\.cl
+CompileFlags:
+  Compiler: clang
+  Add:
+    - -x
+    - cl
+    - -cl-std=CL1.2
+    - -Xclang
+    - -finclude-default-header
+Diagnostics:
+  ClangTidy:
+    Remove:
+      - '*'
+
+---
+If:
+  PathMatch: Tools/gps-sdr-sim/.*
+Diagnostics:
+  ClangTidy:
+    Remove:
+      - '*'
+  UnusedIncludes: None
+  MissingIncludes: None

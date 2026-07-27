@@ -62,6 +62,21 @@ class BoundedQueue
         return true;
     }
 
+    /** @brief Pop an item without blocking; returns false immediately if the queue is empty instead
+     *   of waiting. For consumers that must never stall waiting on a producer (e.g. draining
+     *   best-effort background results on a real-time path).
+     *  @param item Output item.
+     *  @return True if an item was popped; false if the queue was empty. */
+    bool tryPop(T &item)
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        if (m_queue.empty()) return false;
+        item = std::move(m_queue.front());
+        m_queue.pop();
+        m_cvPush.notify_one();
+        return true;
+    }
+
     /** @brief Signal that no more items will be pushed. */
     void finish()
     {

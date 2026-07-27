@@ -1,35 +1,23 @@
 ---
-AlignAfterOpenBracket: BlockIndent
-AccessModifierOffset: -4
+Language: Cpp
+Standard: c++17
+AlignAfterOpenBracket: Align
+AccessModifierOffset: -2
 AlignArrayOfStructures: Left
 AlignConsecutiveAssignments:
-  Enabled: true
-  AcrossEmptyLines: true
-  AcrossComments: true
-  AlignCompound: true
-  AlignFunctionPointers: false
-  PadOperators: false
+  Enabled: false
 AlignConsecutiveBitFields:
-  Enabled: true
-  AcrossEmptyLines: true
-  AcrossComments: true
-  AlignCompound: true
-  AlignFunctionPointers: false
-  PadOperators: false
+  Enabled: false
 AlignConsecutiveDeclarations:
-  Enabled: true
+  Enabled: false
 AlignConsecutiveMacros:
   Enabled: true
-  AcrossEmptyLines: true
+  AcrossEmptyLines: false
   AcrossComments: true
-  AlignCompound: true
-  AlignFunctionPointers: false
-  PadOperators: false
 AlignConsecutiveShortCaseStatements:
   Enabled: true
-  AcrossEmptyLines: true
+  AcrossEmptyLines: false
   AcrossComments: true
-  AlignCaseArrows: false
   AlignCaseColons: false
 AlignEscapedNewlines: Right
 AlignOperands: DontAlign
@@ -40,11 +28,10 @@ AllowAllArgumentsOnNextLine: true
 AllowAllParametersOfDeclarationOnNextLine: false
 AllowBreakBeforeNoexceptSpecifier: OnlyWithParen
 AllowShortBlocksOnASingleLine: Empty
-AllowShortCaseExpressionOnASingleLine: false
 AllowShortCaseLabelsOnASingleLine: false
 AllowShortCompoundRequirementOnASingleLine: true
 AllowShortEnumsOnASingleLine: false
-AllowShortFunctionsOnASingleLine: Inline
+AllowShortFunctionsOnASingleLine: InlineOnly
 AllowShortIfStatementsOnASingleLine: WithoutElse
 AllowShortLambdasOnASingleLine: All
 AllowShortLoopsOnASingleLine: true
@@ -65,7 +52,7 @@ BraceWrapping:
   AfterExternBlock: true
   BeforeCatch: true
   BeforeElse: true
-  BeforeLambdaBody: true
+  BeforeLambdaBody: false
   BeforeWhile: true
   IndentBraces: false
   SplitEmptyFunction: false
@@ -80,13 +67,12 @@ BreakBeforeBraces: Allman
 BreakBeforeConceptDeclarations: Never
 BreakBeforeInlineASMColon: Never
 BreakBeforeTernaryOperators: true
-BreakConstructorInitializers: AfterColon
-BreakFunctionDefinitionParameters: false
+BreakConstructorInitializers: BeforeColon
 BreakInheritanceList: AfterColon
 BreakStringLiterals: false
-BreakTemplateDeclarations: Leave
 ColumnLimit: 120
 CompactNamespaces: false
+FixNamespaceComments: false
 ConstructorInitializerIndentWidth: 4
 ContinuationIndentWidth: 4
 Cpp11BracedListStyle: true
@@ -107,11 +93,10 @@ IntegerLiteralSeparator:
   DecimalMinDigits: 5
   HexMinDigits: 6
   Hex: 2
-MainIncludeChar: Quote
-NamespaceIndentation: All
+NamespaceIndentation: None
 MaxEmptyLinesToKeep: 1
 PackConstructorInitializers: CurrentLine
-PointerAlignment: Middle
+PointerAlignment: Right
 QualifierAlignment: Left
 ReferenceAlignment: Pointer
 ReflowComments: true
@@ -122,29 +107,23 @@ SeparateDefinitionBlocks: Always
 SortIncludes: CaseSensitive
 SortUsingDeclarations: Lexicographic
 SpaceAfterCStyleCast: true
-SpaceAfterLogicalNot: true
+SpaceAfterLogicalNot: false
 SpaceAfterTemplateKeyword: false
 SpaceAroundPointerQualifiers: Both
 SpaceBeforeAssignmentOperators: true
 SpaceBeforeCaseColon: false
-SpaceBeforeCpp11BracedList: true
+SpaceBeforeCpp11BracedList: false
 SpaceBeforeCtorInitializerColon: true
 SpaceBeforeInheritanceColon: true
 SpaceBeforeRangeBasedForLoopColon: true
 SpaceBeforeSquareBrackets: false
 SpaceInEmptyBlock: false
 SpacesBeforeTrailingComments: 4
-SpacesInAngles: Always
+SpacesInAngles: Never
 SpacesInContainerLiterals: false
 SpacesInLineCommentPrefix:
   Minimum: 1
   Maximum: -1
-SpacesInParens: Custom
+SpacesInParens: Never
 UseTab: Never
-SpacesInSquareBrackets: true
-SpacesInParensOptions:
-  InConditionalStatements: true
-  ExceptDoubleParentheses: true
-  InCStyleCasts: false
-  InEmptyParentheses: false
-  Other: true
+SpacesInSquareBrackets: false

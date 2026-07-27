@@ -116,10 +116,7 @@ void Acquisition::correlate(const ComplexFloatVector &input, Compute *gpu, Code 
     std::vector<ComplexFloatVector> referenceFreq(static_cast<size_t>(m_reuseFactor));
     for (int r = 0; r < m_reuseFactor; r++)
     {
-        ComplexFloatVector dopplerMultiplication;
-        gpu->complexMultiplier(input, m_dopplerSearch[r], &dopplerMultiplication);
-
-        if (gpu->fft(dopplerMultiplication, &referenceFreq[r], Compute::FFTForward) != 0)
+        if (gpu->complexMultiplyThenFft(input, m_dopplerSearch[r], Compute::FFTForward, &referenceFreq[r]) != 0)
         {
             std::cerr << "Acquisition::correlate: forward FFT failed (samplesPerCode=" << m_length
                       << " is not a power of two); skipping correlation for SV " << acqChannel->m_svId << std::endl;
@@ -143,20 +140,15 @@ void Acquisition::correlate(const ComplexFloatVector &input, Compute *gpu, Code 
             dopplerMultiplicationFreq = &shiftedFreq;
         }
 
-        ComplexFloatVector correlationFreq;
-        gpu->complexMultiplier(code->m_upsampledFreqDomainCaCode[acqChannel->m_svId - 1], *dopplerMultiplicationFreq,
-                               &correlationFreq);
-
-        ComplexFloatVector correlation;
-        if (gpu->fft(correlationFreq, &correlation, Compute::FFTInverse) != 0)
+        FloatVector correlationAbs;
+        if (gpu->complexMultiplyThenFftThenAbsolute(code->m_upsampledFreqDomainCaCode[acqChannel->m_svId - 1],
+                                                    *dopplerMultiplicationFreq, Compute::FFTInverse,
+                                                    &correlationAbs) != 0)
         {
             std::cerr << "Acquisition::correlate: inverse FFT failed (samplesPerCode=" << m_length
                       << " is not a power of two); skipping correlation for SV " << acqChannel->m_svId << std::endl;
             return;
         }
-
-        FloatVector correlationAbs;
-        gpu->absolute(correlation, &correlationAbs);
 
         if (correlationAbs.empty())
         {

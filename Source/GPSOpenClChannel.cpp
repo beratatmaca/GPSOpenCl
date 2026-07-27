@@ -49,6 +49,7 @@ Channel::~Channel()
 
 void Channel::insertAcquisitionMetrics(float peakValue, int peakIndex, float peakFrequency, float meanValue)
 {
+    std::lock_guard<std::mutex> lock(m_acquisitionMetricsMutex);
     if (peakValue > m_acquisitionPeakValue)
     {
         m_acquisitionPeakValue = peakValue;
@@ -71,6 +72,7 @@ void Channel::insertAcquisitionMetrics(float peakValue, int peakIndex, float pea
 
 void Channel::resetAcquisitionMetrics()
 {
+    std::lock_guard<std::mutex> lock(m_acquisitionMetricsMutex);
     m_acquisitionPeakIndex = 0;
     m_acquisitionPeakValue = 0.0f;
     m_acquisitionPeakFrequency = 0.0f;
@@ -87,6 +89,7 @@ void Channel::checkAcquisition()
 void Channel::getAcquisitionResults(int *peakIndex, float *peakValue, float *peakFrequency, float *meanValue,
                                     float *cno, float *peakRatio)
 {
+    std::lock_guard<std::mutex> lock(m_acquisitionMetricsMutex);
     *peakIndex = m_acquisitionPeakIndex;
     *peakValue = m_acquisitionPeakValue;
     *peakFrequency = m_acquisitionPeakFrequency;
@@ -140,6 +143,8 @@ void Channel::resetNavigationState()
 {
     m_promptHistory.clear();
     m_promptHistory.reserve(60000);
+    m_codePhaseHistory.clear();
+    m_codePhaseHistory.reserve(60000);
     m_bitSyncPhase = -1;
     m_bitSyncSearchPositions.clear();
     m_navBitOffset = 0;
@@ -155,6 +160,10 @@ void Channel::trackBlock(const ComplexFloatVector &input)
     {
         ComplexFloatVector *promptOutput = (m_state == ChannelState::Tracking) ? &m_promptHistory : nullptr;
         m_tracking->doWork(input, m_svId, promptOutput, static_cast<uint32_t>(m_state));
+        if (m_state == ChannelState::Tracking)
+        {
+            m_codePhaseHistory.push_back(m_tracking->getCodePhaseChips());
+        }
         evaluateLockState();
     }
 }

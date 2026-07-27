@@ -12,6 +12,7 @@
 #include "GPSOpenClTracking.h"
 
 #include <memory>
+#include <mutex>
 
 namespace GPSOpenCl
 {
@@ -142,6 +143,15 @@ class Channel
      *  @return Sample index. */
     size_t getLastSubframeStartSample() const { return m_lastSubframeStartSample; }
 
+    /** @brief Get the DLL residual code phase recorded alongside a given prompt history sample, for
+     *   sub-millisecond transmit-time precision. Indices align 1:1 with getPromptHistory().
+     *  @param sampleIndex Index into the prompt/code-phase history.
+     *  @return Code phase (chips, 0-1023), or 0 if out of range. */
+    float getCodePhaseAtSample(size_t sampleIndex) const
+    {
+        return (sampleIndex < m_codePhaseHistory.size()) ? m_codePhaseHistory[sampleIndex] : 0.0f;
+    }
+
   private:
     /** @brief Reset navigation decode state without reinitializing the tracking loop. */
     void resetNavigationState();
@@ -149,6 +159,10 @@ class Channel
     /** @brief Evaluate lock quality and drive channel state transitions. */
     void evaluateLockState();
 
+    mutable std::mutex m_acquisitionMetricsMutex; ///< Guards the acquisition metric fields below
+                                                   ///< against concurrent access from the background
+                                                   ///< acquisition worker thread and the consumer
+                                                   ///< thread's telemetry export.
     int m_acquisitionPeakIndex;           ///< Peak code phase (samples).
     float m_acquisitionPeakValue;         ///< Peak correlation magnitude.
     float m_acquisitionPeakFrequency;     ///< Doppler at peak (Hz).
@@ -161,6 +175,7 @@ class Channel
     Tracking *m_tracking;                 ///< Tracking engine instance.
     std::shared_ptr<Sink> m_sink{nullptr};///< Telemetry sink.
     ComplexFloatVector m_promptHistory;   ///< Prompt correlator history.
+    std::vector<float> m_codePhaseHistory; ///< DLL residual code phase per prompt sample, 1:1 with m_promptHistory.
 
     int m_bitSyncPhase;                   ///< Locked sample-level bit-edge phase, 0-19 (-1 = not yet synced).
     std::vector<size_t> m_bitSyncSearchPositions; ///< Per-candidate-phase search cursor while unsynced.
