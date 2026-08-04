@@ -139,7 +139,18 @@ SatelliteOrbit PVTSolver::computeSatelliteOrbit(const GpsEphemeris &ephem, doubl
     const double A = ephem.sqrtA * ephem.sqrtA;
     const double n0 = std::sqrt(mu / (A * A * A));
 
-    double tk = t - ephem.toe;
+    double dtT = t - ephem.toc;
+    if (dtT > 302400.0)
+    {
+        dtT -= 604800.0;
+    }
+    if (dtT < -302400.0)
+    {
+        dtT += 604800.0;
+    }
+    const double polyClockBias = ephem.af0 + (ephem.af1 * dtT) + (ephem.af2 * dtT * dtT);
+
+    double tk = t - polyClockBias - ephem.toe;
     if (tk > 302400.0)
     {
         tk -= 604800.0;
@@ -162,17 +173,7 @@ SatelliteOrbit PVTSolver::computeSatelliteOrbit(const GpsEphemeris &ephem, doubl
 
     orbit.relCorr = F * ephem.e * ephem.sqrtA * std::sin(Ek);
 
-    double dtT = t - ephem.toc;
-    if (dtT > 302400.0)
-    {
-        dtT -= 604800.0;
-    }
-    if (dtT < -302400.0)
-    {
-        dtT += 604800.0;
-    }
-
-    orbit.clockBias = ephem.af0 + ephem.af1 * dtT + ephem.af2 * dtT * dtT + orbit.relCorr - ephem.tgd;
+    orbit.clockBias = polyClockBias + orbit.relCorr - ephem.tgd;
 
     const double sinEk = std::sin(Ek);
     const double cosEk = std::cos(Ek);
@@ -377,7 +378,6 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
             }
             if (pivotAbs < 1e-12)
             {
-                std::cerr << "  DEBUG singular matrix at iter=" << iter << " pivotAbs=" << pivotAbs << '\n';
                 return false;
             }
             if (pivotRow != i)
@@ -418,13 +418,6 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
         }
 
         const double stepNorm = std::sqrt((deltaX[0] * deltaX[0]) + (deltaX[1] * deltaX[1]) + (deltaX[2] * deltaX[2]));
-        static int debugSolveCount = 0;
-        const bool debugThisCall = (debugSolveCount % 20 == 0);
-        if (debugThisCall)
-        {
-            std::cerr << "  DEBUG solvePosition iter=" << iter << " stepNorm=" << stepNorm << " state=(" << state[0]
-                      << "," << state[1] << "," << state[2] << "," << state[3] << ")" << '\n';
-        }
         if (stepNorm < 1e-4)
         {
             double maxAbsResidual = 0.0;
@@ -434,22 +427,8 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
                 maxAbsResidual = std::max(absResidual, maxAbsResidual);
             }
 
-            if (debugThisCall)
-            {
-                std::cerr << "  DEBUG converged at iter=" << iter << " maxAbsResidual=" << maxAbsResidual
-                          << " limit=" << m_inputConfig.maxPseudorangeErrMeters << '\n';
-                for (size_t i = 0; i < numSats; i++)
-                {
-                    std::cerr << "    DEBUG deltaRho svId=" << orbits[i].svId << " residual=" << deltaRho[i] << '\n';
-                }
-            }
-            debugSolveCount++;
-
             if (maxAbsResidual > m_inputConfig.maxPseudorangeErrMeters)
             {
-                m_referenceEcef.x = state[0];
-                m_referenceEcef.y = state[1];
-                m_referenceEcef.z = state[2];
                 return false;
             }
 
@@ -514,7 +493,6 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
         }
     }
 
-    std::cerr << "  DEBUG never converged within 15 iterations" << '\n';
     return false;
 }
 

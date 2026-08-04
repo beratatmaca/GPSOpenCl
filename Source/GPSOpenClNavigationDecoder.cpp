@@ -294,8 +294,8 @@ bool NavigationDecoder::decodeSubframe(const std::vector<uint32_t> &words30bit, 
         auto omegaRaw = static_cast<int32_t>(omegaRawU);
         ephem.omega = omegaRaw * std::pow(2.0, -31) * M_PI;
         ephem.omegaDot = extractSignedBits(w9, 1, 24) * std::pow(2.0, -43) * M_PI;
-        ephem.idot = extractSignedBits(w10, 1, 14) * std::pow(2.0, -43) * M_PI;
-        ephem.iode3 = static_cast<int>(extractUnsignedBits(w10, 15, 8));
+        ephem.iode3 = static_cast<int>(extractUnsignedBits(w10, 1, 8));
+        ephem.idot = extractSignedBits(w10, 9, 14) * std::pow(2.0, -43) * M_PI;
         ephem.isValid = true;
     }
     else if (ephem.subframeId == 4)
@@ -360,11 +360,12 @@ bool NavigationDecoder::decodeAtPhaseOffset(int svId,
                                             int phase,
                                             size_t &bitOffset,
                                             GpsEphemeris &ephem,
-                                            size_t &subframeStartSample)
+                                            size_t &subframeStartSample,
+                                            const FloatVector *codePhaseHistory)
 {
     bool hadEnoughData = false;
-    const bool decoded =
-        tryDecodeAtBitPosition(svId, promptHistory, phase, bitOffset, hadEnoughData, ephem, subframeStartSample);
+    const bool decoded = tryDecodeAtBitPosition(
+        svId, promptHistory, phase, bitOffset, hadEnoughData, ephem, subframeStartSample, codePhaseHistory);
 
     if (decoded)
     {
@@ -384,7 +385,8 @@ bool NavigationDecoder::tryDecodeAtBitPosition(int svId,
                                                size_t bitPosition,
                                                bool &hadEnoughData,
                                                GpsEphemeris &ephem,
-                                               size_t &subframeStartSample)
+                                               size_t &subframeStartSample,
+                                               const FloatVector *codePhaseHistory)
 {
     hadEnoughData = false;
 
@@ -500,7 +502,65 @@ bool NavigationDecoder::tryDecodeAtBitPosition(int svId,
         prevD30 = (raw & 1u) != 0;
     }
 
-    subframeStartSample = startSample;
+    // The first bit-sync phase whose preamble and parity pass can sit a whole block away from the
+    // true bit edge (19 of 20 blocks per bit still integrate correctly), which would shift every
+    // derived transmit time by that block. The decoded bits are parity-verified, so a matched
+    // filter over candidate start blocks pins the block containing the true edge: each bit's first
+    // block carries mixed adjacent-bit signal split at the sub-block edge position known from the
+    // DLL code phase, and modeling that split keeps adjacent candidates distinguishable by a full
+    // block of energy per bit transition wherever the edge sits inside the block.
+    double edgeFraction = 0.5;
+    if (codePhaseHistory != nullptr && startSample < codePhaseHistory->size())
+    {
+        const double phaseChips = static_cast<double>((*codePhaseHistory)[startSample]);
+        edgeFraction = (1023.0 - phaseChips) / 1023.0;
+        edgeFraction = std::min(std::max(edgeFraction, 0.0), 1.0);
+    }
+
+    std::ptrdiff_t bestOffset = 0;
+    double bestMetric = -1.0;
+    for (std::ptrdiff_t candidate = -2; candidate <= 2; candidate++)
+    {
+        if (candidate < 0 && startSample < static_cast<size_t>(-candidate))
+        {
+            continue;
+        }
+        const size_t candidateStart = startSample + candidate;
+        if (candidateStart + static_cast<size_t>(300 * 20) > promptHistory.size())
+        {
+            continue;
+        }
+
+        double metric = 0.0;
+        for (size_t i = 0; i < 300; i++)
+        {
+            const size_t base = candidateStart + (i * 20);
+            const double sign = bits[i] ? 1.0 : -1.0;
+
+            float sumRe = 0.0f;
+            for (int k = 1; k < 20; k++)
+            {
+                sumRe += promptHistory[base + k].real();
+            }
+            metric += sign * sumRe;
+
+            if (i > 0)
+            {
+                const double previousSign = bits[i - 1] ? 1.0 : -1.0;
+                const double boundaryWeight = (edgeFraction * previousSign) + ((1.0 - edgeFraction) * sign);
+                metric += boundaryWeight * static_cast<double>(promptHistory[base].real());
+            }
+        }
+        metric = std::fabs(metric);
+
+        if (metric > bestMetric)
+        {
+            bestMetric = metric;
+            bestOffset = candidate;
+        }
+    }
+
+    subframeStartSample = startSample + bestOffset;
     ephem.svId = svId;
     return decodeSubframe(words, ephem);
 }

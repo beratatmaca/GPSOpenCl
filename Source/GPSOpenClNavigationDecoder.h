@@ -130,6 +130,9 @@ class NavigationDecoder
      *  @param bitOffset           Current bit offset within the phase-aligned bit stream (in/out).
      *  @param ephem               Output ephemeris.
      *  @param subframeStartSample Subframe start sample index (output).
+     *  @param codePhaseHistory    Optional per-sample DLL code phase aligned 1:1 with promptHistory,
+     *                             used to model the sub-block bit-edge position when refining the
+     *                             subframe start block (null: a neutral mid-block edge is assumed).
      *  @return True if subframe decoded. */
     bool processPromptSignal(int svId,
                              const ComplexFloatVector &promptHistory,
@@ -137,7 +140,8 @@ class NavigationDecoder
                              std::vector<size_t> &searchPositions,
                              size_t &bitOffset,
                              GpsEphemeris &ephem,
-                             size_t &subframeStartSample);
+                             size_t &subframeStartSample,
+                             const FloatVector *codePhaseHistory = nullptr);
 
     /** @brief Process prompt signal and decode subframe into output struct.
      *  @param svId                Satellite vehicle ID.
@@ -147,6 +151,8 @@ class NavigationDecoder
      *  @param bitOffset           Current bit offset within the phase-aligned bit stream (in/out).
      *  @param output              Output struct.
      *  @param subframeStartSample Subframe start sample index (output).
+     *  @param codePhaseHistory    Optional per-sample DLL code phase aligned 1:1 with promptHistory.
+     *                             See other overload.
      *  @return True if subframe decoded. */
     bool processPromptSignal(int svId,
                              const ComplexFloatVector &promptHistory,
@@ -154,7 +160,8 @@ class NavigationDecoder
                              std::vector<size_t> &searchPositions,
                              size_t &bitOffset,
                              NavDecoderOutput &output,
-                             size_t &subframeStartSample);
+                             size_t &subframeStartSample,
+                             const FloatVector *codePhaseHistory = nullptr);
 
     /** @brief Set telemetry sink.
      *  @param sink Sink implementation. */
@@ -191,7 +198,8 @@ class NavigationDecoder
                              int phase,
                              size_t &bitOffset,
                              GpsEphemeris &ephem,
-                             size_t &subframeStartSample);
+                             size_t &subframeStartSample,
+                             const FloatVector *codePhaseHistory);
 
     /** @brief Check exactly one candidate (phase, bitPosition) for a parity-valid subframe, doing
      *   only the fixed 300-bit demodulation and check needed for that single position (no scanning
@@ -213,7 +221,8 @@ class NavigationDecoder
                                 size_t bitPosition,
                                 bool &hadEnoughData,
                                 GpsEphemeris &ephem,
-                                size_t &subframeStartSample);
+                                size_t &subframeStartSample,
+                                const FloatVector *codePhaseHistory);
 
     NavDecoderInput m_inputConfig;            ///< Decoder parameters.
     std::shared_ptr<Sink> m_sink{nullptr};    ///< Telemetry sink.

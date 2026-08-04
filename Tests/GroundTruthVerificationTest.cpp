@@ -319,7 +319,13 @@ TEST(GroundTruthVerificationTest, FullEphemerisAndPvtMatchSimulatorTruth)
     std::map<int, double> maxErrorByPrn;
     std::map<int, double> sumErrorByPrn;
     std::map<int, int> countByPrn;
+    std::map<int, bool> loggedByPrn;
 
+    // Both the measured pseudorange and the simulator's truePseudorangeM are referenced to the
+    // satellite's own clock, so they compare directly with no clock correction. The receiver's
+    // synthesized common epoch legitimately carries an arbitrary offset (absorbed by the clock-bias
+    // state in the solver), so errors are judged relative to the per-epoch mean across satellites.
+    std::vector<std::pair<int, double>> epochDiffs;
     for (int blockIdx = 0; blockIdx < blocksAvailable; blockIdx++)
     {
         auto start = inputSignal.begin() + static_cast<long>(blockIdx) * codeLength;
@@ -327,6 +333,7 @@ TEST(GroundTruthVerificationTest, FullEphemerisAndPvtMatchSimulatorTruth)
         GPSOpenCl::ComplexFloatVector block(start, end);
         app.processBlock(block, static_cast<uint32_t>(blockIdx));
 
+        epochDiffs.clear();
         for (const GPSOpenCl::Application::PseudorangeSample &sample : app.getLastPseudorangeSamples())
         {
             auto prnTruth = truthByPrn.find(sample.svId);
@@ -335,18 +342,40 @@ TEST(GroundTruthVerificationTest, FullEphemerisAndPvtMatchSimulatorTruth)
                 continue;
             }
 
-            const double receiverTimeSec = sample.transmitTimeSeconds + sample.measuredPseudorangeMeters / c;
+            const double receiverTimeSec = sample.transmitTimeSeconds + (sample.measuredPseudorangeMeters / c);
             double closestDt = 1e9;
             const GroundTruthRecord *closest = findClosestRecord(prnTruth->second, receiverTimeSec, &closestDt);
 
             if (closest != nullptr && closestDt < 0.002)
             {
-                const double correctedMeasured = sample.measuredPseudorangeMeters + c * closest->trueSvClockBiasSec;
-                const double err = std::fabs(correctedMeasured - closest->truePseudorangeM);
-                maxErrorByPrn[sample.svId] = std::max(maxErrorByPrn[sample.svId], err);
-                sumErrorByPrn[sample.svId] += err;
-                countByPrn[sample.svId]++;
+                epochDiffs.emplace_back(sample.svId, sample.measuredPseudorangeMeters - closest->truePseudorangeM);
             }
+        }
+
+        if (epochDiffs.size() < 2)
+        {
+            continue;
+        }
+
+        double meanDiff = 0.0;
+        for (const auto &entry : epochDiffs)
+        {
+            meanDiff += entry.second;
+        }
+        meanDiff /= static_cast<double>(epochDiffs.size());
+
+        for (const auto &entry : epochDiffs)
+        {
+            const double err = std::fabs(entry.second - meanDiff);
+            if (!loggedByPrn[entry.first])
+            {
+                loggedByPrn[entry.first] = true;
+                std::cerr << "DEBUG prdiff PRN " << entry.first << " blockIdx=" << blockIdx
+                          << " diffMeters=" << entry.second << " relErrMeters=" << (entry.second - meanDiff) << '\n';
+            }
+            maxErrorByPrn[entry.first] = std::max(maxErrorByPrn[entry.first], err);
+            sumErrorByPrn[entry.first] += err;
+            countByPrn[entry.first]++;
         }
     }
 

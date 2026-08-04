@@ -424,7 +424,16 @@ bool Application::computeNavigationSolution(ReceiverPvtSolution &solution)
         const double driftChips = static_cast<double>(channel.getCumulativeDriftChipsAtSample(promptCount - 1)) -
             static_cast<double>(channel.getCumulativeDriftChipsAtSample(subframeStartSample));
 
-        const double transmitTime = subframeStartTow + elapsedSeconds + (driftChips / GPS_CA_CODE_FREQUENCY_HZ);
+        // Sub-millisecond anchor: the subframe's leading bit edge does not fall on a receiver block
+        // boundary. The decoder's coherent edge refinement guarantees the anchor block contains the
+        // edge, which arrives (1023 - codePhase) chips after that block starts. Without this term
+        // every satellite's transmit time is quantized to the 1 ms block grid, which puts up to
+        // 1 ms (300 km) of per-satellite error on the pseudoranges.
+        const double anchorChipsRaw = static_cast<double>(channel.getCodePhaseAtSample(subframeStartSample));
+        const double anchorChips = anchorChipsRaw - 1023.0;
+
+        const double transmitTime =
+            subframeStartTow + elapsedSeconds + ((driftChips + anchorChips) / GPS_CA_CODE_FREQUENCY_HZ);
 
         ephemerides.push_back(channel.getAccumulatedEphemeris());
         transmitTimes.push_back(transmitTime);

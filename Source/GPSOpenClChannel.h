@@ -90,7 +90,11 @@ class Channel
      *  @param input IQ samples. */
     void trackBlock(const ComplexFloatVector &input);
 
-    /** @brief Get accumulated prompt correlator history.
+    /** @brief Get accumulated prompt correlator history. This and every other history accessor
+     *   (getCodePhaseAtSample, getCumulativeDriftChipsAtSample, getLastSubframeStartSample) must be
+     *   called from the consumer thread only: the histories carry no locking, tracking workers
+     *   append to them inside the trackSatellites() barrier, and updateNavigation() compacts them
+     *   on the consumer thread, rebasing every sample index by the dropped count.
      *  @return Prompt I/Q history. */
     const ComplexFloatVector &getPromptHistory() const { return m_promptHistory; }
 
