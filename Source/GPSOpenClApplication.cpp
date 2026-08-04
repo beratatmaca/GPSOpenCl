@@ -9,10 +9,13 @@
 #include <iostream>
 #include <sstream>
 #include <thread>
+#include <utility>
 
 using namespace GPSOpenCl;
 
-static std::string stripTrailingNewlines(std::string str)
+namespace
+{
+std::string stripTrailingNewlines(std::string str)
 {
     while (!str.empty() && (str.back() == '\r' || str.back() == '\n'))
     {
@@ -21,18 +24,33 @@ static std::string stripTrailingNewlines(std::string str)
     return str;
 }
 
-Application::Application(Settings::Configuration conf)
-    : m_acquisition(nullptr), m_tracking(nullptr), m_configuration(conf), m_code(nullptr), m_gpu(nullptr),
-      m_pvtSolver(conf.pvtSolverInput), m_navDecoder(conf.navDecoderInput), m_nmeaGenerator(conf.nmeaGeneratorInput)
+bool computeElapsedSecondsSincePromptStart(size_t promptCount, size_t startSample, double &elapsedSecondsOut)
 {
-    std::cout << SOFTWARE_NAME << " " << SOFTWARE_VERSION << " started to run" << std::endl;
+    if (promptCount < startSample)
+    {
+        return false;
+    }
+    elapsedSecondsOut = static_cast<double>(promptCount - startSample) * GPS_CA_CODE_PERIOD_SEC;
+    return true;
+}
+}
 
-    m_gpu = new Compute();
+Application::Application(const Settings::Configuration &conf)
+    : m_acquisition(nullptr),
+      m_tracking(nullptr),
+      m_configuration(conf),
+      m_code(nullptr),
+      m_gpu(std::make_unique<Compute>()),
+      m_pvtSolver(conf.pvtSolverInput),
+      m_navDecoder(conf.navDecoderInput),
+      m_nmeaGenerator(conf.nmeaGeneratorInput)
+{
+    std::cout << SOFTWARE_NAME << " " << SOFTWARE_VERSION << " started to run" << '\n';
 
-    m_code = new Code(m_configuration);
-    m_code->createLookupTable(m_gpu);
+    m_code = std::make_unique<Code>(m_configuration);
+    m_code->createLookupTable(m_gpu.get());
 
-    m_acquisition = new Acquisition(m_configuration);
+    m_acquisition = std::make_unique<Acquisition>(m_configuration);
 
     m_pvtSolver.setIonosphericParams(conf.atmosphericInput);
 
@@ -55,10 +73,7 @@ Application::~Application()
         m_outputWriterThread.join();
     }
     stopWorkerPool();
-    delete m_gpu;
-    delete m_acquisition;
     delete m_tracking;
-    delete m_code;
 }
 
 void Application::searchOneChannel(const ComplexFloatVector &input, int channelIndex)
@@ -68,7 +83,7 @@ void Application::searchOneChannel(const ComplexFloatVector &input, int channelI
         return;
     }
 
-    m_acquisition->correlate(input, m_gpu, m_code, &m_channels[channelIndex]);
+    m_acquisition->correlate(input, m_gpu.get(), m_code.get(), &m_channels[channelIndex]);
     finalizeAcquisition(channelIndex);
 }
 
@@ -78,23 +93,29 @@ void Application::finalizeAcquisition(int channelIndex)
     channel.checkAcquisition();
 
     int peakIndex = 0;
-    float peakValue = 0.0f, peakFreq = 0.0f, meanValue = 0.0f, cn0 = 0.0f, peakRatio = 0.0f;
+    float peakValue = 0.0f;
+    float peakFreq = 0.0f;
+    float meanValue = 0.0f;
+    float cn0 = 0.0f;
+    float peakRatio = 0.0f;
     channel.getAcquisitionResults(&peakIndex, &peakValue, &peakFreq, &meanValue, &cn0, &peakRatio);
 
-    float dopplerHz = -peakFreq;
+    const float dopplerHz = -peakFreq;
 
     const float acquisitionCn0ThresholdDbHz = 43.0f;
     if (cn0 >= acquisitionCn0ThresholdDbHz)
     {
         channel.setAcquired(true);
-        int numberOfSamplesPerCode = m_configuration.rawDataSettings.numberOfSamplesPerCode;
-        float numSamplesFloat = static_cast<float>(numberOfSamplesPerCode);
-        int reflectedPeakIndex = (numberOfSamplesPerCode > 0)
-            ? ((numberOfSamplesPerCode - peakIndex) % numberOfSamplesPerCode) : 0;
-        float codePhaseChips = (numSamplesFloat > 0.0f) ? (static_cast<float>(reflectedPeakIndex) / numSamplesFloat) * GPS_CA_CODE_LENGTH : 0.0f;
+        const int numberOfSamplesPerCode = m_configuration.rawDataSettings.numberOfSamplesPerCode;
+        auto numSamplesFloat = static_cast<float>(numberOfSamplesPerCode);
+        const int reflectedPeakIndex =
+            (numberOfSamplesPerCode > 0) ? ((numberOfSamplesPerCode - peakIndex) % numberOfSamplesPerCode) : 0;
+        const float codePhaseChips = (numSamplesFloat > 0.0f)
+            ? (static_cast<float>(reflectedPeakIndex) / numSamplesFloat) * GPS_CA_CODE_LENGTH
+            : 0.0f;
         channel.initTracking(m_configuration, dopplerHz, codePhaseChips);
-        std::cout << "--> SV ID " << channel.m_svId << " ACQUIRED! (C/N0: " << cn0
-                  << " dB-Hz, Doppler: " << dopplerHz << " Hz)" << std::endl;
+        std::cout << "--> SV ID " << channel.m_svId << " ACQUIRED! (C/N0: " << cn0 << " dB-Hz, Doppler: " << dopplerHz
+                  << " Hz)" << '\n';
     }
 
     if (m_sink)
@@ -119,7 +140,7 @@ void Application::acquisitionWorkerLoop()
     while (m_acquisitionJobQueue.pop(job))
     {
         auto start = std::chrono::high_resolution_clock::now();
-        m_acquisition->correlate(job.input, m_gpu, m_code, &m_channels[job.channelIndex]);
+        m_acquisition->correlate(job.input, m_gpu.get(), m_code.get(), &m_channels[job.channelIndex]);
         auto end = std::chrono::high_resolution_clock::now();
 
         AcquisitionResult result;
@@ -170,7 +191,7 @@ void Application::trackChannelRange(const ComplexFloatVector &input, int startId
             }
             catch (const std::exception &e)
             {
-                std::cerr << "Channel " << m_channels[i].m_svId << " tracking threw: " << e.what() << std::endl;
+                std::cerr << "Channel " << m_channels[i].m_svId << " tracking threw: " << e.what() << '\n';
             }
         }
     }
@@ -179,9 +200,9 @@ void Application::trackChannelRange(const ComplexFloatVector &input, int startId
 void Application::workerLoop(int workerIndex)
 {
     int lastSeenGeneration = 0;
-    int channelsPerWorker = (GPS_CA_SV_COUNT + m_numWorkers - 1) / m_numWorkers;
-    int startIdx = workerIndex * channelsPerWorker;
-    int endIdx = std::min(startIdx + channelsPerWorker, GPS_CA_SV_COUNT);
+    const int channelsPerWorker = (GPS_CA_SV_COUNT + m_numWorkers - 1) / m_numWorkers;
+    const int startIdx = workerIndex * channelsPerWorker;
+    const int endIdx = std::min(startIdx + channelsPerWorker, GPS_CA_SV_COUNT);
 
     while (true)
     {
@@ -213,7 +234,7 @@ void Application::workerLoop(int workerIndex)
 
 void Application::startWorkerPool()
 {
-    unsigned int hw = std::thread::hardware_concurrency();
+    const unsigned int hw = std::thread::hardware_concurrency();
     m_numWorkers = std::max(1, std::min(static_cast<int>(hw > 0 ? hw : 4), GPS_CA_SV_COUNT));
     if (m_numWorkers <= 1)
     {
@@ -226,7 +247,7 @@ void Application::startWorkerPool()
     // GPS_CA_SV_COUNT=32 and hardware_concurrency()=22, channelsPerWorker=ceil(32/22)=2 but
     // 22*2=44>32, so without this every worker beyond the 16th would sit idle on an empty range
     // forever, still paying the per-block wait/wake barrier cost for zero work.
-    int channelsPerWorker = (GPS_CA_SV_COUNT + m_numWorkers - 1) / m_numWorkers;
+    const int channelsPerWorker = (GPS_CA_SV_COUNT + m_numWorkers - 1) / m_numWorkers;
     m_numWorkers = (GPS_CA_SV_COUNT + channelsPerWorker - 1) / channelsPerWorker;
 
     m_workerDurationMs.assign(static_cast<size_t>(m_numWorkers), 0.0);
@@ -245,7 +266,7 @@ void Application::stopWorkerPool()
     }
 
     {
-        std::lock_guard<std::mutex> lock(m_poolMutex);
+        const std::lock_guard<std::mutex> lock(m_poolMutex);
         m_shutdownWorkers = true;
     }
     m_startCv.notify_all();
@@ -275,7 +296,7 @@ void Application::trackSatellites(const ComplexFloatVector &input)
     }
 
     {
-        std::lock_guard<std::mutex> lock(m_poolMutex);
+        const std::lock_guard<std::mutex> lock(m_poolMutex);
         m_currentTrackInput = &input;
         m_pendingWorkers = m_numWorkers;
         m_generation++;
@@ -288,14 +309,48 @@ void Application::trackSatellites(const ComplexFloatVector &input)
 
 void Application::updateChannelNavigation()
 {
-    for (int i = 0; i < GPS_CA_SV_COUNT; i++)
+    for (auto &channel : m_channels)
     {
-        if (!m_channels[i].isTrackingConfirmed())
+        if (!channel.isTrackingConfirmed())
         {
             continue;
         }
-        m_channels[i].updateNavigation(m_navDecoder);
+        channel.updateNavigation(m_navDecoder);
     }
+}
+
+std::vector<Application::ChannelDiagnostic> Application::getChannelDiagnostics() const
+{
+    std::vector<ChannelDiagnostic> diagnostics;
+    for (const auto &channel : m_channels)
+    {
+        if (!channel.isTrackingConfirmed() || channel.getBitSyncPhase() < 0 ||
+            channel.getLastSubframeStartSample() == 0)
+        {
+            continue;
+        }
+
+        const size_t promptCount = channel.getPromptHistory().size();
+        if (promptCount == 0)
+        {
+            continue;
+        }
+
+        ChannelDiagnostic diag;
+        diag.svId = channel.m_svId;
+        diag.bitSyncPhase = channel.getBitSyncPhase();
+        diag.subframeStartTow = channel.getLastSubframeTow() - 6.0;
+        diag.subframeStartSample = channel.getLastSubframeStartSample();
+        diag.codePhaseAtSubframeStart = channel.getCodePhaseAtSample(diag.subframeStartSample);
+        if (!computeElapsedSecondsSincePromptStart(promptCount, diag.subframeStartSample, diag.elapsedSeconds))
+        {
+            continue;
+        }
+        diag.candidateNowTow = diag.subframeStartTow + diag.elapsedSeconds;
+        diag.codePhaseNow = channel.getCodePhaseAtSample(promptCount - 1);
+        diagnostics.push_back(diag);
+    }
+    return diagnostics;
 }
 
 bool Application::computeNavigationSolution(ReceiverPvtSolution &solution)
@@ -306,41 +361,37 @@ bool Application::computeNavigationSolution(ReceiverPvtSolution &solution)
 
     const double c = 299792458.0;
 
-    for (int i = 0; i < GPS_CA_SV_COUNT; i++)
+    for (auto &channel : m_channels)
     {
-        if (!m_channels[i].isTrackingConfirmed() || !m_channels[i].hasCompleteEphemeris())
+        if (!channel.isTrackingConfirmed() || !channel.hasCompleteEphemeris())
         {
             continue;
         }
 
-        size_t promptCount = m_channels[i].getPromptHistory().size();
-        size_t subframeStartSample = m_channels[i].getLastSubframeStartSample();
-        if (promptCount < subframeStartSample)
+        const size_t promptCount = channel.getPromptHistory().size();
+        const size_t subframeStartSample = channel.getLastSubframeStartSample();
+        double elapsedSeconds = 0.0;
+        if (!computeElapsedSecondsSincePromptStart(promptCount, subframeStartSample, elapsedSeconds))
         {
             continue;
         }
 
+        const double subframeStartTow = channel.getLastSubframeTow() - 6.0;
 
-        double subframeStartTow = m_channels[i].getLastSubframeTow() - 6.0;
-        double elapsedSeconds = static_cast<double>(promptCount - subframeStartSample) * GPS_CA_CODE_PERIOD_SEC;
-
-        double codePhaseNow = static_cast<double>(m_channels[i].getCodePhaseAtSample(promptCount - 1));
-        double codePhaseAtSubframeStart = static_cast<double>(m_channels[i].getCodePhaseAtSample(subframeStartSample));
-        double driftChips = std::fmod(codePhaseNow - codePhaseAtSubframeStart + 1534.5, 1023.0) - 511.5;
+        const double driftChips = static_cast<double>(channel.getCumulativeDriftChipsAtSample(promptCount - 1)) -
+            static_cast<double>(channel.getCumulativeDriftChipsAtSample(subframeStartSample));
         static int debugDriftCount = 0;
         if (debugDriftCount++ % 200 == 0)
         {
-            std::cerr << "  DEBUG drift svId=" << m_channels[i].m_svId << " promptCount=" << promptCount
-                      << " subframeStartSample=" << subframeStartSample << " codePhaseNow=" << codePhaseNow
-                      << " codePhaseAtStart=" << codePhaseAtSubframeStart << " driftChips=" << driftChips
-                      << std::endl;
+            std::cerr << "  DEBUG drift svId=" << channel.m_svId << " promptCount=" << promptCount
+                      << " subframeStartSample=" << subframeStartSample << " driftChips=" << driftChips << '\n';
         }
 
-        double transmitTime = subframeStartTow + elapsedSeconds + driftChips / GPS_CA_CODE_FREQUENCY_HZ;
+        const double transmitTime = subframeStartTow + elapsedSeconds + (driftChips / GPS_CA_CODE_FREQUENCY_HZ);
 
-        ephemerides.push_back(m_channels[i].getAccumulatedEphemeris());
+        ephemerides.push_back(channel.getAccumulatedEphemeris());
         transmitTimes.push_back(transmitTime);
-        activePrns.push_back(m_channels[i].m_svId);
+        activePrns.push_back(channel.m_svId);
     }
 
     if (ephemerides.size() < 4)
@@ -349,32 +400,15 @@ bool Application::computeNavigationSolution(ReceiverPvtSolution &solution)
         if (insufficientSatCount++ % 20 == 0)
         {
             std::cerr << "Navigation Solution Error: Less than 4 satellites with a complete decoded ephemeris ("
-                      << ephemerides.size() << " ready)." << std::endl;
+                      << ephemerides.size() << " ready)." << '\n';
         }
         solution.isValid = false;
+        m_lastPseudorangeSamples.clear();
         return false;
     }
 
-
-
-
-    EcefPosition referenceEcef = m_pvtSolver.getReferenceEcef();
-    double averageTransmitTime = 0.0;
-    double averageTransitTimeSec = 0.0;
-    for (size_t i = 0; i < transmitTimes.size(); i++)
-    {
-        SatelliteOrbit orbit = PVTSolver::computeSatelliteOrbit(ephemerides[i], transmitTimes[i]);
-        double dx = orbit.position.x - referenceEcef.x;
-        double dy = orbit.position.y - referenceEcef.y;
-        double dz = orbit.position.z - referenceEcef.z;
-
-        averageTransmitTime += transmitTimes[i];
-        averageTransitTimeSec += std::sqrt(dx * dx + dy * dy + dz * dz) / c;
-    }
-    averageTransmitTime /= static_cast<double>(transmitTimes.size());
-    averageTransitTimeSec /= static_cast<double>(transmitTimes.size());
-
-    double receiverTime = averageTransmitTime + averageTransitTimeSec;
+    const EcefPosition referenceEcef = m_pvtSolver.getReferenceEcef();
+    const double receiverTime = PVTSolver::computeReceiverTime(ephemerides, transmitTimes, referenceEcef);
 
     std::vector<double> measuredPseudoranges(transmitTimes.size());
     for (size_t i = 0; i < transmitTimes.size(); i++)
@@ -382,15 +416,21 @@ bool Application::computeNavigationSolution(ReceiverPvtSolution &solution)
         measuredPseudoranges[i] = (receiverTime - transmitTimes[i]) * c;
     }
 
+    m_lastPseudorangeSamples.clear();
+    for (size_t i = 0; i < activePrns.size(); i++)
+    {
+        m_lastPseudorangeSamples.push_back({activePrns[i], transmitTimes[i], measuredPseudoranges[i]});
+    }
+
     static int debugCallCount = 0;
     if (debugCallCount++ % 20 == 0)
     {
         std::cerr << std::setprecision(15) << "DEBUG PVT attempt: " << ephemerides.size()
-                  << " ready, receiverTime=" << receiverTime << std::endl;
+                  << " ready, receiverTime=" << receiverTime << '\n';
         for (size_t i = 0; i < ephemerides.size(); i++)
         {
             std::cerr << "  DEBUG PRN " << activePrns[i] << " transmitTime=" << transmitTimes[i]
-                      << " pseudorange=" << measuredPseudoranges[i] << std::endl;
+                      << " pseudorange=" << measuredPseudoranges[i] << '\n';
         }
         std::cerr << std::setprecision(6);
     }
@@ -400,24 +440,25 @@ bool Application::computeNavigationSolution(ReceiverPvtSolution &solution)
         m_pvtSolver.setIonosphericParams(m_navDecoder.getIonosphericParams());
     }
 
-    bool success = m_pvtSolver.solvePosition(ephemerides, measuredPseudoranges, transmitTimes, solution);
+    const bool success = m_pvtSolver.solvePosition(ephemerides, measuredPseudoranges, transmitTimes, solution);
     if ((debugCallCount - 1) % 20 == 0)
     {
         std::cerr << "DEBUG solvePosition success=" << success << " ecef=(" << solution.ecefPosition.x << ","
-                  << solution.ecefPosition.y << "," << solution.ecefPosition.z << ")" << std::endl;
+                  << solution.ecefPosition.y << "," << solution.ecefPosition.z << ")" << '\n';
     }
     if (success)
     {
         std::ostringstream consoleOut;
-        consoleOut << "\n=============================================" << std::endl;
-        consoleOut << "   GPS PVT Position Solution Computed        " << std::endl;
-        consoleOut << "=============================================" << std::endl;
-        consoleOut << "ECEF Position : X = " << solution.ecefPosition.x << " m, Y = "
-                  << solution.ecefPosition.y << " m, Z = " << solution.ecefPosition.z << " m" << std::endl;
-        consoleOut << "WGS-84 Position: Lat = " << solution.geodeticPosition.latitude << " deg, Lon = "
-                  << solution.geodeticPosition.longitude << " deg, Alt = " << solution.geodeticPosition.altitude << " m" << std::endl;
-        consoleOut << "DOP Metrics    : HDOP = " << solution.dopHDOP << ", PDOP = "
-                  << solution.dopPDOP << ", VDOP = " << solution.dopVDOP << std::endl;
+        consoleOut << "\n=============================================" << '\n';
+        consoleOut << "   GPS PVT Position Solution Computed        " << '\n';
+        consoleOut << "=============================================" << '\n';
+        consoleOut << "ECEF Position : X = " << solution.ecefPosition.x << " m, Y = " << solution.ecefPosition.y
+                   << " m, Z = " << solution.ecefPosition.z << " m" << '\n';
+        consoleOut << "WGS-84 Position: Lat = " << solution.geodeticPosition.latitude
+                   << " deg, Lon = " << solution.geodeticPosition.longitude
+                   << " deg, Alt = " << solution.geodeticPosition.altitude << " m" << '\n';
+        consoleOut << "DOP Metrics    : HDOP = " << solution.dopHDOP << ", PDOP = " << solution.dopPDOP
+                   << ", VDOP = " << solution.dopVDOP << '\n';
 
         std::vector<std::string> gpgsvSentences;
         if (m_nmeaGenerator.isGsvEnabled())
@@ -425,11 +466,23 @@ bool Application::computeNavigationSolution(ReceiverPvtSolution &solution)
             gpgsvSentences = NmeaGenerator::generateGpgsvSentences(m_channels, solution.ecefPosition, solution.isValid);
         }
 
-        consoleOut << "\n--- NMEA 0183 Output Stream ---" << std::endl;
-        if (m_nmeaGenerator.isGgaEnabled()) consoleOut << NmeaGenerator::generateGgga(solution, static_cast<int>(activePrns.size()), receiverTime);
-        if (m_nmeaGenerator.isRmcEnabled()) consoleOut << NmeaGenerator::generateGprmc(solution, receiverTime);
-        if (m_nmeaGenerator.isGsaEnabled()) consoleOut << NmeaGenerator::generateGpgsa(solution, activePrns);
-        for (const std::string &gsvSentence : gpgsvSentences) consoleOut << gsvSentence;
+        consoleOut << "\n--- NMEA 0183 Output Stream ---" << '\n';
+        if (m_nmeaGenerator.isGgaEnabled())
+        {
+            consoleOut << NmeaGenerator::generateGgga(solution, static_cast<int>(activePrns.size()), receiverTime);
+        }
+        if (m_nmeaGenerator.isRmcEnabled())
+        {
+            consoleOut << NmeaGenerator::generateGprmc(solution, receiverTime);
+        }
+        if (m_nmeaGenerator.isGsaEnabled())
+        {
+            consoleOut << NmeaGenerator::generateGpgsa(solution, activePrns);
+        }
+        for (const std::string &gsvSentence : gpgsvSentences)
+        {
+            consoleOut << gsvSentence;
+        }
 
         AsyncOutputJob consoleJob;
         consoleJob.isConsole = true;
@@ -459,17 +512,18 @@ bool Application::computeNavigationSolution(ReceiverPvtSolution &solution)
 
             if (m_nmeaGenerator.isGgaEnabled())
             {
-                NmeaGeneratorOutput nmeaOut = NmeaGenerator::generateGggaOutput(solution, static_cast<int>(activePrns.size()), receiverTime);
+                const NmeaGeneratorOutput nmeaOut =
+                    NmeaGenerator::generateGggaOutput(solution, static_cast<int>(activePrns.size()), receiverTime);
                 m_sink->publishNmeaGeneratorOutput(nmeaOut);
             }
             if (m_nmeaGenerator.isRmcEnabled())
             {
-                NmeaGeneratorOutput nmeaOut = NmeaGenerator::generateGprmcOutput(solution, receiverTime);
+                const NmeaGeneratorOutput nmeaOut = NmeaGenerator::generateGprmcOutput(solution, receiverTime);
                 m_sink->publishNmeaGeneratorOutput(nmeaOut);
             }
             if (m_nmeaGenerator.isGsaEnabled())
             {
-                NmeaGeneratorOutput nmeaOut = NmeaGenerator::generateGpgsaOutput(solution, activePrns);
+                const NmeaGeneratorOutput nmeaOut = NmeaGenerator::generateGpgsaOutput(solution, activePrns);
                 m_sink->publishNmeaGeneratorOutput(nmeaOut);
             }
             for (const std::string &gsvSentence : gpgsvSentences)
@@ -485,20 +539,20 @@ bool Application::computeNavigationSolution(ReceiverPvtSolution &solution)
     return success;
 }
 
-void Application::setSink(std::shared_ptr<Sink> sink)
+void Application::setSink(const std::shared_ptr<Sink> &sink)
 {
     m_sink = sink;
     m_profiler.setSink(sink);
     m_navDecoder.setSink(sink);
-    for (int i = 0; i < GPS_CA_SV_COUNT; i++)
+    for (auto &channel : m_channels)
     {
-        m_channels[i].setSink(sink);
+        channel.setSink(sink);
     }
 }
 
 void Application::setSource(std::shared_ptr<Source> source)
 {
-    m_source = source;
+    m_source = std::move(source);
     if (m_source && m_sink)
     {
         m_source->setSink(m_sink);
@@ -533,14 +587,14 @@ void Application::processBlock(const ComplexFloatVector &input, uint32_t blockIn
         }
         else
         {
-            int32_t reacquisitionIntervalBlocks = m_configuration.acquisitionInput.reacquisitionIntervalBlocks;
+            const int32_t reacquisitionIntervalBlocks = m_configuration.acquisitionInput.reacquisitionIntervalBlocks;
             if (reacquisitionIntervalBlocks > 0)
             {
-                int32_t slotWidth = std::max<int32_t>(1, reacquisitionIntervalBlocks / GPS_CA_SV_COUNT);
+                const int32_t slotWidth = std::max<int32_t>(1, reacquisitionIntervalBlocks / GPS_CA_SV_COUNT);
                 if (blockIndex % static_cast<uint32_t>(slotWidth) == 0)
                 {
                     channelToSearch = static_cast<int>((blockIndex / static_cast<uint32_t>(slotWidth)) %
-                                                        static_cast<uint32_t>(GPS_CA_SV_COUNT));
+                                                       static_cast<uint32_t>(GPS_CA_SV_COUNT));
                 }
             }
         }
@@ -557,54 +611,63 @@ void Application::processBlock(const ComplexFloatVector &input, uint32_t blockIn
         }
     }
     {
-        Profiler::ScopedTimer trackTimer(m_profiler, "tracking");
+        const Profiler::ScopedTimer trackTimer(m_profiler, "tracking");
         trackSatellites(input);
     }
     {
-        double earlyLatePromptGenTotalMs = 0.0, numericOscillatorTotalMs = 0.0, accumulatorTotalMs = 0.0;
-        for (int i = 0; i < GPS_CA_SV_COUNT; i++)
+        double earlyLatePromptGenTotalMs = 0.0;
+        double numericOscillatorTotalMs = 0.0;
+        double accumulatorTotalMs = 0.0;
+        for (const auto &channel : m_channels)
         {
-            float earlyLatePromptGenMs = 0.0f, numericOscillatorMs = 0.0f, accumulatorMs = 0.0f;
-            m_channels[i].getTrackingSubStageTimings(&earlyLatePromptGenMs, &numericOscillatorMs, &accumulatorMs);
+            float earlyLatePromptGenMs = 0.0f;
+            float numericOscillatorMs = 0.0f;
+            float accumulatorMs = 0.0f;
+            channel.getTrackingSubStageTimings(&earlyLatePromptGenMs, &numericOscillatorMs, &accumulatorMs);
             earlyLatePromptGenTotalMs += earlyLatePromptGenMs;
             numericOscillatorTotalMs += numericOscillatorMs;
             accumulatorTotalMs += accumulatorMs;
         }
         double maxWorkerMs = 0.0;
-        for (double workerMs : m_workerDurationMs)
+        for (const double workerMs : m_workerDurationMs)
         {
             maxWorkerMs = std::max(maxWorkerMs, workerMs);
         }
-        m_profiler.recordTrackingSubStageTimings(earlyLatePromptGenTotalMs, numericOscillatorTotalMs,
-                                                 accumulatorTotalMs, maxWorkerMs);
+        m_profiler.recordTrackingSubStageTimings(
+            earlyLatePromptGenTotalMs, numericOscillatorTotalMs, accumulatorTotalMs, maxWorkerMs);
     }
     {
-        Profiler::ScopedTimer navTimer(m_profiler, "navDecode");
+        const Profiler::ScopedTimer navTimer(m_profiler, "navDecode");
         updateChannelNavigation();
     }
-    int32_t fixOutputIntervalBlocks = m_configuration.pvtSolverInput.fixOutputIntervalBlocks;
+    const int32_t fixOutputIntervalBlocks = m_configuration.pvtSolverInput.fixOutputIntervalBlocks;
     if (fixOutputIntervalBlocks <= 0 || blockIndex % static_cast<uint32_t>(fixOutputIntervalBlocks) == 0)
     {
-        Profiler::ScopedTimer pvtTimer(m_profiler, "pvtSolve");
-        ReceiverPvtSolution solution;
+        const Profiler::ScopedTimer pvtTimer(m_profiler, "pvtSolve");
+        ReceiverPvtSolution solution{};
         computeNavigationSolution(solution);
     }
     m_profiler.finishBlock();
 }
 
-void Application::exportTelemetryJson(const std::string &filepath, const ReceiverPvtSolution &solution, double utcTimeSec)
+void Application::exportTelemetryJson(const std::string &filepath,
+                                      const ReceiverPvtSolution &solution,
+                                      double utcTimeSec)
 {
     std::ostringstream file;
 
     std::vector<int> activePrns;
-    for (int i = 0; i < GPS_CA_SV_COUNT; i++)
+    for (auto &channel : m_channels)
     {
-        if (m_channels[i].isAcquired()) activePrns.push_back(m_channels[i].m_svId);
+        if (channel.isAcquired())
+        {
+            activePrns.push_back(channel.m_svId);
+        }
     }
 
     file << "{\n";
     file << "  \"timestamp\": " << utcTimeSec << ",\n";
-    file << "  \"software\": \"" << SOFTWARE_NAME << " " << SOFTWARE_VERSION << "\",\n";
+    file << R"(  "software": ")" << SOFTWARE_NAME << " " << SOFTWARE_VERSION << "\",\n";
     file << "  \"total_acquired\": " << activePrns.size() << ",\n";
 
     file << "  \"pvt\": {\n";
@@ -624,7 +687,11 @@ void Application::exportTelemetryJson(const std::string &filepath, const Receive
     for (int i = 0; i < GPS_CA_SV_COUNT; i++)
     {
         int peakIndex = 0;
-        float peakVal = 0.0f, peakFreq = 0.0f, meanVal = 0.0f, cn0 = 0.0f, peakRatio = 0.0f;
+        float peakVal = 0.0f;
+        float peakFreq = 0.0f;
+        float meanVal = 0.0f;
+        float cn0 = 0.0f;
+        float peakRatio = 0.0f;
         m_channels[i].getAcquisitionResults(&peakIndex, &peakVal, &peakFreq, &meanVal, &cn0, &peakRatio);
 
         bool hasPosition = false;
@@ -633,15 +700,16 @@ void Application::exportTelemetryJson(const std::string &filepath, const Receive
 
         if (solution.isValid && m_channels[i].hasCompleteEphemeris())
         {
-            size_t promptCount = m_channels[i].getPromptHistory().size();
-            size_t subframeStartSample = m_channels[i].getLastSubframeStartSample();
+            const size_t promptCount = m_channels[i].getPromptHistory().size();
+            const size_t subframeStartSample = m_channels[i].getLastSubframeStartSample();
             if (promptCount >= subframeStartSample)
             {
-                double subframeStartTow = m_channels[i].getLastSubframeTow() - 6.0;
-                double elapsedSeconds = static_cast<double>(promptCount - subframeStartSample) * GPS_CA_CODE_PERIOD_SEC;
-                double transmitTime = subframeStartTow + elapsedSeconds;
+                const double subframeStartTow = m_channels[i].getLastSubframeTow() - 6.0;
+                const double elapsedSeconds =
+                    static_cast<double>(promptCount - subframeStartSample) * GPS_CA_CODE_PERIOD_SEC;
+                const double transmitTime = subframeStartTow + elapsedSeconds;
 
-                SatelliteOrbit orbit =
+                const SatelliteOrbit orbit =
                     PVTSolver::computeSatelliteOrbit(m_channels[i].getAccumulatedEphemeris(), transmitTime);
                 AtmosphericCorrections::computeAzimuthElevation(solution.ecefPosition, orbit.position, az, el);
                 hasPosition = true;
@@ -661,7 +729,10 @@ void Application::exportTelemetryJson(const std::string &filepath, const Receive
     file << "  ],\n";
 
     file << "  \"nmea\": [\n";
-    file << "    \"" << stripTrailingNewlines(NmeaGenerator::generateGgga(solution, static_cast<int>(activePrns.size()), utcTimeSec)) << "\",\n";
+    file << "    \""
+         << stripTrailingNewlines(
+                NmeaGenerator::generateGgga(solution, static_cast<int>(activePrns.size()), utcTimeSec))
+         << "\",\n";
     file << "    \"" << stripTrailingNewlines(NmeaGenerator::generateGprmc(solution, utcTimeSec)) << "\",\n";
     file << "    \"" << stripTrailingNewlines(NmeaGenerator::generateGpgsa(solution, activePrns)) << "\"\n";
     file << "  ]\n";

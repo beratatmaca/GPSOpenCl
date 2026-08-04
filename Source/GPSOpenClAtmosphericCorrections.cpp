@@ -10,32 +10,28 @@ AtmosphericCorrections::AtmosphericCorrections()
 {
 }
 
-AtmosphericCorrections::AtmosphericCorrections(const AtmosphericInput &input)
-    : m_inputConfig(input)
-{
-}
-
-AtmosphericCorrections::~AtmosphericCorrections()
+AtmosphericCorrections::AtmosphericCorrections(const AtmosphericInput &input) : m_inputConfig(input)
 {
 }
 
 AtmosphericOutput AtmosphericCorrections::computeCorrections(int svId,
-                                                           const GeodeticPosition &rxPos,
-                                                           const EcefPosition &rxEcef,
-                                                           const EcefPosition &satEcef,
-                                                           double gpsTimeSec,
-                                                           const AtmosphericInput &input)
+                                                             const GeodeticPosition &rxPos,
+                                                             const EcefPosition &rxEcef,
+                                                             const EcefPosition &satEcef,
+                                                             double gpsTimeSec,
+                                                             const AtmosphericInput &input)
 {
     AtmosphericOutput out{};
     out.structVersion = STRUCT_VERSION_1;
     out.svId = svId;
 
-    double azDeg = 0.0, elDeg = 0.0;
+    double azDeg = 0.0;
+    double elDeg = 0.0;
     computeAzimuthElevation(rxPos, rxEcef, satEcef, azDeg, elDeg);
     out.azimuthDeg = azDeg;
     out.elevationDeg = elDeg;
 
-    KlobucharParams params;
+    KlobucharParams params{};
     params.alpha[0] = input.alpha0;
     params.alpha[1] = input.alpha1;
     params.alpha[2] = input.alpha2;
@@ -52,10 +48,10 @@ AtmosphericOutput AtmosphericCorrections::computeCorrections(int svId,
 }
 
 AtmosphericOutput AtmosphericCorrections::computeCorrections(int svId,
-                                                              const GeodeticPosition &rxPos,
-                                                              const EcefPosition &rxEcef,
-                                                              const EcefPosition &satEcef,
-                                                              double gpsTimeSec) const
+                                                             const GeodeticPosition &rxPos,
+                                                             const EcefPosition &rxEcef,
+                                                             const EcefPosition &satEcef,
+                                                             double gpsTimeSec) const
 {
     return computeCorrections(svId, rxPos, rxEcef, satEcef, gpsTimeSec, m_inputConfig);
 }
@@ -74,27 +70,29 @@ void AtmosphericCorrections::computeAzimuthElevation(const GeodeticPosition &rxG
                                                      double &azimuthDeg,
                                                      double &elevationDeg)
 {
-    double latRad = rxGeodeticPos.latitude * M_PI / 180.0;
-    double lonRad = rxGeodeticPos.longitude * M_PI / 180.0;
+    const double latRad = rxGeodeticPos.latitude * M_PI / 180.0;
+    const double lonRad = rxGeodeticPos.longitude * M_PI / 180.0;
 
-    double dx = satEcef.x - rxEcef.x;
-    double dy = satEcef.y - rxEcef.y;
-    double dz = satEcef.z - rxEcef.z;
+    const double dx = satEcef.x - rxEcef.x;
+    const double dy = satEcef.y - rxEcef.y;
+    const double dz = satEcef.z - rxEcef.z;
 
+    const double sinLat = std::sin(latRad);
+    const double cosLat = std::cos(latRad);
+    const double sinLon = std::sin(lonRad);
+    const double cosLon = std::cos(lonRad);
 
-    double sinLat = std::sin(latRad);
-    double cosLat = std::cos(latRad);
-    double sinLon = std::sin(lonRad);
-    double cosLon = std::cos(lonRad);
+    const double east = (-sinLon * dx) + (cosLon * dy);
+    const double north = (-sinLat * cosLon * dx) - (sinLat * sinLon * dy) + (cosLat * dz);
+    const double up = (cosLat * cosLon * dx) + (cosLat * sinLon * dy) + (sinLat * dz);
 
-    double east  = -sinLon * dx + cosLon * dy;
-    double north = -sinLat * cosLon * dx - sinLat * sinLon * dy + cosLat * dz;
-    double up    =  cosLat * cosLon * dx + cosLat * sinLon * dy + sinLat * dz;
-
-    double horizontalDist = std::sqrt(east * east + north * north);
+    const double horizontalDist = std::sqrt((east * east) + (north * north));
     elevationDeg = std::atan2(up, horizontalDist) * 180.0 / M_PI;
     double azRad = std::atan2(east, north);
-    if (azRad < 0.0) azRad += 2.0 * M_PI;
+    if (azRad < 0.0)
+    {
+        azRad += 2.0 * M_PI;
+    }
     azimuthDeg = azRad * 180.0 / M_PI;
 }
 
@@ -106,47 +104,40 @@ double AtmosphericCorrections::klobucharIonosphericDelay(const GeodeticPosition 
 {
     const double c = 299792458.0;
 
-
-    double phiU = rxPos.latitude / 180.0;
-    double lambdaU = rxPos.longitude / 180.0;
+    const double phiU = rxPos.latitude / 180.0;
+    const double lambdaU = rxPos.longitude / 180.0;
     double el = elevationDeg / 180.0;
-    double az = azimuthDeg * M_PI / 180.0;
+    const double az = azimuthDeg * M_PI / 180.0;
 
-    if (el < 0.0) el = 0.0;
+    el = std::max(el, 0.0);
 
+    const double psi = (0.0137 / (el + 0.11)) - 0.022;
 
-    double psi = 0.0137 / (el + 0.11) - 0.022;
-
-
-    double phiI = phiU + psi * std::cos(az);
+    double phiI = phiU + (psi * std::cos(az));
     phiI = std::clamp(phiI, -0.416, 0.416);
 
+    const double lambdaI = lambdaU + ((psi * std::sin(az)) / std::cos(phiI * M_PI));
 
-    double lambdaI = lambdaU + (psi * std::sin(az)) / std::cos(phiI * M_PI);
+    const double phiM = phiI + (0.064 * std::cos((lambdaI - 1.617) * M_PI));
 
-
-    double phiM = phiI + 0.064 * std::cos((lambdaI - 1.617) * M_PI);
-
-
-    double tLocal = 43200.0 * lambdaI + gpsTimeSec;
+    double tLocal = (43200.0 * lambdaI) + gpsTimeSec;
     tLocal = std::fmod(tLocal, 86400.0);
-    if (tLocal < 0.0) tLocal += 86400.0;
+    if (tLocal < 0.0)
+    {
+        tLocal += 86400.0;
+    }
 
+    const double F = 1.0 + (16.0 * std::pow(0.53 - el, 3));
 
-    double F = 1.0 + 16.0 * std::pow(0.53 - el, 3);
+    double PER = params.beta[0] + (params.beta[1] * phiM) + (params.beta[2] * phiM * phiM) +
+        (params.beta[3] * phiM * phiM * phiM);
+    PER = std::max(PER, 72000.0);
 
+    double AMP = params.alpha[0] + (params.alpha[1] * phiM) + (params.alpha[2] * phiM * phiM) +
+        (params.alpha[3] * phiM * phiM * phiM);
+    AMP = std::max(AMP, 0.0);
 
-    double PER = params.beta[0] + params.beta[1] * phiM +
-                 params.beta[2] * phiM * phiM + params.beta[3] * phiM * phiM * phiM;
-    if (PER < 72000.0) PER = 72000.0;
-
-
-    double AMP = params.alpha[0] + params.alpha[1] * phiM +
-                 params.alpha[2] * phiM * phiM + params.alpha[3] * phiM * phiM * phiM;
-    if (AMP < 0.0) AMP = 0.0;
-
-
-    double x = 2.0 * M_PI * (tLocal - 50400.0) / PER;
+    const double x = 2.0 * M_PI * (tLocal - 50400.0) / PER;
 
     double delaySec = 0.0;
     if (std::fabs(x) < 1.57)
@@ -163,28 +154,27 @@ double AtmosphericCorrections::klobucharIonosphericDelay(const GeodeticPosition 
 
 double AtmosphericCorrections::saastamoinenTroposphericDelay(double rxAltitudeMeters, double elevationDeg)
 {
-    if (elevationDeg < 2.0) elevationDeg = 2.0;
+    elevationDeg = std::max(elevationDeg, 2.0);
 
     double h = rxAltitudeMeters;
-    if (h < 0.0) h = 0.0;
-    if (h > 10000.0) h = 10000.0;
+    h = std::max(h, 0.0);
+    h = std::min(h, 10000.0);
 
+    const double p0 = 1013.25;
+    const double T0 = 288.15;
+    const double e0 = 11.691;
 
-    double p0 = 1013.25;
-    double T0 = 288.15;
-    double e0 = 11.691;
+    const double p = p0 * std::pow(1.0 - (2.2557e-5 * h), 5.2568);
+    const double T = T0 - (0.0065 * h);
+    const double e = e0 * std::pow(1.0 - (2.2557e-5 * h), 11.96);
 
-    double p = p0 * std::pow(1.0 - 2.2557e-5 * h, 5.2568);
-    double T = T0 - 0.0065 * h;
-    double e = e0 * std::pow(1.0 - 2.2557e-5 * h, 11.96);
+    const double elRad = elevationDeg * M_PI / 180.0;
+    const double tanEl = std::tan(elRad);
 
-    double elRad = elevationDeg * M_PI / 180.0;
-    double tanEl = std::tan(elRad);
+    const double mappedEl = std::sin(elRad + (0.00143 / (tanEl + 0.0445)));
 
-    double mappedEl = std::sin(elRad + 0.00143 / (tanEl + 0.045));
-
-    double dryDelay = (0.002277 * p) / mappedEl;
-    double wetDelay = (0.002277 * (1255.0 / T + 0.05) * e) / mappedEl;
+    const double dryDelay = (0.002277 * p) / mappedEl;
+    const double wetDelay = (0.002277 * (1255.0 / T + 0.05) * e) / mappedEl;
 
     return dryDelay + wetDelay;
 }

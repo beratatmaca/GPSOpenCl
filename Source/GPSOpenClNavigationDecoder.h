@@ -9,6 +9,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <utility>
 #include <vector>
 
 #include "GPSOpenClSink.h"
@@ -19,32 +20,32 @@ namespace GPSOpenCl
 /** @brief Decoded GPS ephemeris and clock parameters. */
 struct GpsEphemeris
 {
-    int svId;          ///< Satellite vehicle ID.
-    int weekNumber;    ///< GPS week number.
-    double tow;        ///< Time of week (s).
-    int subframeId;    ///< Subframe ID (1-5).
-    bool isValid;      ///< True if decode valid.
+    int svId;                               ///< Satellite vehicle ID.
+    int weekNumber;                         ///< GPS week number.
+    double tow;                             ///< Time of week (s).
+    int subframeId;                         ///< Subframe ID (1-5).
+    bool isValid;                           ///< True if decode valid.
 
-    double toc;        ///< Clock reference time (s).
-    double af0;        ///< Clock bias (s).
-    double af1;        ///< Clock drift (s/s).
-    double af2;        ///< Clock drift rate (s/s^2).
-    double tgd;        ///< Group delay differential (s).
-    int iodc;          ///< Issue of Data, Clock (10-bit, subframe 1).
+    double toc;                             ///< Clock reference time (s).
+    double af0;                             ///< Clock bias (s).
+    double af1;                             ///< Clock drift (s/s).
+    double af2;                             ///< Clock drift rate (s/s^2).
+    double tgd;                             ///< Group delay differential (s).
+    int iodc;                               ///< Issue of Data, Clock (10-bit, subframe 1).
 
-    double toe;        ///< Ephemeris reference time (s).
-    double sqrtA;      ///< Sqrt of semi-major axis (m^1/2).
-    double e;          ///< Orbital eccentricity.
-    double i0;         ///< Inclination at reference time (rad).
-    double omega0;     ///< Longitude of ascending node (rad).
-    double omega;      ///< Argument of perigee (rad).
-    double M0;         ///< Mean anomaly at reference time (rad).
-    double deltaN;     ///< Mean motion correction (rad/s).
-    double omegaDot;   ///< Rate of right ascension (rad/s).
-    double idot;       ///< Rate of inclination (rad/s).
-    double Cuc, Cus, Crc, Crs, Cic, Cis; ///< Harmonic correction terms.
-    int iode2;         ///< Issue of Data, Ephemeris from subframe 2.
-    int iode3;         ///< Issue of Data, Ephemeris from subframe 3.
+    double toe;                             ///< Ephemeris reference time (s).
+    double sqrtA;                           ///< Sqrt of semi-major axis (m^1/2).
+    double e;                               ///< Orbital eccentricity.
+    double i0;                              ///< Inclination at reference time (rad).
+    double omega0;                          ///< Longitude of ascending node (rad).
+    double omega;                           ///< Argument of perigee (rad).
+    double M0;                              ///< Mean anomaly at reference time (rad).
+    double deltaN;                          ///< Mean motion correction (rad/s).
+    double omegaDot;                        ///< Rate of right ascension (rad/s).
+    double idot;                            ///< Rate of inclination (rad/s).
+    double Cuc, Cus, Crc, Crs, Cic, Cis;    ///< Harmonic correction terms.
+    int iode2;                              ///< Issue of Data, Ephemeris from subframe 2.
+    int iode3;                              ///< Issue of Data, Ephemeris from subframe 3.
 };
 
 /** @brief GPS L1 C/A navigation message decoder. */
@@ -58,6 +59,10 @@ class NavigationDecoder
     NavigationDecoder(const NavDecoderInput &input);
 
     ~NavigationDecoder();
+    NavigationDecoder(const NavigationDecoder &) = delete;
+    NavigationDecoder &operator=(const NavigationDecoder &) = delete;
+    NavigationDecoder(NavigationDecoder &&) = delete;
+    NavigationDecoder &operator=(NavigationDecoder &&) = delete;
 
     /** @brief Find TLM preamble in a bit stream.
      *  @param bits          Navigation bit array.
@@ -112,7 +117,7 @@ class NavigationDecoder
     /** @brief Convert Prompt correlator history to navigation bits.
      *  @param promptHistory Accumulated Prompt I samples.
      *  @return Demodulated bit array. */
-    std::vector<bool> promptToBits(const ComplexFloatVector &promptHistory);
+    static std::vector<bool> promptToBits(const ComplexFloatVector &promptHistory);
 
     /** @brief Process prompt signal and decode subframe into ephemeris.
      *  @param svId                Satellite vehicle ID.
@@ -126,8 +131,12 @@ class NavigationDecoder
      *  @param ephem               Output ephemeris.
      *  @param subframeStartSample Subframe start sample index (output).
      *  @return True if subframe decoded. */
-    bool processPromptSignal(int svId, const ComplexFloatVector &promptHistory, int &bitSyncPhase,
-                             std::vector<size_t> &searchPositions, size_t &bitOffset, GpsEphemeris &ephem,
+    bool processPromptSignal(int svId,
+                             const ComplexFloatVector &promptHistory,
+                             int &bitSyncPhase,
+                             std::vector<size_t> &searchPositions,
+                             size_t &bitOffset,
+                             GpsEphemeris &ephem,
                              size_t &subframeStartSample);
 
     /** @brief Process prompt signal and decode subframe into output struct.
@@ -139,13 +148,17 @@ class NavigationDecoder
      *  @param output              Output struct.
      *  @param subframeStartSample Subframe start sample index (output).
      *  @return True if subframe decoded. */
-    bool processPromptSignal(int svId, const ComplexFloatVector &promptHistory, int &bitSyncPhase,
-                             std::vector<size_t> &searchPositions, size_t &bitOffset, NavDecoderOutput &output,
+    bool processPromptSignal(int svId,
+                             const ComplexFloatVector &promptHistory,
+                             int &bitSyncPhase,
+                             std::vector<size_t> &searchPositions,
+                             size_t &bitOffset,
+                             NavDecoderOutput &output,
                              size_t &subframeStartSample);
 
     /** @brief Set telemetry sink.
      *  @param sink Sink implementation. */
-    void setSink(std::shared_ptr<Sink> sink) { m_sink = sink; }
+    void setSink(std::shared_ptr<Sink> sink) { m_sink = std::move(sink); }
 
     /** @brief Check if broadcast ionospheric parameters have been decoded.
      *  @return True if Subframe 4 Page 18 has been seen. */
@@ -171,8 +184,12 @@ class NavigationDecoder
      *  @param ephem               Output ephemeris.
      *  @param subframeStartSample Subframe start sample index (output).
      *  @return True if a parity-valid subframe decoded at this phase. */
-    bool decodeAtPhaseOffset(int svId, const ComplexFloatVector &promptHistory, int phase, size_t &bitOffset,
-                             GpsEphemeris &ephem, size_t &subframeStartSample);
+    bool decodeAtPhaseOffset(int svId,
+                             const ComplexFloatVector &promptHistory,
+                             int phase,
+                             size_t &bitOffset,
+                             GpsEphemeris &ephem,
+                             size_t &subframeStartSample);
 
     /** @brief Check exactly one candidate (phase, bitPosition) for a parity-valid subframe, doing
      *   only the fixed 300-bit demodulation and check needed for that single position (no scanning
@@ -188,8 +205,13 @@ class NavigationDecoder
      *  @param ephem               Output ephemeris.
      *  @param subframeStartSample Subframe start sample index (output).
      *  @return True if a parity-valid subframe starts at exactly this position. */
-    bool tryDecodeAtBitPosition(int svId, const ComplexFloatVector &promptHistory, int phase, size_t bitPosition,
-                                bool &hadEnoughData, GpsEphemeris &ephem, size_t &subframeStartSample);
+    bool tryDecodeAtBitPosition(int svId,
+                                const ComplexFloatVector &promptHistory,
+                                int phase,
+                                size_t bitPosition,
+                                bool &hadEnoughData,
+                                GpsEphemeris &ephem,
+                                size_t &subframeStartSample);
 
     NavDecoderInput m_inputConfig;            ///< Decoder parameters.
     std::shared_ptr<Sink> m_sink{nullptr};    ///< Telemetry sink.

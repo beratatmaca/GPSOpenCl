@@ -30,7 +30,7 @@ Checks: >
   -readability-magic-numbers,
   -readability-uppercase-literal-suffix
 
-WarningsAsErrors: ''
+WarningsAsErrors: ""
 HeaderFilterRegex: '^.*/Source/.*\.h$'
 FormatStyle: file
 UseColor: true
@@ -69,6 +69,6 @@ CheckOptions:
   - key: readability-identifier-naming.StaticConstantCase
     value: UPPER_CASE
   - key: bugprone-narrowing-conversions.WarnOnFloatingPointNarrowingConversion
-    value: 'true'
+    value: "true"
   - key: performance-move-const-arg.CheckTriviallyCopyableMove
-    value: 'true'
+    value: "true"

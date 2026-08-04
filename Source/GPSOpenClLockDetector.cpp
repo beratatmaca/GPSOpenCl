@@ -6,7 +6,7 @@ using namespace GPSOpenCl;
 
 double LockDetector::carrierLockIndicator(double Ip, double Qp)
 {
-    double denom = Ip * Ip + Qp * Qp;
+    const double denom = (Ip * Ip) + (Qp * Qp);
     if (denom < 1e-12)
     {
         return 0.0;
@@ -16,7 +16,7 @@ double LockDetector::carrierLockIndicator(double Ip, double Qp)
 
 double LockDetector::codeLockRatio(double Ie, double Ip, double Il)
 {
-    double absIp = std::fabs(Ip);
+    const double absIp = std::fabs(Ip);
     if (absIp < 1e-12)
     {
         return 0.0;

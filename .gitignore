@@ -34,8 +34,15 @@
 # Build Directories
 build/
 
-# VSCode
-.vscode/
+# Generated documentation
+docs/
+
+# VSCode (shared configs in .vscode/ are checked in; ignore local-only state)
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
 .cache/
 
 # Any Data File

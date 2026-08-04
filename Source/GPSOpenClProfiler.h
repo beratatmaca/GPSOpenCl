@@ -10,6 +10,7 @@
 #include <chrono>
 #include <memory>
 #include <string>
+#include <utility>
 
 namespace GPSOpenCl
 {
@@ -19,6 +20,10 @@ class Profiler
   public:
     Profiler();
     ~Profiler();
+    Profiler(const Profiler &) = delete;
+    Profiler &operator=(const Profiler &) = delete;
+    Profiler(Profiler &&) = delete;
+    Profiler &operator=(Profiler &&) = delete;
 
     /** @brief Enable or disable profiling.
      *  @param enabled True to enable. */
@@ -43,7 +48,9 @@ class Profiler
      *  @param numericOscillatorMs  Aggregate numericOscillator time across active channels (ms).
      *  @param accumulatorMs        Aggregate correlator-accumulation time across active channels (ms).
      *  @param maxWorkerMs          Slowest tracking worker's own wall-clock time this block (ms). */
-    void recordTrackingSubStageTimings(double earlyLatePromptGenMs, double numericOscillatorMs, double accumulatorMs,
+    void recordTrackingSubStageTimings(double earlyLatePromptGenMs,
+                                       double numericOscillatorMs,
+                                       double accumulatorMs,
                                        double maxWorkerMs);
 
     /** @brief Finish block and return output.
@@ -52,7 +59,7 @@ class Profiler
 
     /** @brief Set telemetry sink.
      *  @param sink Sink implementation. */
-    void setSink(std::shared_ptr<Sink> sink) { m_sink = sink; }
+    void setSink(std::shared_ptr<Sink> sink) { m_sink = std::move(sink); }
 
     /** @brief RAII timer that records stage duration on destruction. */
     class ScopedTimer
@@ -61,8 +68,10 @@ class Profiler
         /** @brief Start timing a stage.
          *  @param profiler  Parent profiler.
          *  @param stageName Stage name. */
-        ScopedTimer(Profiler &profiler, const std::string &stageName)
-            : m_profiler(profiler), m_stageName(stageName), m_start(std::chrono::high_resolution_clock::now())
+        ScopedTimer(Profiler &profiler, std::string stageName)
+            : m_profiler(profiler),
+              m_stageName(std::move(stageName)),
+              m_start(std::chrono::high_resolution_clock::now())
         {
         }
 
@@ -71,21 +80,26 @@ class Profiler
             if (m_profiler.isEnabled())
             {
                 auto end = std::chrono::high_resolution_clock::now();
-                double durationMs = std::chrono::duration<double, std::milli>(end - m_start).count();
+                const double durationMs = std::chrono::duration<double, std::milli>(end - m_start).count();
                 m_profiler.recordStageTimeMs(m_stageName, durationMs);
             }
         }
 
+        ScopedTimer(const ScopedTimer &) = delete;
+        ScopedTimer &operator=(const ScopedTimer &) = delete;
+        ScopedTimer(ScopedTimer &&) = delete;
+        ScopedTimer &operator=(ScopedTimer &&) = delete;
+
       private:
-        Profiler &m_profiler;                                       ///< Parent profiler.
-        std::string m_stageName;                                    ///< Stage name.
-        std::chrono::high_resolution_clock::time_point m_start;     ///< Start time.
+        Profiler &m_profiler;                                      ///< Parent profiler.
+        std::string m_stageName;                                   ///< Stage name.
+        std::chrono::high_resolution_clock::time_point m_start;    ///< Start time.
     };
 
   private:
     bool m_enabled{true};                                           ///< Profiling enabled flag.
     ProfilerOutput m_currentOutput{};                               ///< Current block output.
-    std::chrono::high_resolution_clock::time_point m_blockStart{};  ///< Block start time.
+    std::chrono::high_resolution_clock::time_point m_blockStart;    ///< Block start time.
     std::shared_ptr<Sink> m_sink{nullptr};                          ///< Telemetry sink.
 };
 }

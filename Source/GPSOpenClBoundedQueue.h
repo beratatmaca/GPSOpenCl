@@ -13,8 +13,7 @@ namespace GPSOpenCl
 {
 /** @brief Thread-safe bounded blocking queue.
  *  @tparam T Element type. */
-template <typename T>
-class BoundedQueue
+template<typename T> class BoundedQueue
 {
   public:
     /** @brief Construct with max capacity.
@@ -28,7 +27,10 @@ class BoundedQueue
     {
         std::unique_lock<std::mutex> lock(m_mutex);
         m_cvPush.wait(lock, [this]() { return m_queue.size() < m_maxCapacity || m_finished; });
-        if (m_finished) return false;
+        if (m_finished)
+        {
+            return false;
+        }
         m_queue.push(std::move(item));
         m_cvPop.notify_one();
         return true;
@@ -41,8 +43,11 @@ class BoundedQueue
      *  @return True if enqueued; false if the queue was full or finished (item is dropped). */
     bool tryPush(T item)
     {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        if (m_finished || m_queue.size() >= m_maxCapacity) return false;
+        const std::lock_guard<std::mutex> lock(m_mutex);
+        if (m_finished || m_queue.size() >= m_maxCapacity)
+        {
+            return false;
+        }
         m_queue.push(std::move(item));
         m_cvPop.notify_one();
         return true;
@@ -55,7 +60,10 @@ class BoundedQueue
     {
         std::unique_lock<std::mutex> lock(m_mutex);
         m_cvPop.wait(lock, [this]() { return !m_queue.empty() || m_finished; });
-        if (m_queue.empty() && m_finished) return false;
+        if (m_queue.empty() && m_finished)
+        {
+            return false;
+        }
         item = std::move(m_queue.front());
         m_queue.pop();
         m_cvPush.notify_one();
@@ -69,8 +77,11 @@ class BoundedQueue
      *  @return True if an item was popped; false if the queue was empty. */
     bool tryPop(T &item)
     {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        if (m_queue.empty()) return false;
+        const std::lock_guard<std::mutex> lock(m_mutex);
+        if (m_queue.empty())
+        {
+            return false;
+        }
         item = std::move(m_queue.front());
         m_queue.pop();
         m_cvPush.notify_one();
@@ -80,7 +91,7 @@ class BoundedQueue
     /** @brief Signal that no more items will be pushed. */
     void finish()
     {
-        std::unique_lock<std::mutex> lock(m_mutex);
+        const std::unique_lock<std::mutex> lock(m_mutex);
         m_finished = true;
         m_cvPush.notify_all();
         m_cvPop.notify_all();

@@ -9,23 +9,18 @@
 
 using namespace GPSOpenCl;
 
-NmeaGenerator::NmeaGenerator()
-    : m_inputConfig{STRUCT_VERSION_1, 1, 1, 1, 1}
+NmeaGenerator::NmeaGenerator() : m_inputConfig{STRUCT_VERSION_1, 1, 1, 1, 1}
 {
 }
 
-NmeaGenerator::NmeaGenerator(const NmeaGeneratorInput &input)
-    : m_inputConfig(input)
+NmeaGenerator::NmeaGenerator(const NmeaGeneratorInput &input) : m_inputConfig(input)
 {
 }
 
-NmeaGenerator::~NmeaGenerator()
+NmeaGeneratorOutput
+    NmeaGenerator::generateGggaOutput(const ReceiverPvtSolution &solution, int numSatellites, double utcTimeSec)
 {
-}
-
-NmeaGeneratorOutput NmeaGenerator::generateGggaOutput(const ReceiverPvtSolution &solution, int numSatellites, double utcTimeSec)
-{
-    std::string str = generateGgga(solution, numSatellites, utcTimeSec);
+    const std::string str = generateGgga(solution, numSatellites, utcTimeSec);
     NmeaGeneratorOutput out{};
     out.structVersion = STRUCT_VERSION_1;
     snprintf(out.sentence, sizeof(out.sentence), "%s", str.c_str());
@@ -34,29 +29,30 @@ NmeaGeneratorOutput NmeaGenerator::generateGggaOutput(const ReceiverPvtSolution 
 
 NmeaGeneratorOutput NmeaGenerator::generateGprmcOutput(const ReceiverPvtSolution &solution, double utcTimeSec)
 {
-    std::string str = generateGprmc(solution, utcTimeSec);
+    const std::string str = generateGprmc(solution, utcTimeSec);
     NmeaGeneratorOutput out{};
     out.structVersion = STRUCT_VERSION_1;
     snprintf(out.sentence, sizeof(out.sentence), "%s", str.c_str());
     return out;
 }
 
-NmeaGeneratorOutput NmeaGenerator::generateGggaOutput(const PvtSolverOutput &pvtOutput, int numSatellites, double utcTimeSec)
+NmeaGeneratorOutput
+    NmeaGenerator::generateGggaOutput(const PvtSolverOutput &pvtOutput, int numSatellites, double utcTimeSec)
 {
-    ReceiverPvtSolution sol = PVTSolver::outputToSolution(pvtOutput);
+    const ReceiverPvtSolution sol = PVTSolver::outputToSolution(pvtOutput);
     return generateGggaOutput(sol, numSatellites, utcTimeSec);
 }
 
 NmeaGeneratorOutput NmeaGenerator::generateGprmcOutput(const PvtSolverOutput &pvtOutput, double utcTimeSec)
 {
-    ReceiverPvtSolution sol = PVTSolver::outputToSolution(pvtOutput);
+    const ReceiverPvtSolution sol = PVTSolver::outputToSolution(pvtOutput);
     return generateGprmcOutput(sol, utcTimeSec);
 }
 
 uint8_t NmeaGenerator::calculateChecksum(const std::string &sentenceBody)
 {
     uint8_t checksum = 0;
-    for (char c : sentenceBody)
+    for (const char c : sentenceBody)
     {
         checksum ^= static_cast<uint8_t>(c);
     }
@@ -65,7 +61,7 @@ uint8_t NmeaGenerator::calculateChecksum(const std::string &sentenceBody)
 
 std::string NmeaGenerator::appendChecksum(const std::string &sentenceBody)
 {
-    uint8_t checksum = calculateChecksum(sentenceBody);
+    const uint8_t checksum = calculateChecksum(sentenceBody);
     char buf[16];
     std::snprintf(buf, sizeof(buf), "*%02X\r\n", checksum);
     return "$" + sentenceBody + buf;
@@ -77,14 +73,14 @@ std::string NmeaGenerator::formatLatitude(double latDegrees)
     {
         return "0000.0000,N";
     }
-    char hemisphere = (latDegrees >= 0.0) ? 'N' : 'S';
-    double absLat = std::fabs(latDegrees);
-    int degrees = static_cast<int>(absLat);
-    double minutes = (absLat - degrees) * 60.0;
+    const char hemisphere = (latDegrees >= 0.0) ? 'N' : 'S';
+    const double absLat = std::fabs(latDegrees);
+    const int degrees = static_cast<int>(absLat);
+    const double minutes = (absLat - degrees) * 60.0;
 
     char buf[32];
     std::snprintf(buf, sizeof(buf), "%02d%07.4f,%c", degrees, minutes, hemisphere);
-    return std::string(buf);
+    return {buf};
 }
 
 std::string NmeaGenerator::formatLongitude(double lonDegrees)
@@ -93,76 +89,92 @@ std::string NmeaGenerator::formatLongitude(double lonDegrees)
     {
         return "00000.0000,E";
     }
-    char hemisphere = (lonDegrees >= 0.0) ? 'E' : 'W';
-    double absLon = std::fabs(lonDegrees);
-    int degrees = static_cast<int>(absLon);
-    double minutes = (absLon - degrees) * 60.0;
+    const char hemisphere = (lonDegrees >= 0.0) ? 'E' : 'W';
+    const double absLon = std::fabs(lonDegrees);
+    const int degrees = static_cast<int>(absLon);
+    const double minutes = (absLon - degrees) * 60.0;
 
     char buf[32];
     std::snprintf(buf, sizeof(buf), "%03d%07.4f,%c", degrees, minutes, hemisphere);
-    return std::string(buf);
+    return {buf};
 }
 
 std::string NmeaGenerator::generateGgga(const ReceiverPvtSolution &solution, int numSatellites, double utcTimeSec)
 {
-    int hours = static_cast<int>(utcTimeSec / 3600.0) % 24;
-    int minutes = static_cast<int>(fmod(utcTimeSec, 3600.0) / 60.0);
-    double seconds = fmod(utcTimeSec, 60.0);
+    const int hours = static_cast<int>(utcTimeSec / 3600.0) % 24;
+    const int minutes = static_cast<int>(fmod(utcTimeSec, 3600.0) / 60.0);
+    const double seconds = fmod(utcTimeSec, 60.0);
 
     char timeBuf[16];
     std::snprintf(timeBuf, sizeof(timeBuf), "%02d%02d%05.2f", hours, minutes, seconds);
 
-    std::string latStr = formatLatitude(solution.geodeticPosition.latitude);
-    std::string lonStr = formatLongitude(solution.geodeticPosition.longitude);
+    const std::string latStr = formatLatitude(solution.geodeticPosition.latitude);
+    const std::string lonStr = formatLongitude(solution.geodeticPosition.longitude);
 
-    int fixQuality = solution.isValid ? 1 : 0;
-    double hdop = solution.isValid ? solution.dopHDOP : 99.9;
-    double alt = solution.isValid ? solution.geodeticPosition.altitude : 0.0;
+    const int fixQuality = solution.isValid ? 1 : 0;
+    const double hdop = solution.isValid ? solution.dopHDOP : 99.9;
+    const double alt = solution.isValid ? solution.geodeticPosition.altitude : 0.0;
 
     char body[256];
-    std::snprintf(body, sizeof(body), "GPGGA,%s,%s,%s,%d,%02d,%.1f,%.1f,M,0.0,M,,",
-                  timeBuf, latStr.c_str(), lonStr.c_str(), fixQuality, numSatellites, hdop, alt);
+    std::snprintf(body,
+                  sizeof(body),
+                  "GPGGA,%s,%s,%s,%d,%02d,%.1f,%.1f,M,0.0,M,,",
+                  timeBuf,
+                  latStr.c_str(),
+                  lonStr.c_str(),
+                  fixQuality,
+                  numSatellites,
+                  hdop,
+                  alt);
 
     return appendChecksum(body);
 }
 
 std::string NmeaGenerator::generateGprmc(const ReceiverPvtSolution &solution, double utcTimeSec)
 {
-    int hours = static_cast<int>(utcTimeSec / 3600.0) % 24;
-    int minutes = static_cast<int>(fmod(utcTimeSec, 3600.0) / 60.0);
-    double seconds = fmod(utcTimeSec, 60.0);
+    const int hours = static_cast<int>(utcTimeSec / 3600.0) % 24;
+    const int minutes = static_cast<int>(fmod(utcTimeSec, 3600.0) / 60.0);
+    const double seconds = fmod(utcTimeSec, 60.0);
 
     char timeBuf[16];
     std::snprintf(timeBuf, sizeof(timeBuf), "%02d%02d%05.2f", hours, minutes, seconds);
 
-    char status = solution.isValid ? 'A' : 'V';
-    std::string latStr = formatLatitude(solution.geodeticPosition.latitude);
-    std::string lonStr = formatLongitude(solution.geodeticPosition.longitude);
+    const char status = solution.isValid ? 'A' : 'V';
+    const std::string latStr = formatLatitude(solution.geodeticPosition.latitude);
+    const std::string lonStr = formatLongitude(solution.geodeticPosition.longitude);
 
     char dateBuf[8] = "000000";
     {
-        time_t now = std::time(nullptr);
+        const time_t now = std::time(nullptr);
+
         struct tm utcTm{};
+
         if (gmtime_r(&now, &utcTm) != nullptr)
         {
-            std::snprintf(dateBuf, sizeof(dateBuf), "%02d%02d%02d",
-                          utcTm.tm_mday, utcTm.tm_mon + 1, utcTm.tm_year % 100);
+            std::snprintf(
+                dateBuf, sizeof(dateBuf), "%02d%02d%02d", utcTm.tm_mday, utcTm.tm_mon + 1, utcTm.tm_year % 100);
         }
     }
 
     char body[256];
-    std::snprintf(body, sizeof(body), "GPRMC,%s,%c,%s,%s,0.0,0.0,%s,,,A",
-                  timeBuf, status, latStr.c_str(), lonStr.c_str(), dateBuf);
+    std::snprintf(body,
+                  sizeof(body),
+                  "GPRMC,%s,%c,%s,%s,0.0,0.0,%s,,,A",
+                  timeBuf,
+                  status,
+                  latStr.c_str(),
+                  lonStr.c_str(),
+                  dateBuf);
 
     return appendChecksum(body);
 }
 
 std::string NmeaGenerator::generateGpgsa(const ReceiverPvtSolution &solution, const std::vector<int> &activePrns)
 {
-    int fixMode = solution.isValid ? 3 : 1;
-    double pdop = solution.isValid ? solution.dopPDOP : 99.9;
-    double hdop = solution.isValid ? solution.dopHDOP : 99.9;
-    double vdop = solution.isValid ? solution.dopVDOP : 99.9;
+    const int fixMode = solution.isValid ? 3 : 1;
+    const double pdop = solution.isValid ? solution.dopPDOP : 99.9;
+    const double hdop = solution.isValid ? solution.dopHDOP : 99.9;
+    const double vdop = solution.isValid ? solution.dopVDOP : 99.9;
 
     std::ostringstream oss;
     oss << "GPGSA,A," << fixMode;
@@ -189,7 +201,8 @@ std::string NmeaGenerator::generateGpgsa(const ReceiverPvtSolution &solution, co
 }
 
 std::vector<std::string> NmeaGenerator::generateGpgsvSentences(const Channel channels[GPS_CA_SV_COUNT],
-                                                                const EcefPosition &rxEcef, bool rxPositionValid)
+                                                               const EcefPosition &rxEcef,
+                                                               bool rxPositionValid)
 {
     struct SvInfo
     {
@@ -199,6 +212,7 @@ std::vector<std::string> NmeaGenerator::generateGpgsvSentences(const Channel cha
         double elevationDeg;
         double azimuthDeg;
     };
+
     std::vector<SvInfo> acquiredSats;
 
     for (int i = 0; i < GPS_CA_SV_COUNT; i++)
@@ -206,26 +220,30 @@ std::vector<std::string> NmeaGenerator::generateGpgsvSentences(const Channel cha
         if (channels[i].isAcquired())
         {
             int peakIdx = 0;
-            float peakVal = 0.0f, peakFreq = 0.0f, meanVal = 0.0f, cn0 = 0.0f, peakRatio = 0.0f;
-            const_cast<Channel &>(channels[i]).getAcquisitionResults(&peakIdx, &peakVal, &peakFreq, &meanVal, &cn0, &peakRatio);
+            float peakVal = 0.0f;
+            float peakFreq = 0.0f;
+            float meanVal = 0.0f;
+            float cn0 = 0.0f;
+            float peakRatio = 0.0f;
+            channels[i].getAcquisitionResults(&peakIdx, &peakVal, &peakFreq, &meanVal, &cn0, &peakRatio);
 
             SvInfo sv{channels[i].m_svId, static_cast<int>(std::round(cn0)), false, 0.0, 0.0};
 
             if (rxPositionValid && channels[i].hasCompleteEphemeris())
             {
-                size_t promptCount = channels[i].getPromptHistory().size();
-                size_t subframeStartSample = channels[i].getLastSubframeStartSample();
+                const size_t promptCount = channels[i].getPromptHistory().size();
+                const size_t subframeStartSample = channels[i].getLastSubframeStartSample();
                 if (promptCount >= subframeStartSample)
                 {
-                    double subframeStartTow = channels[i].getLastSubframeTow() - 6.0;
-                    double elapsedSeconds =
+                    const double subframeStartTow = channels[i].getLastSubframeTow() - 6.0;
+                    const double elapsedSeconds =
                         static_cast<double>(promptCount - subframeStartSample) * GPS_CA_CODE_PERIOD_SEC;
-                    double transmitTime = subframeStartTow + elapsedSeconds;
+                    const double transmitTime = subframeStartTow + elapsedSeconds;
 
-                    SatelliteOrbit orbit =
+                    const SatelliteOrbit orbit =
                         PVTSolver::computeSatelliteOrbit(channels[i].getAccumulatedEphemeris(), transmitTime);
-                    AtmosphericCorrections::computeAzimuthElevation(rxEcef, orbit.position, sv.azimuthDeg,
-                                                                    sv.elevationDeg);
+                    AtmosphericCorrections::computeAzimuthElevation(
+                        rxEcef, orbit.position, sv.azimuthDeg, sv.elevationDeg);
                     sv.hasPosition = true;
                 }
             }
@@ -234,9 +252,12 @@ std::vector<std::string> NmeaGenerator::generateGpgsvSentences(const Channel cha
         }
     }
 
-    int totalSats = static_cast<int>(acquiredSats.size());
+    const int totalSats = static_cast<int>(acquiredSats.size());
     int numSentences = (totalSats + 3) / 4;
-    if (numSentences == 0) numSentences = 1;
+    if (numSentences == 0)
+    {
+        numSentences = 1;
+    }
 
     std::vector<std::string> sentences;
     for (int s = 0; s < numSentences; s++)
@@ -246,16 +267,21 @@ std::vector<std::string> NmeaGenerator::generateGpgsvSentences(const Channel cha
 
         for (int i = 0; i < 4; i++)
         {
-            int idx = s * 4 + i;
+            const int idx = (s * 4) + i;
             if (idx < totalSats)
             {
                 char buf[32];
                 if (acquiredSats[idx].hasPosition)
                 {
-                    int elev = static_cast<int>(std::lround(acquiredSats[idx].elevationDeg));
-                    int azim = ((static_cast<int>(std::lround(acquiredSats[idx].azimuthDeg)) % 360) + 360) % 360;
-                    std::snprintf(buf, sizeof(buf), ",%02d,%02d,%03d,%02d",
-                                  acquiredSats[idx].prn, elev, azim, acquiredSats[idx].snr);
+                    const int elev = static_cast<int>(std::lround(acquiredSats[idx].elevationDeg));
+                    const int azim = ((static_cast<int>(std::lround(acquiredSats[idx].azimuthDeg)) % 360) + 360) % 360;
+                    std::snprintf(buf,
+                                  sizeof(buf),
+                                  ",%02d,%02d,%03d,%02d",
+                                  acquiredSats[idx].prn,
+                                  elev,
+                                  azim,
+                                  acquiredSats[idx].snr);
                 }
                 else
                 {
@@ -275,7 +301,8 @@ std::vector<std::string> NmeaGenerator::generateGpgsvSentences(const Channel cha
     return sentences;
 }
 
-std::string NmeaGenerator::generateGpgsv(const Channel channels[GPS_CA_SV_COUNT], const EcefPosition &rxEcef,
+std::string NmeaGenerator::generateGpgsv(const Channel channels[GPS_CA_SV_COUNT],
+                                         const EcefPosition &rxEcef,
                                          bool rxPositionValid)
 {
     std::string result;
@@ -286,9 +313,10 @@ std::string NmeaGenerator::generateGpgsv(const Channel channels[GPS_CA_SV_COUNT]
     return result;
 }
 
-NmeaGeneratorOutput NmeaGenerator::generateGpgsaOutput(const ReceiverPvtSolution &solution, const std::vector<int> &activePrns)
+NmeaGeneratorOutput NmeaGenerator::generateGpgsaOutput(const ReceiverPvtSolution &solution,
+                                                       const std::vector<int> &activePrns)
 {
-    std::string str = generateGpgsa(solution, activePrns);
+    const std::string str = generateGpgsa(solution, activePrns);
     NmeaGeneratorOutput out{};
     out.structVersion = STRUCT_VERSION_1;
     snprintf(out.sentence, sizeof(out.sentence), "%s", str.c_str());
@@ -296,7 +324,8 @@ NmeaGeneratorOutput NmeaGenerator::generateGpgsaOutput(const ReceiverPvtSolution
 }
 
 std::vector<NmeaGeneratorOutput> NmeaGenerator::generateGpgsvOutput(const Channel channels[GPS_CA_SV_COUNT],
-                                                                     const EcefPosition &rxEcef, bool rxPositionValid)
+                                                                    const EcefPosition &rxEcef,
+                                                                    bool rxPositionValid)
 {
     std::vector<NmeaGeneratorOutput> outputs;
     for (const auto &sentence : generateGpgsvSentences(channels, rxEcef, rxPositionValid))

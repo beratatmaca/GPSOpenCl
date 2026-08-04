@@ -1,10 +1,26 @@
 #!/usr/bin/env python3
 import argparse
 import json
+import math
 import os
 import subprocess
 import sys
 import time
+
+# WGS-84 geodetic -> ECEF, mirrors GPSOpenCl::PVTSolver::ecefToWgs84's inverse, for scoring the scenario's true position.
+def geodetic_to_ecef(lat_deg, lon_deg, alt_m):
+    a = 6378137.0
+    f = 1.0 / 298.257223563
+    e2 = f * (2.0 - f)
+    lat_rad = math.radians(lat_deg)
+    lon_rad = math.radians(lon_deg)
+    sin_lat = math.sin(lat_rad)
+    cos_lat = math.cos(lat_rad)
+    n = a / math.sqrt(1.0 - e2 * sin_lat * sin_lat)
+    x = (n + alt_m) * cos_lat * math.cos(lon_rad)
+    y = (n + alt_m) * cos_lat * math.sin(lon_rad)
+    z = (n * (1.0 - e2) + alt_m) * sin_lat
+    return x, y, z
 
 def parse_args():
     parser = argparse.ArgumentParser(description="End-to-End GPS Receiver Benchmark & Profiler Harness")
@@ -104,12 +120,52 @@ def main():
 
     # Step 2: Run GPSOpenCl Software Receiver
     print("\n[Step 2/2] Running GPSOpenCl Software Receiver Pipeline...")
+    telemetry_path = os.path.join(project_root, "telemetry_stream.json")
+    if os.path.exists(telemetry_path):
+        os.remove(telemetry_path)
+
     t_rx_start = time.time()
     rx_proc = subprocess.run([receiver_binary, sim_output_bin], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, cwd=project_root)
     t_rx_end = time.time()
     rx_wall_time = t_rx_end - t_rx_start
 
     rx_stdout = rx_proc.stdout
+
+    # No PVT fix within short benchmark runs is reported explicitly, never silently omitted as zero error.
+    true_ecef_x, true_ecef_y, true_ecef_z = geodetic_to_ecef(args.lat, args.lon, args.alt)
+    accuracy_profile = {
+        "pvt_fix_achieved": False,
+        "reason": f"No PVT fix within {args.duration}s -- ephemeris decode and 4-satellite PVT typically need tens of seconds",
+        "true_ecef_x": true_ecef_x,
+        "true_ecef_y": true_ecef_y,
+        "true_ecef_z": true_ecef_z
+    }
+    if os.path.exists(telemetry_path):
+        try:
+            with open(telemetry_path) as f:
+                telemetry = json.load(f)
+            pvt = telemetry.get("pvt", {})
+            if pvt.get("valid"):
+                dx = pvt["ecef_x"] - true_ecef_x
+                dy = pvt["ecef_y"] - true_ecef_y
+                dz = pvt["ecef_z"] - true_ecef_z
+                position_error_m = math.sqrt(dx * dx + dy * dy + dz * dz)
+                accuracy_profile = {
+                    "pvt_fix_achieved": True,
+                    "position_error_meters": round(position_error_m, 3),
+                    "measured_latitude": pvt["latitude"],
+                    "measured_longitude": pvt["longitude"],
+                    "measured_altitude_meters": pvt["altitude"],
+                    "hdop": pvt.get("hdop"),
+                    "pdop": pvt.get("pdop"),
+                    "vdop": pvt.get("vdop"),
+                    "true_ecef_x": true_ecef_x,
+                    "true_ecef_y": true_ecef_y,
+                    "true_ecef_z": true_ecef_z
+                }
+        except (json.JSONDecodeError, KeyError) as e:
+            print(f"Warning: failed to parse {telemetry_path}: {e}", file=sys.stderr)
+        os.remove(telemetry_path)
 
     # Parse receiver metrics
     acquired_satellites = []
@@ -150,6 +206,7 @@ def main():
             "acquired_count": len(acquired_satellites),
             "acquired_satellites": acquired_satellites
         },
+        "accuracy_profile": accuracy_profile,
         "receiver_status": "SUCCESS" if rx_proc.returncode == 0 else "FAILURE"
     }
 
@@ -176,12 +233,29 @@ def main():
         for sat in acquired_satellites:
             f.write(f"| PRN {sat['sv_id']:02d} | `{sat['cn0_db_hz']:.2f}` | `{sat['doppler_hz']:.1f}` |\n")
 
+        f.write(f"\n## Position Accuracy\n\n")
+        if accuracy_profile["pvt_fix_achieved"]:
+            f.write(f"| Metric | Value |\n")
+            f.write(f"| --- | --- |\n")
+            f.write(f"| Position Error (3D, vs. known truth) | `{accuracy_profile['position_error_meters']:.2f} m` |\n")
+            f.write(f"| HDOP | `{accuracy_profile['hdop']:.2f}` |\n")
+            f.write(f"| PDOP | `{accuracy_profile['pdop']:.2f}` |\n")
+            f.write(f"| VDOP | `{accuracy_profile['vdop']:.2f}` |\n")
+        else:
+            f.write(f"No PVT fix achieved: {accuracy_profile['reason']}. ")
+            f.write(f"Re-run with a longer `--duration` (60s+) to get a position accuracy measurement.\n")
+
     print("\n=========================================================")
     print("   End-to-End Benchmark Completed Successfully           ")
     print("=========================================================")
     print(f"Receiver Processing Time : {rx_wall_time:.3f} s")
     print(f"Processing Throughput    : {throughput_m_samples_sec:.2f} MSamples/s ({realtime_speedup_factor:.2f}x Realtime)")
     print(f"Acquired Satellite Channels: {len(acquired_satellites)} / 32")
+    if accuracy_profile["pvt_fix_achieved"]:
+        print(f"Position Error (3D)      : {accuracy_profile['position_error_meters']:.2f} m "
+              f"(HDOP {accuracy_profile['hdop']:.2f}, PDOP {accuracy_profile['pdop']:.2f})")
+    else:
+        print(f"Position Error           : N/A ({accuracy_profile['reason']})")
     print(f"JSON LLM Report Written  : {args.output_json}")
     print(f"Markdown Report Written  : {args.output_md}")
 

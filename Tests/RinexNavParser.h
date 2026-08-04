@@ -99,6 +99,7 @@ class RinexNavParser
             ephem->omegaDot = values[18];
             ephem->idot = values[19];
             ephem->weekNumber = static_cast<int>(std::lround(values[21]));
+            ephem->tgd = values[25];
 
             double towSec = 0.0;
             if (!epochToGpsSecondsOfWeek(year, month, day, hour, minute, sec, ephem->weekNumber, &towSec))
@@ -143,8 +144,14 @@ class RinexNavParser
         return values;
     }
 
-    static bool epochToGpsSecondsOfWeek(int year, int month, int day, int hour, int minute, double sec,
-                                        int gpsWeek, double *outTowSec)
+    static bool epochToGpsSecondsOfWeek(int year,
+                                        int month,
+                                        int day,
+                                        int hour,
+                                        int minute,
+                                        double sec,
+                                        int gpsWeek,
+                                        double *outTowSec)
     {
         int fullYear = (year < 80) ? (2000 + year) : (1900 + year);
 
@@ -162,7 +169,7 @@ class RinexNavParser
             return false;
         }
 
-        const time_t gpsEpochUnix = 315964800; // 1980-01-06T00:00:00Z
+        const time_t gpsEpochUnix = 315'964'800;    // 1980-01-06T00:00:00Z
         double secondsSinceGpsEpoch = static_cast<double>(epochUnix - gpsEpochUnix) + sec;
 
         double secondsSinceWeekStart = secondsSinceGpsEpoch - static_cast<double>(gpsWeek) * 604800.0;
@@ -170,6 +177,6 @@ class RinexNavParser
         return true;
     }
 };
-} // namespace GPSOpenClTest
+}    // namespace GPSOpenClTest
 
-#endif //! INCLUDED_GPSOPENCLTEST_RINEXNAVPARSER_H
+#endif    //! INCLUDED_GPSOPENCLTEST_RINEXNAVPARSER_H

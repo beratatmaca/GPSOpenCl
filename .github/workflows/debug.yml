@@ -2,10 +2,9 @@ name: GPSOpenClTest
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
-
+    branches: [main]
 
 jobs:
   build:
@@ -17,17 +16,32 @@ jobs:
       run:
         shell: bash -l {0}
     steps:
-    - uses: actions/checkout@v1
-    - name: Install Build Essential
-      run: sudo apt-get install build-essential ocl-icd-opencl-dev libgtest-dev
-    - name: configure
-      run: cmake -S . -B ./build
-    - name: make
-      run: cd build && make
-    - name: move to Test folder and run Test
-      run: cd build/Tests && ./GPSOpenClTest
-    - name: Publish Unit Test Results
-      uses: EnricoMi/publish-unit-test-result-action/composite@v1
-      if: always()
-      with:
-        files: build/Test/TestResult.xml
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install Build Dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential ocl-icd-opencl-dev libgtest-dev clang-format-20 clang-tidy-20 doxygen
+      - name: Configure
+        run: cmake -S . -B build
+      - name: Format Check
+        run: cmake --build build --target format-check
+        continue-on-error: true
+      - name: Build
+        run: cmake --build build -j"$(nproc)"
+      - name: Test
+        run: ctest --test-dir build --output-on-failure --output-junit ctest-junit.xml
+      - name: Tidy
+        run: cmake --build build --target tidy
+      - name: Docs
+        run: cmake --build build --target docs
+      - name: Upload Docs Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: doxygen-docs
+          path: docs/html
+      - name: Publish Unit Test Results
+        uses: EnricoMi/publish-unit-test-result-action/composite@v1
+        if: always()
+        with:
+          files: build/ctest-junit.xml

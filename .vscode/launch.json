@@ -1,0 +1,25 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug GPSOpenCl",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/Source/GPSOpenCl",
+            "args": [],
+            "cwd": "${workspaceFolder}/build/Source",
+            "MIMode": "gdb",
+            "preLaunchTask": "Build"
+        },
+        {
+            "name": "Debug GPSOpenClTest",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/Tests/GPSOpenClTest",
+            "args": [],
+            "cwd": "${workspaceFolder}/build/Tests",
+            "MIMode": "gdb",
+            "preLaunchTask": "Build"
+        }
+    ]
+}

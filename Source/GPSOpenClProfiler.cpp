@@ -7,9 +7,7 @@ Profiler::Profiler()
     m_currentOutput.structVersion = STRUCT_VERSION_1;
 }
 
-Profiler::~Profiler()
-{
-}
+Profiler::~Profiler() = default;
 
 void Profiler::startBlock(uint32_t blockIndex, double timestamp)
 {
@@ -40,8 +38,10 @@ void Profiler::recordStageTimeMs(const std::string &stageName, double timeMs)
     }
 }
 
-void Profiler::recordTrackingSubStageTimings(double earlyLatePromptGenMs, double numericOscillatorMs,
-                                             double accumulatorMs, double maxWorkerMs)
+void Profiler::recordTrackingSubStageTimings(double earlyLatePromptGenMs,
+                                             double numericOscillatorMs,
+                                             double accumulatorMs,
+                                             double maxWorkerMs)
 {
     m_currentOutput.earlyLatePromptGenTimeMs = earlyLatePromptGenMs;
     m_currentOutput.numericOscillatorTimeMs = numericOscillatorMs;

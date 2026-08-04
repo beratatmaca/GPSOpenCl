@@ -48,6 +48,7 @@ add_executable(
     ChannelTest.cpp
     GroundTruthVerificationTest.cpp
     SingleChannelGroundTruthTest.cpp
+    DynamicMotionGroundTruthTest.cpp
     E2ETest.cpp
 )
 

@@ -8,6 +8,8 @@
 #include "GPSOpenClCommon.h"
 #include "GPSOpenClGPUHandler.h"
 
+#include <cstdint>
+
 namespace GPSOpenCl
 {
 /** @brief GPU/CPU compute engine for FFT and signal math. */
@@ -16,13 +18,17 @@ class Compute
   public:
     Compute();
     ~Compute();
+    Compute(const Compute &) = delete;
+    Compute &operator=(const Compute &) = delete;
+    Compute(Compute &&) = delete;
+    Compute &operator=(Compute &&) = delete;
 
     /** @brief FFT direction flag. */
-    typedef enum FFTDirection
+    using FFTDirectionType = enum FFTDirection : std::int8_t
     {
-        FFTForward = 1,  ///< Forward FFT.
-        FFTInverse = -1  ///< Inverse FFT.
-    } FFTDirectionType;
+        FFTForward = 1,    ///< Forward FFT.
+        FFTInverse = -1    ///< Inverse FFT.
+    };
 
     /** @brief Compute FFT or IFFT.
      *  @param input     Complex input samples.
@@ -36,7 +42,9 @@ class Compute
      *  @param input2 Second complex vector.
      *  @param output Product vector.
      *  @return 0 on success. */
-    int complexMultiplier(const ComplexFloatVector &input1, const ComplexFloatVector &input2, ComplexFloatVector *output);
+    int complexMultiplier(const ComplexFloatVector &input1,
+                          const ComplexFloatVector &input2,
+                          ComplexFloatVector *output);
 
     /** @brief Compute magnitude squared of complex vector.
      *  @param input1 Complex input.
@@ -51,8 +59,10 @@ class Compute
      *  @param direction Forward or inverse FFT.
      *  @param output    FFT of the product.
      *  @return 0 on success. */
-    int complexMultiplyThenFft(const ComplexFloatVector &input1, const ComplexFloatVector &input2,
-                               FFTDirectionType direction, ComplexFloatVector *output);
+    int complexMultiplyThenFft(const ComplexFloatVector &input1,
+                               const ComplexFloatVector &input2,
+                               FFTDirectionType direction,
+                               ComplexFloatVector *output);
 
     /** @brief Complex-multiply, FFT, then magnitude-squared, keeping both intermediates on-device
      *   between kernel stages instead of a host round-trip after each one.
@@ -61,8 +71,10 @@ class Compute
      *  @param direction Forward or inverse FFT.
      *  @param output    Magnitude squared of the FFT of the product.
      *  @return 0 on success. */
-    int complexMultiplyThenFftThenAbsolute(const ComplexFloatVector &input1, const ComplexFloatVector &input2,
-                                           FFTDirectionType direction, FloatVector *output);
+    int complexMultiplyThenFftThenAbsolute(const ComplexFloatVector &input1,
+                                           const ComplexFloatVector &input2,
+                                           FFTDirectionType direction,
+                                           FloatVector *output);
 
     /** @brief Parallel reduction sum.
      *  @param input    Float vector.
@@ -75,12 +87,19 @@ class Compute
      *  @return Nearest power of two not greater than value. */
     static unsigned int roundDownToPowerOfTwo(unsigned int value);
 
+    /** @brief Clamp a candidate points-per-group value to a power of two no larger than length.
+     *  @param pointsPerGroup Candidate points processed per work-group.
+     *  @param length         Total points to process.
+     *  @return Clamped points-per-group value. */
+    static unsigned int clampPointsPerGroup(unsigned int pointsPerGroup, unsigned int length);
+
     /** @brief Shrink a work-group size until pointsPerGroup/localSize meets a minimum.
      *  @param localSize        Work-group size, assumed already a power of two.
      *  @param pointsPerGroup   Points processed per work-group.
      *  @param minPointsPerItem Minimum points each work-item must process.
      *  @return Clamped work-group size. */
-    static unsigned int clampLocalSizeForMinPointsPerItem(unsigned int localSize, unsigned int pointsPerGroup,
+    static unsigned int clampLocalSizeForMinPointsPerItem(unsigned int localSize,
+                                                          unsigned int pointsPerGroup,
                                                           unsigned int minPointsPerItem);
 
   private:
@@ -101,7 +120,8 @@ class Compute
      *  @param input2 Second complex vector.
      *  @param length Element count (equal for both inputs).
      *  @return The device output buffer (m_cmBufferC), or nullptr on failure. */
-    cl_mem complexMultiplierDevice(const ComplexFloatVector &input1, const ComplexFloatVector &input2,
+    cl_mem complexMultiplierDevice(const ComplexFloatVector &input1,
+                                   const ComplexFloatVector &input2,
                                    unsigned int length);
 
     /** @brief GPU FFT stage, operating in place on a caller-supplied device buffer instead of
@@ -121,38 +141,38 @@ class Compute
      *  @return 0 on success. */
     int absoluteDeviceToHost(cl_mem inputBuffer, unsigned int length, FloatVector *output);
 
-    GpuHandler m_gpu;                      ///< OpenCL handler.
-    cl_command_queue m_queue;               ///< OpenCL command queue.
-    cl_int m_error;                         ///< Last OpenCL error.
-    std::vector<float> m_allocatedMemory;   ///< Scratch memory buffer.
-    std::vector<float> m_partialSums;       ///< Scratch buffer for sum() partial-sum readback.
+    GpuHandler m_gpu;                          ///< OpenCL handler.
+    cl_command_queue m_queue;                  ///< OpenCL command queue.
+    cl_int m_error;                            ///< Last OpenCL error.
+    std::vector<float> m_allocatedMemory;      ///< Scratch memory buffer.
+    std::vector<float> m_partialSums;          ///< Scratch buffer for sum() partial-sum readback.
 
-    bool m_deviceInfoCached{false};              ///< True once per-kernel/device info below is cached.
-    cl_ulong m_localMemorySize{0};               ///< Cached device local memory size (bytes).
-    size_t m_fftLocalSize{0};                     ///< Cached fft_init kernel work-group size.
-    size_t m_complexMultiplierLocalSize{0};       ///< Cached complexMultiplier kernel work-group size.
-    size_t m_absoluteLocalSize{0};                ///< Cached absolute kernel work-group size.
-    size_t m_sumLocalSize{0};                     ///< Cached sum kernel work-group size.
+    bool m_deviceInfoCached{false};            ///< True once per-kernel/device info below is cached.
+    cl_ulong m_localMemorySize{0};             ///< Cached device local memory size (bytes).
+    size_t m_fftLocalSize{0};                  ///< Cached fft_init kernel work-group size.
+    size_t m_complexMultiplierLocalSize{0};    ///< Cached complexMultiplier kernel work-group size.
+    size_t m_absoluteLocalSize{0};             ///< Cached absolute kernel work-group size.
+    size_t m_sumLocalSize{0};                  ///< Cached sum kernel work-group size.
 
-    cl_mem m_fftBuffer{nullptr};                  ///< Persistent FFT data buffer.
-    size_t m_fftBufferCapacity{0};                ///< FFT buffer capacity (floats).
+    cl_mem m_fftBuffer{nullptr};               ///< Persistent FFT data buffer.
+    size_t m_fftBufferCapacity{0};             ///< FFT buffer capacity (floats).
 
-    cl_mem m_cmBufferA{nullptr};                  ///< Persistent complexMultiplier input-A buffer.
-    cl_mem m_cmBufferB{nullptr};                  ///< Persistent complexMultiplier input-B buffer.
-    cl_mem m_cmBufferC{nullptr};                  ///< Persistent complexMultiplier output buffer.
-    size_t m_cmBufferCapacityA{0};                 ///< complexMultiplier input-A buffer capacity (floats).
-    size_t m_cmBufferCapacityB{0};                 ///< complexMultiplier input-B buffer capacity (floats).
-    size_t m_cmBufferCapacityC{0};                 ///< complexMultiplier output buffer capacity (floats).
+    cl_mem m_cmBufferA{nullptr};               ///< Persistent complexMultiplier input-A buffer.
+    cl_mem m_cmBufferB{nullptr};               ///< Persistent complexMultiplier input-B buffer.
+    cl_mem m_cmBufferC{nullptr};               ///< Persistent complexMultiplier output buffer.
+    size_t m_cmBufferCapacityA{0};             ///< complexMultiplier input-A buffer capacity (floats).
+    size_t m_cmBufferCapacityB{0};             ///< complexMultiplier input-B buffer capacity (floats).
+    size_t m_cmBufferCapacityC{0};             ///< complexMultiplier output buffer capacity (floats).
 
-    cl_mem m_absBufferA{nullptr};                  ///< Persistent absolute() input buffer.
-    cl_mem m_absBufferC{nullptr};                  ///< Persistent absolute() output buffer.
-    size_t m_absBufferCapacityA{0};                ///< absolute() input buffer capacity (floats).
-    size_t m_absBufferCapacityC{0};                ///< absolute() output buffer capacity (floats).
+    cl_mem m_absBufferA{nullptr};              ///< Persistent absolute() input buffer.
+    cl_mem m_absBufferC{nullptr};              ///< Persistent absolute() output buffer.
+    size_t m_absBufferCapacityA{0};            ///< absolute() input buffer capacity (floats).
+    size_t m_absBufferCapacityC{0};            ///< absolute() output buffer capacity (floats).
 
-    cl_mem m_sumBufferInput{nullptr};              ///< Persistent sum() input buffer.
-    cl_mem m_sumBufferOutput{nullptr};              ///< Persistent sum() partial-sum output buffer.
-    size_t m_sumBufferInputCapacity{0};            ///< sum() input buffer capacity (floats).
-    size_t m_sumBufferOutputCapacity{0};           ///< sum() output buffer capacity (floats, one per work-group).
+    cl_mem m_sumBufferInput{nullptr};          ///< Persistent sum() input buffer.
+    cl_mem m_sumBufferOutput{nullptr};         ///< Persistent sum() partial-sum output buffer.
+    size_t m_sumBufferInputCapacity{0};        ///< sum() input buffer capacity (floats).
+    size_t m_sumBufferOutputCapacity{0};       ///< sum() output buffer capacity (floats, one per work-group).
 };
 }
 

@@ -22,21 +22,18 @@ int main(int argc, char **argv)
     GPSOpenCl::Settings settings;
     settings.captureSettings();
 
-    std::string signalPath = "";
+    std::string signalPath;
     if (argc > 1)
     {
         signalPath = argv[1];
     }
     else
     {
-        std::vector<std::string> candidateBinPaths = {
-            "build/live_stream.bin",
-            "../build/live_stream.bin",
-            "live_stream.bin"
-        };
+        const std::vector<std::string> candidateBinPaths = {
+            "build/live_stream.bin", "../build/live_stream.bin", "live_stream.bin"};
         for (const auto &path : candidateBinPaths)
         {
-            std::ifstream f(path);
+            const std::ifstream f(path);
             if (f.good())
             {
                 signalPath = path;
@@ -47,17 +44,15 @@ int main(int argc, char **argv)
 
     if (signalPath.empty())
     {
-        std::vector<std::string> candidatePaths = {
-            "Tests/Scripts/inputSignal.txt",
-            "../Tests/Scripts/inputSignal.txt",
-            "../../Tests/Scripts/inputSignal.txt",
-            "Scripts/inputSignal.txt",
-            "inputSignal.txt"
-        };
+        const std::vector<std::string> candidatePaths = {"Tests/Scripts/inputSignal.txt",
+                                                         "../Tests/Scripts/inputSignal.txt",
+                                                         "../../Tests/Scripts/inputSignal.txt",
+                                                         "Scripts/inputSignal.txt",
+                                                         "inputSignal.txt"};
 
         for (const auto &path : candidatePaths)
         {
-            std::ifstream f(path);
+            const std::ifstream f(path);
             if (f.good())
             {
                 signalPath = path;
@@ -66,14 +61,12 @@ int main(int argc, char **argv)
         }
     }
 
-
     auto compositeSink = std::make_shared<GPSOpenCl::CompositeSink>();
     compositeSink->addSink(std::make_shared<GPSOpenCl::FileSink>("build/telemetry_wire.log"));
 #ifdef GPSOPENCL_ENABLE_ZMQ
     compositeSink->addSink(std::make_shared<GPSOpenCl::ZmqSink>("ipc:///tmp/gpsopencl/telemetry.sock"));
 #endif
     auto sink = std::static_pointer_cast<GPSOpenCl::Sink>(compositeSink);
-
 
     std::shared_ptr<GPSOpenCl::Source> source;
     bool sourceInitialized = false;
@@ -96,60 +89,58 @@ int main(int argc, char **argv)
 
     if (!sourceInitialized)
     {
-        std::cerr << "Failed to initialize signal source (path: '" << signalPath
-                   << "'). Nothing to process, aborting." << std::endl;
+        std::cerr << "Failed to initialize signal source (path: '" << signalPath << "'). Nothing to process, aborting."
+                  << '\n';
         return 1;
     }
 
     source->setSink(sink);
 
-
     GPSOpenCl::Application app(settings.configuration);
     app.setSink(sink);
     app.setSource(source);
 
-
     struct SignalBlock
     {
-        uint32_t blockIndex;
+        uint32_t blockIndex{0};
         GPSOpenCl::ComplexFloatVector samples;
     };
 
     GPSOpenCl::BoundedQueue<SignalBlock> blockQueue(16);
 
-    std::cout << "\n=============================================" << std::endl;
-    std::cout << "   GPS Processing Pipeline Starting (Real-Time Loop)" << std::endl;
-    std::cout << "=============================================" << std::endl;
+    std::cout << "\n=============================================" << '\n';
+    std::cout << "   GPS Processing Pipeline Starting (Real-Time Loop)" << '\n';
+    std::cout << "=============================================" << '\n';
 
-
-    std::thread producerThread([&]() {
-        try
+    std::thread producerThread(
+        [&]()
         {
-            uint32_t blockIdx = 0;
-            while (true)
+            try
             {
-                SignalBlock block;
-                block.blockIndex = blockIdx;
-                GPSOpenCl::SourceOutput telemetry{};
-                bool ok = source->readBlock(block.samples, telemetry);
-                if (!ok || block.samples.empty())
+                uint32_t blockIdx = 0;
+                while (true)
                 {
-                    break;
+                    SignalBlock block;
+                    block.blockIndex = blockIdx;
+                    GPSOpenCl::SourceOutput telemetry{};
+                    const bool ok = source->readBlock(block.samples, telemetry);
+                    if (!ok || block.samples.empty())
+                    {
+                        break;
+                    }
+                    if (!blockQueue.push(block))
+                    {
+                        break;
+                    }
+                    blockIdx++;
                 }
-                if (!blockQueue.push(block))
-                {
-                    break;
-                }
-                blockIdx++;
             }
-        }
-        catch (const std::exception &e)
-        {
-            std::cerr << "Producer thread terminated by exception: " << e.what() << std::endl;
-        }
-        blockQueue.finish();
-    });
-
+            catch (const std::exception &e)
+            {
+                std::cerr << "Producer thread terminated by exception: " << e.what() << '\n';
+            }
+            blockQueue.finish();
+        });
 
     SignalBlock block;
     try
@@ -161,7 +152,7 @@ int main(int argc, char **argv)
     }
     catch (const std::exception &e)
     {
-        std::cerr << "Consumer loop terminated by exception: " << e.what() << std::endl;
+        std::cerr << "Consumer loop terminated by exception: " << e.what() << '\n';
         blockQueue.finish();
     }
 
@@ -170,9 +161,9 @@ int main(int argc, char **argv)
         producerThread.join();
     }
 
-    std::cout << "\n=============================================" << std::endl;
-    std::cout << "   GPS Processing Pipeline Completed Successfully" << std::endl;
-    std::cout << "=============================================" << std::endl;
+    std::cout << "\n=============================================" << '\n';
+    std::cout << "   GPS Processing Pipeline Completed Successfully" << '\n';
+    std::cout << "=============================================" << '\n';
 
     return 0;
 }

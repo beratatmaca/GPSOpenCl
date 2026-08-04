@@ -23,13 +23,17 @@ class Acquisition
   public:
     /** @brief Construct from full configuration.
      *  @param conf Application configuration. */
-    Acquisition(Settings::Configuration conf);
+    Acquisition(const Settings::Configuration &conf);
 
     /** @brief Construct from acquisition parameters.
      *  @param input Acquisition settings. */
     Acquisition(const AcquisitionInput &input);
 
     ~Acquisition();
+    Acquisition(const Acquisition &) = delete;
+    Acquisition &operator=(const Acquisition &) = delete;
+    Acquisition(Acquisition &&) = delete;
+    Acquisition &operator=(Acquisition &&) = delete;
 
     /** @brief Run acquisition for one satellite channel.
      *  @param input      IQ samples for one code period.
@@ -48,7 +52,7 @@ class Acquisition
      *  @param samplingRate Sampling rate (Hz).
      *  @param phaseOffset  Initial phase (rad).
      *  @param output       Output complex vector. */
-    void exp(int length, float frequency, float samplingRate, float phaseOffset, ComplexFloatVector *output);
+    static void exp(int length, float frequency, float samplingRate, float phaseOffset, ComplexFloatVector *output);
 
     /** @brief Determine how many distinct forward-FFT "reference" spectra are needed to reach every
      *   searched Doppler bin via an exact circular frequency-domain shift, instead of one forward FFT
@@ -69,14 +73,14 @@ class Acquisition
      *  @param output    Shifted spectrum, length N. */
     static void circularShiftFreqDomain(const ComplexFloatVector &input, int shiftBins, ComplexFloatVector *output);
 
-    AcquisitionInput m_inputConfig;                 ///< Input parameters.
-    std::vector<ComplexFloatVector> m_dopplerSearch; ///< Pre-computed Doppler replicas.
-    int m_numberOfFreqencyBins;                     ///< Number of Doppler bins.
-    float m_initialFrequency;                       ///< First Doppler bin frequency (Hz).
-    float m_freqSpacing;                            ///< Doppler bin spacing (Hz).
-    int m_length;                                   ///< Samples per code period.
-    float m_samplingFrequency;                      ///< Sampling rate (Hz).
-    int m_reuseFactor;                              ///< Number of forward-FFT reference spectra (see computeReuseFactor).
+    AcquisitionInput m_inputConfig;                     ///< Input parameters.
+    std::vector<ComplexFloatVector> m_dopplerSearch;    ///< Pre-computed Doppler replicas.
+    int m_numberOfFreqencyBins;                         ///< Number of Doppler bins.
+    float m_initialFrequency;                           ///< First Doppler bin frequency (Hz).
+    float m_freqSpacing;                                ///< Doppler bin spacing (Hz).
+    int m_length;                                       ///< Samples per code period.
+    float m_samplingFrequency;                          ///< Sampling rate (Hz).
+    int m_reuseFactor;    ///< Number of forward-FFT reference spectra (see computeReuseFactor).
 };
 }
 

@@ -1,9 +1,9 @@
 #include "GPSOpenClApplication.h"
 #include "GPSOpenClCommon.h"
 #include "GPSOpenClSettings.h"
-#include "GPSOpenClSink.h"
 #include "GPSOpenClStructs.h"
 #include "GroundTruthRecord.h"
+#include "GroundTruthTestUtils.h"
 #include "RinexNavParser.h"
 #include "TestUtils.h"
 
@@ -16,6 +16,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <iomanip>
 #include <map>
 #include <vector>
 
@@ -23,44 +24,8 @@ namespace GPSOpenClTest
 {
 namespace
 {
-class CapturingSink : public GPSOpenCl::Sink
-{
-  public:
-    std::vector<GPSOpenCl::AcquisitionOutput> acquisitionOutputs;
-    std::vector<GPSOpenCl::TrackingOutput> trackingOutputs;
-    std::vector<GPSOpenCl::NavDecoderOutput> navDecoderOutputs;
-    std::vector<GPSOpenCl::PvtSolverOutput> pvtSolverOutputs;
-
-    void publish(const std::string &identifier, const void *data, size_t size) override
-    {
-        if (identifier == "AcquisitionOutput" && size == sizeof(GPSOpenCl::AcquisitionOutput))
-        {
-            GPSOpenCl::AcquisitionOutput out;
-            std::memcpy(&out, data, sizeof(out));
-            acquisitionOutputs.push_back(out);
-        }
-        else if (identifier == "TrackingOutput" && size == sizeof(GPSOpenCl::TrackingOutput))
-        {
-            GPSOpenCl::TrackingOutput out;
-            std::memcpy(&out, data, sizeof(out));
-            trackingOutputs.push_back(out);
-        }
-        else if (identifier == "NavDecoderOutput" && size == sizeof(GPSOpenCl::NavDecoderOutput))
-        {
-            GPSOpenCl::NavDecoderOutput out;
-            std::memcpy(&out, data, sizeof(out));
-            navDecoderOutputs.push_back(out);
-        }
-        else if (identifier == "PvtSolverOutput" && size == sizeof(GPSOpenCl::PvtSolverOutput))
-        {
-            GPSOpenCl::PvtSolverOutput out;
-            std::memcpy(&out, data, sizeof(out));
-            pvtSolverOutputs.push_back(out);
-        }
-    }
-};
-
-/** @brief Merge per-subframe NavDecoderOutput captures into an accumulated ephemeris, mirroring Channel::updateNavigation. */
+/** @brief Merge per-subframe NavDecoderOutput captures into an accumulated ephemeris, mirroring
+ * Channel::updateNavigation. */
 class EphemerisAccumulator
 {
   public:
@@ -76,38 +41,39 @@ class EphemerisAccumulator
 
         switch (out.subframeId)
         {
-        case 1:
-            ephem.weekNumber = out.weekNumber;
-            ephem.toc = out.toc;
-            ephem.af0 = out.af0;
-            ephem.af1 = out.af1;
-            ephem.af2 = out.af2;
-            m_seenMask[out.svId] |= 0x1;
-            break;
-        case 2:
-            ephem.toe = out.toe;
-            ephem.sqrtA = out.sqrtA;
-            ephem.e = out.e;
-            ephem.M0 = out.M0;
-            ephem.deltaN = out.deltaN;
-            ephem.Cuc = out.Cuc;
-            ephem.Cus = out.Cus;
-            ephem.Crs = out.Crs;
-            m_seenMask[out.svId] |= 0x2;
-            break;
-        case 3:
-            ephem.i0 = out.i0;
-            ephem.idot = out.idot;
-            ephem.omega0 = out.omega0;
-            ephem.omegaDot = out.omegaDot;
-            ephem.omega = out.omega;
-            ephem.Cic = out.Cic;
-            ephem.Cis = out.Cis;
-            ephem.Crc = out.Crc;
-            m_seenMask[out.svId] |= 0x4;
-            break;
-        default:
-            break;
+            case 1:
+                ephem.weekNumber = out.weekNumber;
+                ephem.toc = out.toc;
+                ephem.af0 = out.af0;
+                ephem.af1 = out.af1;
+                ephem.af2 = out.af2;
+                ephem.tgd = out.tgd;
+                m_seenMask[out.svId] |= 0x1;
+                break;
+            case 2:
+                ephem.toe = out.toe;
+                ephem.sqrtA = out.sqrtA;
+                ephem.e = out.e;
+                ephem.M0 = out.M0;
+                ephem.deltaN = out.deltaN;
+                ephem.Cuc = out.Cuc;
+                ephem.Cus = out.Cus;
+                ephem.Crs = out.Crs;
+                m_seenMask[out.svId] |= 0x2;
+                break;
+            case 3:
+                ephem.i0 = out.i0;
+                ephem.idot = out.idot;
+                ephem.omega0 = out.omega0;
+                ephem.omegaDot = out.omegaDot;
+                ephem.omega = out.omega;
+                ephem.Cic = out.Cic;
+                ephem.Cis = out.Cis;
+                ephem.Crc = out.Crc;
+                m_seenMask[out.svId] |= 0x4;
+                break;
+            default:
+                break;
         }
     }
 
@@ -137,22 +103,35 @@ class EphemerisAccumulator
     std::map<int, uint8_t> m_seenMask;
 };
 
-bool readGroundTruth(const std::string &path, std::vector<GroundTruthRecord> *records)
+const GroundTruthRecord *
+    findClosestRecord(const std::vector<GroundTruthRecord> &records, double targetTimeSec, double *outDt)
 {
-    std::ifstream file(path, std::ios::binary);
-    if (!file.is_open())
-    {
-        return false;
-    }
+    auto lowerBound = std::lower_bound(records.begin(),
+                                       records.end(),
+                                       targetTimeSec,
+                                       [](const GroundTruthRecord &record, double t) { return record.gpsTimeSec < t; });
 
-    GroundTruthRecord record;
-    while (file.read(reinterpret_cast<char *>(&record), sizeof(record)))
+    const GroundTruthRecord *closest = nullptr;
+    double closestDt = 1e9;
+    if (lowerBound != records.end())
     {
-        records->push_back(record);
+        closest = &(*lowerBound);
+        closestDt = std::fabs(lowerBound->gpsTimeSec - targetTimeSec);
     }
-    return true;
+    if (lowerBound != records.begin())
+    {
+        auto prev = std::prev(lowerBound);
+        const double dtPrev = std::fabs(prev->gpsTimeSec - targetTimeSec);
+        if (dtPrev < closestDt)
+        {
+            closest = &(*prev);
+            closestDt = dtPrev;
+        }
+    }
+    *outDt = closestDt;
+    return closest;
 }
-} // namespace
+}    // namespace
 
 TEST(GroundTruthVerificationTest, AcquisitionAndTrackingMatchSimulatorTruth)
 {
@@ -169,16 +148,15 @@ TEST(GroundTruthVerificationTest, AcquisitionAndTrackingMatchSimulatorTruth)
     std::string iqFile = "ground_truth_iq.bin";
     std::string truthFile = "ground_truth_records.bin";
 
-    std::string cmd = gpsSimBin + " -e " + navFile +
-                       " -l 48.1173,11.5167,545.4 -s 4096000 -b 8 -d 2 -o " + iqFile +
-                       " -G " + truthFile + " > /dev/null 2>&1";
+    std::string cmd = gpsSimBin + " -e " + navFile + " -l 48.1173,11.5167,545.4 -s 4096000 -b 8 -d 2 -o " + iqFile +
+        " -G " + truthFile + " > /dev/null 2>&1";
     int sysRet = std::system(cmd.c_str());
     ASSERT_EQ(sysRet, 0);
 
     std::vector<GroundTruthRecord> truth;
     ASSERT_TRUE(readGroundTruth(truthFile, &truth));
     ASSERT_FALSE(truth.empty());
-    ASSERT_EQ(truth.front().structVersion, 1u);
+    ASSERT_EQ(truth.front().structVersion, 2u);
 
     GPSOpenCl::ComplexFloatVector inputSignal;
     TestUtils::readFromFileBinaryIQ8(iqFile.c_str(), &inputSignal);
@@ -305,10 +283,21 @@ TEST(GroundTruthVerificationTest, FullEphemerisAndPvtMatchSimulatorTruth)
     // strongest) need multiple clean cycles to get every word's parity right. 180s (six full cycles)
     // gives them a realistic chance; empirically 45-90s only ever got the single strongest satellite.
     std::string iqFile = "ground_truth_iq_long.bin";
-    std::string cmd = gpsSimBin + " -e " + navFile +
-                       " -l 48.1173,11.5167,545.4 -s 4096000 -b 8 -d 180 -o " + iqFile + " > /dev/null 2>&1";
+    std::string truthFile = "ground_truth_records_long.bin";
+    std::string cmd = gpsSimBin + " -e " + navFile + " -l 48.1173,11.5167,545.4 -s 4096000 -b 8 -d 180 -o " + iqFile +
+        " -G " + truthFile + " > /dev/null 2>&1";
     int sysRet = std::system(cmd.c_str());
     ASSERT_EQ(sysRet, 0);
+
+    std::vector<GroundTruthRecord> truth;
+    ASSERT_TRUE(readGroundTruth(truthFile, &truth));
+    ASSERT_FALSE(truth.empty());
+
+    std::map<int, std::vector<GroundTruthRecord>> truthByPrn;
+    for (const GroundTruthRecord &record : truth)
+    {
+        truthByPrn[record.prn].push_back(record);
+    }
 
     GPSOpenCl::ComplexFloatVector inputSignal;
     TestUtils::readFromFileBinaryIQ8(iqFile.c_str(), &inputSignal);
@@ -326,13 +315,62 @@ TEST(GroundTruthVerificationTest, FullEphemerisAndPvtMatchSimulatorTruth)
 
     int blocksAvailable = static_cast<int>(inputSignal.size() / static_cast<size_t>(codeLength));
 
+    const double c = 299792458.0;
+    std::map<int, double> maxErrorByPrn;
+    std::map<int, double> sumErrorByPrn;
+    std::map<int, int> countByPrn;
+
     for (int blockIdx = 0; blockIdx < blocksAvailable; blockIdx++)
     {
         auto start = inputSignal.begin() + static_cast<long>(blockIdx) * codeLength;
         auto end = start + codeLength;
         GPSOpenCl::ComplexFloatVector block(start, end);
         app.processBlock(block, static_cast<uint32_t>(blockIdx));
+
+        for (const GPSOpenCl::Application::PseudorangeSample &sample : app.getLastPseudorangeSamples())
+        {
+            auto prnTruth = truthByPrn.find(sample.svId);
+            if (prnTruth == truthByPrn.end())
+            {
+                continue;
+            }
+
+            const double receiverTimeSec = sample.transmitTimeSeconds + sample.measuredPseudorangeMeters / c;
+            double closestDt = 1e9;
+            const GroundTruthRecord *closest = findClosestRecord(prnTruth->second, receiverTimeSec, &closestDt);
+
+            if (closest != nullptr && closestDt < 0.002)
+            {
+                const double correctedMeasured = sample.measuredPseudorangeMeters + c * closest->trueSvClockBiasSec;
+                const double err = std::fabs(correctedMeasured - closest->truePseudorangeM);
+                maxErrorByPrn[sample.svId] = std::max(maxErrorByPrn[sample.svId], err);
+                sumErrorByPrn[sample.svId] += err;
+                countByPrn[sample.svId]++;
+            }
+        }
     }
+
+    int pseudorangeVerifiedCount = 0;
+    double maxPseudorangeErrorMeters = 0.0;
+    for (const auto &entry : countByPrn)
+    {
+        const int prn = entry.first;
+        const int count = entry.second;
+        const double meanErr = sumErrorByPrn[prn] / count;
+        const double maxErr = maxErrorByPrn[prn];
+        std::cerr << "DEBUG pseudorange PRN " << prn << " samples=" << count << " meanErrorMeters=" << meanErr
+                  << " maxErrorMeters=" << maxErr << '\n';
+        pseudorangeVerifiedCount += count;
+        maxPseudorangeErrorMeters = std::max(maxPseudorangeErrorMeters, maxErr);
+    }
+
+    std::cerr << "DEBUG pseudorangeVerifiedCount=" << pseudorangeVerifiedCount
+              << " maxPseudorangeErrorMeters=" << maxPseudorangeErrorMeters << '\n';
+    ASSERT_GT(pseudorangeVerifiedCount, 0)
+        << "Expected at least one pseudorange sample to cross-check against simulator ground truth";
+    EXPECT_LT(maxPseudorangeErrorMeters, 1000.0)
+        << "Pseudorange reconstruction diverges from simulator ground truth by up to " << maxPseudorangeErrorMeters
+        << " m";
 
     EphemerisAccumulator accumulator;
     for (const GPSOpenCl::NavDecoderOutput &out : sink->navDecoderOutputs)
@@ -360,8 +398,8 @@ TEST(GroundTruthVerificationTest, FullEphemerisAndPvtMatchSimulatorTruth)
     for (const auto &entry : subframeCountByPrn)
     {
         int mask = subframeMaskByPrn.count(entry.first) ? subframeMaskByPrn[entry.first] : 0;
-        std::cerr << "DEBUG PRN " << entry.first << " valid subframe decodes=" << entry.second
-                  << " subframe123Mask=0b" << ((mask >> 2) & 1) << ((mask >> 1) & 1) << (mask & 1) << std::endl;
+        std::cerr << "DEBUG PRN " << entry.first << " valid subframe decodes=" << entry.second << " subframe123Mask=0b"
+                  << ((mask >> 2) & 1) << ((mask >> 1) & 1) << (mask & 1) << std::endl;
     }
 
     ASSERT_FALSE(completedPrns.empty()) << "Expected at least one satellite to decode a complete ephemeris "
@@ -377,26 +415,27 @@ TEST(GroundTruthVerificationTest, FullEphemerisAndPvtMatchSimulatorTruth)
         }
 
         const GPSOpenCl::GpsEphemeris &decoded = accumulator.get(prn);
-        const double tolerance = 0.001;
 
-        TestUtils::compareRealResults(static_cast<float>(decoded.sqrtA), static_cast<float>(truthEphem.sqrtA), tolerance);
-        TestUtils::compareRealResults(static_cast<float>(decoded.e), static_cast<float>(truthEphem.e), tolerance);
-        TestUtils::compareRealResults(static_cast<float>(decoded.M0), static_cast<float>(truthEphem.M0), tolerance);
-        TestUtils::compareRealResults(static_cast<float>(decoded.deltaN), static_cast<float>(truthEphem.deltaN), tolerance);
-        TestUtils::compareRealResults(static_cast<float>(decoded.toe), static_cast<float>(truthEphem.toe), tolerance);
-        TestUtils::compareRealResults(static_cast<float>(decoded.i0), static_cast<float>(truthEphem.i0), tolerance);
-        TestUtils::compareRealResults(static_cast<float>(decoded.idot), static_cast<float>(truthEphem.idot), tolerance);
-        TestUtils::compareRealResults(static_cast<float>(decoded.omega0), static_cast<float>(truthEphem.omega0), tolerance);
-        TestUtils::compareRealResults(static_cast<float>(decoded.omega), static_cast<float>(truthEphem.omega), tolerance);
-        TestUtils::compareRealResults(static_cast<float>(decoded.omegaDot), static_cast<float>(truthEphem.omegaDot), tolerance);
-        TestUtils::compareRealResults(static_cast<float>(decoded.Cuc), static_cast<float>(truthEphem.Cuc), tolerance);
-        TestUtils::compareRealResults(static_cast<float>(decoded.Cus), static_cast<float>(truthEphem.Cus), tolerance);
-        TestUtils::compareRealResults(static_cast<float>(decoded.Crc), static_cast<float>(truthEphem.Crc), tolerance);
-        TestUtils::compareRealResults(static_cast<float>(decoded.Crs), static_cast<float>(truthEphem.Crs), tolerance);
-        TestUtils::compareRealResults(static_cast<float>(decoded.Cic), static_cast<float>(truthEphem.Cic), tolerance);
-        TestUtils::compareRealResults(static_cast<float>(decoded.Cis), static_cast<float>(truthEphem.Cis), tolerance);
-        TestUtils::compareRealResults(static_cast<float>(decoded.af0), static_cast<float>(truthEphem.af0), tolerance);
-        TestUtils::compareRealResults(static_cast<float>(decoded.af1), static_cast<float>(truthEphem.af1), tolerance);
+        EXPECT_NEAR(decoded.sqrtA, truthEphem.sqrtA, 1e-4) << "PRN " << prn << " sqrtA";
+        EXPECT_NEAR(decoded.e, truthEphem.e, 1e-8) << "PRN " << prn << " e";
+        EXPECT_NEAR(decoded.M0, truthEphem.M0, 1e-7) << "PRN " << prn << " M0";
+        EXPECT_NEAR(decoded.deltaN, truthEphem.deltaN, 1e-11) << "PRN " << prn << " deltaN";
+        EXPECT_NEAR(decoded.toe, truthEphem.toe, 20.0) << "PRN " << prn << " toe";
+        EXPECT_NEAR(decoded.i0, truthEphem.i0, 1e-7) << "PRN " << prn << " i0";
+        EXPECT_NEAR(decoded.idot, truthEphem.idot, 1e-11) << "PRN " << prn << " idot";
+        EXPECT_NEAR(decoded.omega0, truthEphem.omega0, 1e-7) << "PRN " << prn << " omega0";
+        EXPECT_NEAR(decoded.omega, truthEphem.omega, 1e-7) << "PRN " << prn << " omega";
+        EXPECT_NEAR(decoded.omegaDot, truthEphem.omegaDot, 1e-11) << "PRN " << prn << " omegaDot";
+        EXPECT_NEAR(decoded.Cuc, truthEphem.Cuc, 1e-7) << "PRN " << prn << " Cuc";
+        EXPECT_NEAR(decoded.Cus, truthEphem.Cus, 1e-7) << "PRN " << prn << " Cus";
+        EXPECT_NEAR(decoded.Crc, truthEphem.Crc, 0.05) << "PRN " << prn << " Crc";
+        EXPECT_NEAR(decoded.Crs, truthEphem.Crs, 0.05) << "PRN " << prn << " Crs";
+        EXPECT_NEAR(decoded.Cic, truthEphem.Cic, 1e-7) << "PRN " << prn << " Cic";
+        EXPECT_NEAR(decoded.Cis, truthEphem.Cis, 1e-7) << "PRN " << prn << " Cis";
+        EXPECT_NEAR(decoded.af0, truthEphem.af0, 1e-9) << "PRN " << prn << " af0";
+        EXPECT_NEAR(decoded.af1, truthEphem.af1, 1e-12) << "PRN " << prn << " af1";
+        EXPECT_NEAR(decoded.af2, truthEphem.af2, 1e-15) << "PRN " << prn << " af2";
+        EXPECT_NEAR(decoded.tgd, truthEphem.tgd, 1e-9) << "PRN " << prn << " tgd";
         // Subframe 1's broadcast WN field is a raw 10-bit (mod-1024) value per ICD-GPS-200, while RINEX
         // stores the un-rolled continuous GPS week - reduce the truth value the same way before comparing.
         EXPECT_EQ(decoded.weekNumber, truthEphem.weekNumber % 1024) << "PRN " << prn;
@@ -407,11 +446,9 @@ TEST(GroundTruthVerificationTest, FullEphemerisAndPvtMatchSimulatorTruth)
 
     ASSERT_FALSE(sink->pvtSolverOutputs.empty()) << "Expected at least one PVT solution attempt";
 
-    // gps-sdr-sim's own printed ECEF for lat=48.1173,lon=11.5167,alt=545.4 (cross-referenced at scenario startup,
-    // not re-derived here to avoid introducing a second, independently-unverified WGS-84 conversion).
-    const double trueEcefX = 4180483.4;
-    const double trueEcefY = 851798.0;
-    const double trueEcefZ = 4725999.8;
+    const double trueEcefX = truth.front().trueReceiverPosXEcefM;
+    const double trueEcefY = truth.front().trueReceiverPosYEcefM;
+    const double trueEcefZ = truth.front().trueReceiverPosZEcefM;
     const double positionToleranceMeters = 50.0;
 
     bool foundValidPvt = false;
@@ -427,12 +464,143 @@ TEST(GroundTruthVerificationTest, FullEphemerisAndPvtMatchSimulatorTruth)
         double dz = pvt.ecefZ - trueEcefZ;
         double distance = std::sqrt(dx * dx + dy * dy + dz * dz);
 
-        EXPECT_LT(distance, positionToleranceMeters) << "PVT solution " << distance
-                                                      << " m from true receiver position";
+        EXPECT_LT(distance, positionToleranceMeters) << "PVT solution " << distance << " m from true receiver position";
         foundValidPvt = true;
     }
     EXPECT_TRUE(foundValidPvt) << "Expected at least one valid PVT solution within " << blocksAvailable << " blocks";
 
     std::remove(iqFile.c_str());
+}
+
+TEST(GroundTruthVerificationTest, SubframeStartCodePhaseMatchesSimulatorTruth)
+{
+    if (std::getenv("GPSOPENCL_RUN_INTEGRATION_TESTS") == nullptr)
+    {
+        GTEST_SKIP() << "Slow subframe-timing verification skipped by default. "
+                     << "Set GPSOPENCL_RUN_INTEGRATION_TESTS=1 to run it.";
+        return;
+    }
+
+    std::string gpsSimBin = "../Tools/gps-sdr-sim/gps-sdr-sim";
+    std::string navFile = "Tools/gps-sdr-sim/brdc0010.22n";
+
+    std::ifstream checkSim(gpsSimBin);
+    if (!checkSim.is_open())
+    {
+        GTEST_SKIP() << "gps-sdr-sim binary not found at " << gpsSimBin << ". Skipping ground-truth verification test.";
+        return;
+    }
+
+    std::string iqFile = "ground_truth_iq_bitsync.bin";
+    std::string truthFile = "ground_truth_records_bitsync.bin";
+    std::string cmd = gpsSimBin + " -e " + navFile + " -l 48.1173,11.5167,545.4 -s 4096000 -b 8 -d 40 -o " + iqFile +
+        " -G " + truthFile + " > /dev/null 2>&1";
+    int sysRet = std::system(cmd.c_str());
+    ASSERT_EQ(sysRet, 0);
+
+    std::vector<GroundTruthRecord> truth;
+    ASSERT_TRUE(readGroundTruth(truthFile, &truth));
+    ASSERT_FALSE(truth.empty());
+
+    std::map<int, std::vector<GroundTruthRecord>> truthByPrn;
+    for (const GroundTruthRecord &record : truth)
+    {
+        truthByPrn[record.prn].push_back(record);
+    }
+
+    GPSOpenCl::ComplexFloatVector inputSignal;
+    TestUtils::readFromFileBinaryIQ8(iqFile.c_str(), &inputSignal);
+    ASSERT_GE(inputSignal.size(), 4096u);
+
+    GPSOpenCl::Settings settings;
+    settings.captureSettings();
+
+    GPSOpenCl::Application app(settings.configuration);
+    auto sink = std::make_shared<CapturingSink>();
+    app.setSink(sink);
+
+    int codeLength = settings.configuration.rawDataSettings.numberOfSamplesPerCode;
+    ASSERT_GT(codeLength, 0);
+
+    int blocksAvailable = static_cast<int>(inputSignal.size() / static_cast<size_t>(codeLength));
+
+    std::map<int, size_t> seenSubframeStartSampleByPrn;
+    int checkedCount = 0;
+
+    for (int blockIdx = 0; blockIdx < blocksAvailable; blockIdx++)
+    {
+        auto start = inputSignal.begin() + static_cast<long>(blockIdx) * codeLength;
+        auto end = start + codeLength;
+        GPSOpenCl::ComplexFloatVector block(start, end);
+        app.processBlock(block, static_cast<uint32_t>(blockIdx));
+
+        for (const GPSOpenCl::Application::ChannelDiagnostic &diag : app.getChannelDiagnostics())
+        {
+            auto seenIt = seenSubframeStartSampleByPrn.find(diag.svId);
+            if (seenIt != seenSubframeStartSampleByPrn.end() && seenIt->second == diag.subframeStartSample)
+            {
+                continue;
+            }
+            seenSubframeStartSampleByPrn[diag.svId] = diag.subframeStartSample;
+
+            auto prnTruth = truthByPrn.find(diag.svId);
+            if (prnTruth == truthByPrn.end())
+            {
+                continue;
+            }
+
+            auto findClosest = [&](double queryTow) -> const GroundTruthRecord *
+            {
+                double bestDt = 1e9;
+                const GroundTruthRecord *best = findClosestRecord(prnTruth->second, queryTow, &bestDt);
+                return (best != nullptr && bestDt <= 0.1) ? best : nullptr;
+            };
+
+            const GroundTruthRecord *closestAtStart = findClosest(diag.subframeStartTow);
+            if (closestAtStart != nullptr)
+            {
+                double chipDiff =
+                    static_cast<double>(diag.codePhaseAtSubframeStart) - closestAtStart->trueCodePhaseChips;
+                chipDiff = std::fmod(chipDiff + 1534.5, 1023.0) - 511.5;
+
+                std::cerr << "DEBUG bitsync PRN " << diag.svId << " bitSyncPhase=" << diag.bitSyncPhase
+                          << " subframeStartTow=" << diag.subframeStartTow
+                          << " subframeStartSample=" << diag.subframeStartSample
+                          << " codePhaseAtSubframeStart=" << diag.codePhaseAtSubframeStart
+                          << " truthCodePhase=" << closestAtStart->trueCodePhaseChips << " chipDiffWrapped=" << chipDiff
+                          << " metersEquivalent=" << (chipDiff / GPSOpenCl::GPS_CA_CODE_FREQUENCY_HZ) * 299792458.0
+                          << '\n';
+
+                EXPECT_LT(std::fabs(chipDiff), 5.0)
+                    << "PRN " << diag.svId << " code phase at subframe start diverges from truth by " << chipDiff
+                    << " chips (bitSyncPhase=" << diag.bitSyncPhase << ")";
+                checkedCount++;
+            }
+
+            const GroundTruthRecord *closestNow = findClosest(diag.candidateNowTow);
+            if (closestNow != nullptr)
+            {
+                double chipDiffNow = static_cast<double>(diag.codePhaseNow) - closestNow->trueCodePhaseChips;
+                chipDiffNow = std::fmod(chipDiffNow + 1534.5, 1023.0) - 511.5;
+
+                std::cerr << "DEBUG elapsedcheck PRN " << diag.svId << " elapsedSeconds=" << diag.elapsedSeconds
+                          << " candidateNowTow=" << diag.candidateNowTow << " codePhaseNow=" << diag.codePhaseNow
+                          << " truthCodePhase=" << closestNow->trueCodePhaseChips << " chipDiffWrapped=" << chipDiffNow
+                          << " metersEquivalent=" << (chipDiffNow / GPSOpenCl::GPS_CA_CODE_FREQUENCY_HZ) * 299792458.0
+                          << '\n';
+
+                EXPECT_LT(std::fabs(chipDiffNow), 5.0)
+                    << "PRN " << diag.svId << " code phase 'now' (elapsedSeconds=" << diag.elapsedSeconds
+                    << ") diverges from truth by " << chipDiffNow << " chips";
+                checkedCount++;
+            }
+        }
+    }
+
+    std::cerr << "DEBUG bitsync checkedCount=" << checkedCount << '\n';
+    EXPECT_GT(checkedCount, 0) << "Expected at least one subframe-start code-phase sample to check against truth";
+
+    std::remove(iqFile.c_str());
+    std::remove(truthFile.c_str());
 }
 }

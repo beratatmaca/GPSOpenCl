@@ -21,17 +21,21 @@ class Code
 
     /** @brief Construct with configuration.
      *  @param conf Application configuration. */
-    Code(Settings::Configuration conf);
+    Code(const Settings::Configuration &conf);
 
     ~Code();
+    Code(const Code &) = delete;
+    Code &operator=(const Code &) = delete;
+    Code(Code &&) = delete;
+    Code &operator=(Code &&) = delete;
 
-    char m_caCode[GPS_CA_SV_COUNT][GPS_CA_CODE_LENGTH];           ///< Raw C/A code chips per PRN.
-    std::vector<FloatVector> m_upsampledCaCode;                   ///< Upsampled time-domain C/A codes.
-    std::vector<ComplexFloatVector> m_upsampledFreqDomainCaCode;   ///< Frequency-domain C/A codes.
+    char m_caCode[GPS_CA_SV_COUNT][GPS_CA_CODE_LENGTH]{};           ///< Raw C/A code chips per PRN.
+    std::vector<FloatVector> m_upsampledCaCode;                     ///< Upsampled time-domain C/A codes.
+    std::vector<ComplexFloatVector> m_upsampledFreqDomainCaCode;    ///< Frequency-domain C/A codes.
 
     /** @brief Set configuration.
      *  @param conf Application configuration. */
-    void setConfiguration(Settings::Configuration conf);
+    void setConfiguration(const Settings::Configuration &conf);
 
     /** @brief Create upsampled and frequency-domain code lookup table.
      *  @param gpu Compute back-end for FFT. */
@@ -44,8 +48,8 @@ class Code
     /** @brief Calculate C/A Gold codes for all PRNs. */
     void calculateCACode();
 
-    int m_sampleLength;            ///< Samples per code period.
-    float m_samplingFrequencyHz;   ///< Sampling rate (Hz).
+    int m_sampleLength{};             ///< Samples per code period.
+    float m_samplingFrequencyHz{};    ///< Sampling rate (Hz).
 };
 }
 

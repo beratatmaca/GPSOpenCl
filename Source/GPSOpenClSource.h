@@ -10,6 +10,7 @@
 #include "GPSOpenClStructs.h"
 
 #include <memory>
+#include <utility>
 
 namespace GPSOpenCl
 {
@@ -19,6 +20,11 @@ class Source
 {
   public:
     virtual ~Source() = default;
+    Source() = default;
+    Source(const Source &) = delete;
+    Source &operator=(const Source &) = delete;
+    Source(Source &&) = delete;
+    Source &operator=(Source &&) = delete;
 
     /** @brief Initialize the source.
      *  @param input Source configuration.
@@ -33,10 +39,10 @@ class Source
 
     /** @brief Set telemetry sink.
      *  @param sink Sink implementation. */
-    virtual void setSink(std::shared_ptr<Sink> sink) { m_sink = sink; }
+    virtual void setSink(std::shared_ptr<Sink> sink) { m_sink = std::move(sink); }
 
   protected:
-    std::shared_ptr<Sink> m_sink{nullptr}; ///< Telemetry sink.
+    std::shared_ptr<Sink> m_sink{nullptr};    ///< Telemetry sink.
 };
 }
 

@@ -7,6 +7,7 @@
 
 #include <CL/cl.h>
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -18,25 +19,29 @@ class GpuHandler
   public:
     GpuHandler();
     ~GpuHandler();
+    GpuHandler(const GpuHandler &) = delete;
+    GpuHandler &operator=(const GpuHandler &) = delete;
+    GpuHandler(GpuHandler &&) = delete;
+    GpuHandler &operator=(GpuHandler &&) = delete;
 
     /** @brief OpenCL program index. */
-    typedef enum GPUProgramList
+    using GPUProgramListType = enum GPUProgramList : std::uint8_t
     {
-        GPSOpenClAcquistion = 0,  ///< Acquisition kernel program.
-        GPSOpenClProgramCount     ///< Total program count.
-    } GPUProgramListType;
+        GPSOpenClAcquistion = 0,    ///< Acquisition kernel program.
+        GPSOpenClProgramCount       ///< Total program count.
+    };
 
     /** @brief Acquisition kernel index. */
-    typedef enum GPSOpenClAcquisitionKernelList
+    using GPSOpenClAcquisitionKernelListType = enum GPSOpenClAcquisitionKernelList : std::uint8_t
     {
-        FFTInit = 0,          ///< FFT initialization kernel.
-        FFTStage,             ///< FFT stage kernel.
-        FFTScale,             ///< FFT IFFT scaling kernel.
-        ComplexMultiplier,    ///< Complex multiplication kernel.
-        Absolute,             ///< Magnitude squared kernel.
-        Sum,                  ///< Reduction sum kernel.
-        AcquisitionKernelCount ///< Total acquisition kernel count.
-    } GPSOpenClAcquisitionKernelListType;
+        FFTInit = 0,              ///< FFT initialization kernel.
+        FFTStage,                 ///< FFT stage kernel.
+        FFTScale,                 ///< FFT IFFT scaling kernel.
+        ComplexMultiplier,        ///< Complex multiplication kernel.
+        Absolute,                 ///< Magnitude squared kernel.
+        Sum,                      ///< Reduction sum kernel.
+        AcquisitionKernelCount    ///< Total acquisition kernel count.
+    };
 
     /** @brief Create OpenCL device and context.
      *  @return 0 on success. */
@@ -51,25 +56,29 @@ class GpuHandler
     int initKernels();
 
     /** @brief Log the last OpenCL error as string. */
-    void getLastErrorAsString();
+    void getLastErrorAsString() const;
 
     /** @brief Query device local memory size.
      *  @return 0 on success. */
     int determineLocalMemorySize();
 
     cl_context m_context;                              ///< OpenCL context.
-    std::vector<cl_program> m_programList;              ///< Compiled programs.
-    std::vector<cl_kernel> m_acquisitionKernelList;     ///< Acquisition kernels.
-    cl_device_id m_device;                              ///< OpenCL device ID.
-    cl_ulong m_localMemorySize;                         ///< Device local memory (bytes).
+    std::vector<cl_program> m_programList;             ///< Compiled programs.
+    std::vector<cl_kernel> m_acquisitionKernelList;    ///< Acquisition kernels.
+    cl_device_id m_device;                             ///< OpenCL device ID.
+    cl_ulong m_localMemorySize;                        ///< Device local memory (bytes).
 
   private:
-    cl_platform_id m_platform;                          ///< OpenCL platform ID.
-    cl_int m_error;                                     ///< Last OpenCL error code.
-    std::string ProgramCharList[GPSOpenClProgramCount]{"Acquisition.cl"};
+    cl_platform_id m_platform;    ///< OpenCL platform ID.
+    cl_int m_error;               ///< Last OpenCL error code.
+    std::string m_programCharList[GPSOpenClProgramCount]{"Acquisition.cl"};
 
-    std::string GPSOpenClAcquisitionKernelCharList[AcquisitionKernelCount]{
-        "fft_init", "fft_stage", "fft_scale", "complexMultiplier", "absolute", "sum"};
+    std::string m_acquisitionKernelCharList[AcquisitionKernelCount]{"fft_init",
+                                                                    "fft_stage",
+                                                                    "fft_scale",
+                                                                    "complexMultiplier",
+                                                                    "absolute",
+                                                                    "sum"};
 };
 }
 

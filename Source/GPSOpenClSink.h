@@ -5,12 +5,12 @@
  *  @brief Abstract telemetry output interface and implementations.
  */
 
+#include "GPSOpenClStructs.h"
 #include <cstddef>
 #include <memory>
 #include <mutex>
 #include <string>
 #include <vector>
-#include "GPSOpenClStructs.h"
 
 namespace GPSOpenCl
 {
@@ -31,6 +31,11 @@ class Sink
 {
   public:
     virtual ~Sink() = default;
+    Sink() = default;
+    Sink(const Sink &) = delete;
+    Sink &operator=(const Sink &) = delete;
+    Sink(Sink &&) = delete;
+    Sink &operator=(Sink &&) = delete;
 
     /** @brief Publish binary data with an identifier.
      *  @param identifier Topic/module name.
@@ -42,7 +47,7 @@ class Sink
      *  @param out Source output struct. */
     void publishSourceOutput(const SourceOutput &out)
     {
-        std::lock_guard<std::mutex> lock(m_publishMutex);
+        const std::lock_guard<std::mutex> lock(m_publishMutex);
         publish("SourceOutput", &out, sizeof(out));
     }
 
@@ -50,7 +55,7 @@ class Sink
      *  @param out Acquisition output struct. */
     void publishAcquisitionOutput(const AcquisitionOutput &out)
     {
-        std::lock_guard<std::mutex> lock(m_publishMutex);
+        const std::lock_guard<std::mutex> lock(m_publishMutex);
         publish("AcquisitionOutput", &out, sizeof(out));
     }
 
@@ -58,7 +63,7 @@ class Sink
      *  @param out Tracking output struct. */
     void publishTrackingOutput(const TrackingOutput &out)
     {
-        std::lock_guard<std::mutex> lock(m_publishMutex);
+        const std::lock_guard<std::mutex> lock(m_publishMutex);
         publish("TrackingOutput", &out, sizeof(out));
     }
 
@@ -66,7 +71,7 @@ class Sink
      *  @param out Nav decoder output struct. */
     void publishNavDecoderOutput(const NavDecoderOutput &out)
     {
-        std::lock_guard<std::mutex> lock(m_publishMutex);
+        const std::lock_guard<std::mutex> lock(m_publishMutex);
         publish("NavDecoderOutput", &out, sizeof(out));
     }
 
@@ -74,7 +79,7 @@ class Sink
      *  @param out PVT solver output struct. */
     void publishPvtSolverOutput(const PvtSolverOutput &out)
     {
-        std::lock_guard<std::mutex> lock(m_publishMutex);
+        const std::lock_guard<std::mutex> lock(m_publishMutex);
         publish("PvtSolverOutput", &out, sizeof(out));
     }
 
@@ -82,7 +87,7 @@ class Sink
      *  @param out Atmospheric output struct. */
     void publishAtmosphericOutput(const AtmosphericOutput &out)
     {
-        std::lock_guard<std::mutex> lock(m_publishMutex);
+        const std::lock_guard<std::mutex> lock(m_publishMutex);
         publish("AtmosphericOutput", &out, sizeof(out));
     }
 
@@ -90,7 +95,7 @@ class Sink
      *  @param out NMEA output struct. */
     void publishNmeaGeneratorOutput(const NmeaGeneratorOutput &out)
     {
-        std::lock_guard<std::mutex> lock(m_publishMutex);
+        const std::lock_guard<std::mutex> lock(m_publishMutex);
         publish("NmeaGeneratorOutput", &out, sizeof(out));
     }
 
@@ -98,12 +103,12 @@ class Sink
      *  @param out Profiler output struct. */
     void publishProfilerOutput(const ProfilerOutput &out)
     {
-        std::lock_guard<std::mutex> lock(m_publishMutex);
+        const std::lock_guard<std::mutex> lock(m_publishMutex);
         publish("ProfilerOutput", &out, sizeof(out));
     }
 
   private:
-    std::mutex m_publishMutex; ///< Serializes publish() calls across concurrent callers.
+    std::mutex m_publishMutex;    ///< Serializes publish() calls across concurrent callers.
 };
 
 /** @brief No-op sink that discards all telemetry. */
@@ -111,9 +116,7 @@ class NullSink : public Sink
 {
   public:
     /** @brief Discard published data. */
-    void publish(const std::string &, const void *, size_t) override
-    {
-    }
+    void publish(const std::string &, const void *, size_t) override {}
 };
 
 /** @brief Fan-out sink that forwards to multiple downstream sinks. */
@@ -122,9 +125,12 @@ class CompositeSink : public Sink
   public:
     /** @brief Add a downstream sink.
      *  @param sink Sink to add. */
-    void addSink(std::shared_ptr<Sink> sink)
+    void addSink(const std::shared_ptr<Sink> &sink)
     {
-        if (sink) m_sinks.push_back(sink);
+        if (sink)
+        {
+            m_sinks.push_back(sink);
+        }
     }
 
     /** @brief Forward data to all downstream sinks. */
@@ -137,7 +143,7 @@ class CompositeSink : public Sink
     }
 
   private:
-    std::vector<std::shared_ptr<Sink>> m_sinks; ///< Downstream sinks.
+    std::vector<std::shared_ptr<Sink>> m_sinks;    ///< Downstream sinks.
 };
 
 }

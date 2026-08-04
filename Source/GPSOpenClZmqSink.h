@@ -26,8 +26,12 @@ class ZmqSink : public Sink
   public:
     /** @brief Construct with ZMQ endpoint.
      *  @param endpoint ZMQ endpoint URI. */
-    explicit ZmqSink(const std::string &endpoint = "ipc:///tmp/gpsopencl/telemetry.sock");
+    explicit ZmqSink(std::string endpoint = "ipc:///tmp/gpsopencl/telemetry.sock");
     ~ZmqSink() override;
+    ZmqSink(const ZmqSink &) = delete;
+    ZmqSink &operator=(const ZmqSink &) = delete;
+    ZmqSink(ZmqSink &&) = delete;
+    ZmqSink &operator=(ZmqSink &&) = delete;
 
     /** @brief Enqueue telemetry data for the background sender thread.
      *  @param identifier Topic name.
@@ -40,12 +44,12 @@ class ZmqSink : public Sink
      *   the queue is finished and empty. */
     void senderThreadLoop();
 
-    std::string m_endpoint;                ///< ZMQ endpoint URI.
-    BoundedQueue<SinkMessage> m_queue;      ///< Handoff queue from callers to the sender thread.
-    std::thread m_senderThread;             ///< Background ZMQ-sender thread.
+    std::string m_endpoint;               ///< ZMQ endpoint URI.
+    BoundedQueue<SinkMessage> m_queue;    ///< Handoff queue from callers to the sender thread.
+    std::thread m_senderThread;           ///< Background ZMQ-sender thread.
 #ifdef GPSOPENCL_ENABLE_ZMQ
-    void *m_context{nullptr};   ///< ZMQ context.
-    void *m_publisher{nullptr}; ///< ZMQ PUB socket.
+    void *m_context{nullptr};             ///< ZMQ context.
+    void *m_publisher{nullptr};           ///< ZMQ PUB socket.
 #endif
 };
 }

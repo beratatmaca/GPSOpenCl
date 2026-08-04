@@ -24,6 +24,10 @@ class FileSink : public Sink
      *  @param outputFilePath Path to output file. */
     explicit FileSink(const std::string &outputFilePath);
     ~FileSink() override;
+    FileSink(const FileSink &) = delete;
+    FileSink &operator=(const FileSink &) = delete;
+    FileSink(FileSink &&) = delete;
+    FileSink &operator=(FileSink &&) = delete;
 
     /** @brief Enqueue telemetry data for the background writer thread.
      *  @param identifier Topic name.
@@ -36,9 +40,9 @@ class FileSink : public Sink
      *   the queue is finished and empty. */
     void writerThreadLoop();
 
-    std::ofstream m_file;                  ///< Output file stream, touched only by the writer thread.
-    BoundedQueue<SinkMessage> m_queue;      ///< Handoff queue from callers to the writer thread.
-    std::thread m_writerThread;             ///< Background file-writer thread.
+    std::ofstream m_file;                 ///< Output file stream, touched only by the writer thread.
+    BoundedQueue<SinkMessage> m_queue;    ///< Handoff queue from callers to the writer thread.
+    std::thread m_writerThread;           ///< Background file-writer thread.
 };
 }
 

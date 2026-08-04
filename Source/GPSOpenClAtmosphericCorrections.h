@@ -16,8 +16,8 @@ namespace GPSOpenCl
 /** @brief Klobuchar ionospheric model coefficients. */
 struct KlobucharParams
 {
-    double alpha[4]; ///< Alpha coefficients (s).
-    double beta[4];  ///< Beta coefficients (s).
+    double alpha[4];    ///< Alpha coefficients (s).
+    double beta[4];     ///< Beta coefficients (s).
 };
 
 /** @brief Atmospheric delay correction calculator. */
@@ -30,7 +30,11 @@ class AtmosphericCorrections
      *  @param input Klobuchar alpha/beta coefficients. */
     AtmosphericCorrections(const AtmosphericInput &input);
 
-    ~AtmosphericCorrections();
+    ~AtmosphericCorrections() = default;
+    AtmosphericCorrections(const AtmosphericCorrections &) = delete;
+    AtmosphericCorrections &operator=(const AtmosphericCorrections &) = delete;
+    AtmosphericCorrections(AtmosphericCorrections &&) = delete;
+    AtmosphericCorrections &operator=(AtmosphericCorrections &&) = delete;
 
     /** @brief Compute Klobuchar ionospheric delay.
      *  @param rxPos        Receiver geodetic position.
@@ -49,8 +53,7 @@ class AtmosphericCorrections
      *  @param rxAltitudeMeters Receiver altitude (m).
      *  @param elevationDeg     Satellite elevation (deg).
      *  @return Tropospheric delay (m). */
-    static double saastamoinenTroposphericDelay(double rxAltitudeMeters,
-                                               double elevationDeg);
+    static double saastamoinenTroposphericDelay(double rxAltitudeMeters, double elevationDeg);
 
     /** @brief Compute azimuth and elevation from receiver to satellite.
      *  @param rxEcef       Receiver ECEF position.
@@ -106,7 +109,7 @@ class AtmosphericCorrections
                                          double gpsTimeSec) const;
 
   private:
-    AtmosphericInput m_inputConfig; ///< Klobuchar coefficients.
+    AtmosphericInput m_inputConfig;    ///< Klobuchar coefficients.
 };
 }
 

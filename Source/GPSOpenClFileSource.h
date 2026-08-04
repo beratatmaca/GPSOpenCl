@@ -18,6 +18,10 @@ class FileSource : public Source
   public:
     FileSource();
     ~FileSource() override;
+    FileSource(const FileSource &) = delete;
+    FileSource &operator=(const FileSource &) = delete;
+    FileSource(FileSource &&) = delete;
+    FileSource &operator=(FileSource &&) = delete;
 
     /** @brief Initialize from source config.
      *  @param input Source configuration.
@@ -37,10 +41,10 @@ class FileSource : public Source
     bool loadAllSamples(const std::string &filePath, size_t samplesPerBlock);
 
   private:
-    SourceInput m_inputConfig;         ///< Source configuration.
+    SourceInput m_inputConfig;          ///< Source configuration.
     ComplexFloatVector m_allSamples;    ///< All loaded samples.
-    size_t m_currentBlockIndex;        ///< Current block index.
-    size_t m_samplesPerBlock;          ///< Samples per block.
+    size_t m_currentBlockIndex;         ///< Current block index.
+    size_t m_samplesPerBlock;           ///< Samples per block.
 };
 }
 

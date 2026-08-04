@@ -1,19 +1,17 @@
 #include "GPSOpenClGpsSdrSimSource.h"
 
+#include <cmath>
+#include <cstring>
 #include <fcntl.h>
+#include <iostream>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <cmath>
-#include <cstring>
-#include <iostream>
 #include <vector>
 
 namespace GPSOpenCl
 {
-GpsSdrSimSource::GpsSdrSimSource()
-{
-}
+GpsSdrSimSource::GpsSdrSimSource() = default;
 
 GpsSdrSimSource::~GpsSdrSimSource()
 {
@@ -51,8 +49,8 @@ bool GpsSdrSimSource::sendControlCommand(const std::string &command)
     }
     if (m_ctrlFd >= 0)
     {
-        std::string cmdWithNewline = command + "\n";
-        ssize_t written = write(m_ctrlFd, cmdWithNewline.c_str(), cmdWithNewline.length());
+        const std::string cmdWithNewline = command + "\n";
+        const ssize_t written = write(m_ctrlFd, cmdWithNewline.c_str(), cmdWithNewline.length());
         return written > 0;
     }
     return false;
@@ -66,7 +64,7 @@ bool GpsSdrSimSource::readBlock(ComplexFloatVector &outputSamples, SourceOutput 
         samplesPerBlock = static_cast<size_t>(
             std::round(m_inputConfig.samplingRate / (GPS_CA_CODE_FREQUENCY_HZ / GPS_CA_CODE_LENGTH)));
     }
-    size_t bytesNeeded = samplesPerBlock * 2 * sizeof(int8_t);
+    const size_t bytesNeeded = samplesPerBlock * 2 * sizeof(int8_t);
     std::vector<int8_t> buffer(bytesNeeded);
 
     if (m_dataFd < 0)
@@ -81,9 +79,9 @@ bool GpsSdrSimSource::readBlock(ComplexFloatVector &outputSamples, SourceOutput 
 
     size_t totalRead = 0;
     int retryCount = 0;
-    while (totalRead < bytesNeeded && retryCount < 50000)
+    while (totalRead < bytesNeeded && retryCount < 50'000)
     {
-        ssize_t res = read(m_dataFd, buffer.data() + totalRead, bytesNeeded - totalRead);
+        const ssize_t res = read(m_dataFd, buffer.data() + totalRead, bytesNeeded - totalRead);
         if (res > 0)
         {
             totalRead += res;
@@ -104,13 +102,13 @@ bool GpsSdrSimSource::readBlock(ComplexFloatVector &outputSamples, SourceOutput 
     outputSamples.resize(samplesPerBlock);
     for (size_t i = 0; i < samplesPerBlock; i++)
     {
-        float re = static_cast<float>(buffer[2 * i]);
-        float im = static_cast<float>(buffer[2 * i + 1]);
+        auto re = static_cast<float>(buffer[2 * i]);
+        auto im = static_cast<float>(buffer[(2 * i) + 1]);
         outputSamples[i] = std::complex<float>(re, im);
     }
 
     telemetry.structVersion = STRUCT_VERSION_1;
-    telemetry.blockIndex = static_cast<uint32_t>(m_blockIndex);
+    telemetry.blockIndex = m_blockIndex;
     telemetry.timestamp = static_cast<double>(m_blockIndex) * 0.001;
     m_blockIndex++;
     telemetry.fifoUnderrunCount = m_underrunCount;

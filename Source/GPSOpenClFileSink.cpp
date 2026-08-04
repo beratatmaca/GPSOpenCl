@@ -37,10 +37,13 @@ void FileSink::writerThreadLoop()
     SinkMessage message;
     while (m_queue.pop(message))
     {
-        if (!m_file.is_open()) continue;
+        if (!m_file.is_open())
+        {
+            continue;
+        }
 
-        uint32_t nameLen = static_cast<uint32_t>(message.identifier.size());
-        uint32_t dataLen = static_cast<uint32_t>(message.data.size());
+        auto nameLen = static_cast<uint32_t>(message.identifier.size());
+        auto dataLen = static_cast<uint32_t>(message.data.size());
 
         m_file.write(reinterpret_cast<const char *>(&nameLen), sizeof(nameLen));
         m_file.write(message.identifier.data(), nameLen);

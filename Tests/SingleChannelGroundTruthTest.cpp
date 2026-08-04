@@ -5,8 +5,8 @@
 #include "GPSOpenClGPUCompute.h"
 #include "GPSOpenClNavigationDecoder.h"
 #include "GPSOpenClSettings.h"
-#include "GPSOpenClSink.h"
 #include "GroundTruthRecord.h"
+#include "GroundTruthTestUtils.h"
 #include "RinexNavParser.h"
 #include "TestUtils.h"
 
@@ -27,39 +27,6 @@ namespace GPSOpenClTest
 {
 namespace
 {
-class CapturingSink : public GPSOpenCl::Sink
-{
-  public:
-    GPSOpenCl::TrackingOutput lastTracking{};
-    bool haveTracking = false;
-
-    void publish(const std::string &identifier, const void *data, size_t size) override
-    {
-        if (identifier == "TrackingOutput" && size == sizeof(GPSOpenCl::TrackingOutput))
-        {
-            std::memcpy(&lastTracking, data, sizeof(lastTracking));
-            haveTracking = true;
-        }
-    }
-};
-
-bool readGroundTruth(const std::string &path, std::vector<GroundTruthRecord> *records)
-{
-    std::ifstream file(path, std::ios::binary);
-    if (!file.is_open())
-    {
-        return false;
-    }
-
-    GroundTruthRecord record;
-    while (file.read(reinterpret_cast<char *>(&record), sizeof(record)))
-    {
-        records->push_back(record);
-    }
-    return true;
-}
-
-/** @brief PRN with the highest elevation seen in the ground-truth records (strongest, most reliable signal). */
 int strongestPrn(const std::vector<GroundTruthRecord> &truth)
 {
     std::map<int32_t, double> maxElevationByPrn;
@@ -106,7 +73,7 @@ GroundTruthRecord lastRecordForPrn(const std::vector<GroundTruthRecord> &truth, 
     }
     return last;
 }
-} // namespace
+}    // namespace
 
 TEST(SingleChannelGroundTruthTest, AcquisitionAndTrackingConvergeForOneChannel)
 {
@@ -122,9 +89,8 @@ TEST(SingleChannelGroundTruthTest, AcquisitionAndTrackingConvergeForOneChannel)
 
     std::string iqFile = "single_channel_iq.bin";
     std::string truthFile = "single_channel_truth.bin";
-    std::string cmd = gpsSimBin + " -e " + navFile +
-                       " -l 48.1173,11.5167,545.4 -s 4096000 -b 8 -d 2 -o " + iqFile + " -G " + truthFile +
-                       " > /dev/null 2>&1";
+    std::string cmd = gpsSimBin + " -e " + navFile + " -l 48.1173,11.5167,545.4 -s 4096000 -b 8 -d 2 -o " + iqFile +
+        " -G " + truthFile + " > /dev/null 2>&1";
     int sysRet = std::system(cmd.c_str());
     ASSERT_EQ(sysRet, 0);
 
@@ -188,15 +154,16 @@ TEST(SingleChannelGroundTruthTest, AcquisitionAndTrackingConvergeForOneChannel)
         channel.trackBlock(block);
     }
 
-    ASSERT_TRUE(sink->haveTracking) << "Expected at least one TrackingOutput to be published";
+    ASSERT_FALSE(sink->trackingOutputs.empty()) << "Expected at least one TrackingOutput to be published";
     EXPECT_EQ(channel.getState(), GPSOpenCl::ChannelState::Tracking)
         << "Expected the channel to reach confirmed Tracking within " << blocksToRun << " blocks";
 
+    const GPSOpenCl::TrackingOutput &lastTracking = sink->trackingOutputs.back();
     GroundTruthRecord lastTruth = lastRecordForPrn(truth, prn);
-    double trackedDopplerDiff = std::fabs(sink->lastTracking.carrierFreqHz - lastTruth.trueDopplerHz);
-    EXPECT_LT(trackedDopplerDiff, 50.0) << "PRN " << prn << " tracked Doppler " << sink->lastTracking.carrierFreqHz
+    double trackedDopplerDiff = std::fabs(lastTracking.carrierFreqHz - lastTruth.trueDopplerHz);
+    EXPECT_LT(trackedDopplerDiff, 50.0) << "PRN " << prn << " tracked Doppler " << lastTracking.carrierFreqHz
                                         << " Hz too far from true Doppler " << lastTruth.trueDopplerHz << " Hz";
-    EXPECT_GT(sink->lastTracking.carrierLockIndicator, 0.7)
+    EXPECT_GT(lastTracking.carrierLockIndicator, 0.7)
         << "Expected carrier lock indicator near 1.0 once tracking is confirmed";
 
     std::remove(iqFile.c_str());
@@ -225,13 +192,8 @@ TEST(SingleChannelGroundTruthTest, FullEphemerisMatchesRinexForOneChannel)
     std::string iqFile = "single_channel_iq_long.bin";
     std::string truthFile = "single_channel_truth_long.bin";
 
-    // Same reasoning as the multi-channel Tier 2 test: subframe 1's preamble falls at the scenario's
-    // exact start, before acquisition/confirm can lock on to catch it, and only reappears ~30s later
-    // in the second cycle. 60s covers two full cycles with margin - less than the multi-channel
-    // test's 90s since this picks the single strongest (most reliable) satellite, not the weakest.
-    std::string cmd = gpsSimBin + " -e " + navFile +
-                       " -l 48.1173,11.5167,545.4 -s 4096000 -b 8 -d 60 -o " + iqFile + " -G " + truthFile +
-                       " > /dev/null 2>&1";
+    std::string cmd = gpsSimBin + " -e " + navFile + " -l 48.1173,11.5167,545.4 -s 4096000 -b 8 -d 60 -o " + iqFile +
+        " -G " + truthFile + " > /dev/null 2>&1";
     int sysRet = std::system(cmd.c_str());
     ASSERT_EQ(sysRet, 0);
 
@@ -296,39 +258,31 @@ TEST(SingleChannelGroundTruthTest, FullEphemerisMatchesRinexForOneChannel)
         << " blocks";
 
     GPSOpenCl::GpsEphemeris truthEphem{};
-    ASSERT_TRUE(RinexNavParser::findEphemeris(navFile, prn, &truthEphem)) << "No matching RINEX record for PRN "
-                                                                          << prn;
+    ASSERT_TRUE(RinexNavParser::findEphemeris(navFile, prn, &truthEphem)) << "No matching RINEX record for PRN " << prn;
 
     const GPSOpenCl::GpsEphemeris &decoded = channel.getAccumulatedEphemeris();
-    const double tolerance = 0.001;
 
-    TestUtils::compareRealResults(static_cast<float>(decoded.sqrtA), static_cast<float>(truthEphem.sqrtA), tolerance);
-    TestUtils::compareRealResults(static_cast<float>(decoded.e), static_cast<float>(truthEphem.e), tolerance);
-    TestUtils::compareRealResults(static_cast<float>(decoded.M0), static_cast<float>(truthEphem.M0), tolerance);
-    TestUtils::compareRealResults(static_cast<float>(decoded.deltaN), static_cast<float>(truthEphem.deltaN),
-                                  tolerance);
-    TestUtils::compareRealResults(static_cast<float>(decoded.toe), static_cast<float>(truthEphem.toe), tolerance);
-    TestUtils::compareRealResults(static_cast<float>(decoded.i0), static_cast<float>(truthEphem.i0), tolerance);
-    TestUtils::compareRealResults(static_cast<float>(decoded.idot), static_cast<float>(truthEphem.idot), tolerance);
-    TestUtils::compareRealResults(static_cast<float>(decoded.omega0), static_cast<float>(truthEphem.omega0),
-                                  tolerance);
-    TestUtils::compareRealResults(static_cast<float>(decoded.omega), static_cast<float>(truthEphem.omega),
-                                  tolerance);
-    TestUtils::compareRealResults(static_cast<float>(decoded.omegaDot), static_cast<float>(truthEphem.omegaDot),
-                                  tolerance);
-    TestUtils::compareRealResults(static_cast<float>(decoded.Cuc), static_cast<float>(truthEphem.Cuc), tolerance);
-    TestUtils::compareRealResults(static_cast<float>(decoded.Cus), static_cast<float>(truthEphem.Cus), tolerance);
-    TestUtils::compareRealResults(static_cast<float>(decoded.Crc), static_cast<float>(truthEphem.Crc), tolerance);
-    TestUtils::compareRealResults(static_cast<float>(decoded.Crs), static_cast<float>(truthEphem.Crs), tolerance);
-    TestUtils::compareRealResults(static_cast<float>(decoded.Cic), static_cast<float>(truthEphem.Cic), tolerance);
-    TestUtils::compareRealResults(static_cast<float>(decoded.Cis), static_cast<float>(truthEphem.Cis), tolerance);
-    TestUtils::compareRealResults(static_cast<float>(decoded.af0), static_cast<float>(truthEphem.af0), tolerance);
-    TestUtils::compareRealResults(static_cast<float>(decoded.af1), static_cast<float>(truthEphem.af1), tolerance);
-    // Subframe 1's broadcast WN field is a raw 10-bit (mod-1024) value per ICD-GPS-200, while RINEX
-    // stores the un-rolled continuous GPS week - reduce the truth value the same way before comparing.
+    EXPECT_NEAR(decoded.sqrtA, truthEphem.sqrtA, 1e-4) << "PRN " << prn << " sqrtA";
+    EXPECT_NEAR(decoded.e, truthEphem.e, 1e-8) << "PRN " << prn << " e";
+    EXPECT_NEAR(decoded.M0, truthEphem.M0, 1e-7) << "PRN " << prn << " M0";
+    EXPECT_NEAR(decoded.deltaN, truthEphem.deltaN, 1e-11) << "PRN " << prn << " deltaN";
+    EXPECT_NEAR(decoded.toe, truthEphem.toe, 20.0) << "PRN " << prn << " toe";
+    EXPECT_NEAR(decoded.i0, truthEphem.i0, 1e-7) << "PRN " << prn << " i0";
+    EXPECT_NEAR(decoded.idot, truthEphem.idot, 1e-11) << "PRN " << prn << " idot";
+    EXPECT_NEAR(decoded.omega0, truthEphem.omega0, 1e-7) << "PRN " << prn << " omega0";
+    EXPECT_NEAR(decoded.omega, truthEphem.omega, 1e-7) << "PRN " << prn << " omega";
+    EXPECT_NEAR(decoded.omegaDot, truthEphem.omegaDot, 1e-11) << "PRN " << prn << " omegaDot";
+    EXPECT_NEAR(decoded.Cuc, truthEphem.Cuc, 1e-7) << "PRN " << prn << " Cuc";
+    EXPECT_NEAR(decoded.Cus, truthEphem.Cus, 1e-7) << "PRN " << prn << " Cus";
+    EXPECT_NEAR(decoded.Crc, truthEphem.Crc, 0.05) << "PRN " << prn << " Crc";
+    EXPECT_NEAR(decoded.Crs, truthEphem.Crs, 0.05) << "PRN " << prn << " Crs";
+    EXPECT_NEAR(decoded.Cic, truthEphem.Cic, 1e-7) << "PRN " << prn << " Cic";
+    EXPECT_NEAR(decoded.Cis, truthEphem.Cis, 1e-7) << "PRN " << prn << " Cis";
+    EXPECT_NEAR(decoded.af0, truthEphem.af0, 1e-9) << "PRN " << prn << " af0";
+    EXPECT_NEAR(decoded.af1, truthEphem.af1, 1e-12) << "PRN " << prn << " af1";
     EXPECT_EQ(decoded.weekNumber, truthEphem.weekNumber % 1024) << "PRN " << prn;
 
     std::remove(iqFile.c_str());
     std::remove(truthFile.c_str());
 }
-} // namespace GPSOpenClTest
+}    // namespace GPSOpenClTest

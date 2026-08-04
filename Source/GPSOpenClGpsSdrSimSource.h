@@ -16,6 +16,10 @@ class GpsSdrSimSource : public Source
   public:
     GpsSdrSimSource();
     ~GpsSdrSimSource() override;
+    GpsSdrSimSource(const GpsSdrSimSource &) = delete;
+    GpsSdrSimSource &operator=(const GpsSdrSimSource &) = delete;
+    GpsSdrSimSource(GpsSdrSimSource &&) = delete;
+    GpsSdrSimSource &operator=(GpsSdrSimSource &&) = delete;
 
     /** @brief Initialize from source config.
      *  @param input Source configuration.

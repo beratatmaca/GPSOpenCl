@@ -6,13 +6,9 @@
 
 using namespace GPSOpenCl;
 
-
-
-
-
-Settings::Settings()
+Settings::Settings() : m_confFileName("DefaultConf.ini")
 {
-    m_confFileName = "DefaultConf.ini";
+
     configuration.rawDataSettings.dataSource = "capture.dat";
     configuration.rawDataSettings.samplingFrequency = 4096000.0f;
     configuration.rawDataSettings.numberOfSamplesPerCode = 4096;
@@ -21,30 +17,18 @@ Settings::Settings()
     configuration.acquisitionSettings.acquisitionDopplerSearchRange = 500;
 }
 
-
-
-
-
-Settings::~Settings()
-{
-}
-
-
-
-
+Settings::~Settings() = default;
 
 void Settings::captureSettings()
 {
     std::ifstream confFile;
     std::string line;
 
-    std::vector<std::string> candidatePaths = {
-        m_confFileName,
-        "build/Source/" + m_confFileName,
-        "Tests/Scripts/ConfigurationFile/" + m_confFileName,
-        "../Tests/Scripts/ConfigurationFile/" + m_confFileName,
-        "../../Tests/Scripts/ConfigurationFile/" + m_confFileName
-    };
+    const std::vector<std::string> candidatePaths = {m_confFileName,
+                                                     "build/Source/" + m_confFileName,
+                                                     "Tests/Scripts/ConfigurationFile/" + m_confFileName,
+                                                     "../Tests/Scripts/ConfigurationFile/" + m_confFileName,
+                                                     "../../Tests/Scripts/ConfigurationFile/" + m_confFileName};
 
     bool opened = false;
     for (const auto &path : candidatePaths)
@@ -59,7 +43,7 @@ void Settings::captureSettings()
 
     if (!opened)
     {
-        std::cerr << "Error in opening the configuration file. Using default parameters." << std::endl;
+        std::cerr << "Error in opening the configuration file. Using default parameters." << '\n';
     }
     else
     {
@@ -73,56 +57,49 @@ void Settings::captureSettings()
     updateConfigurationStruct();
 }
 
-
-
-
-
-
-void Settings::fillMap(std::string line)
+void Settings::fillMap(const std::string &line)
 {
     std::string::size_type keyPos = 0;
-    std::string::size_type keyEnd;
-    std::string::size_type valPos;
-    std::string::size_type valEnd;
+    std::string::size_type keyEnd = 0;
+    std::string::size_type valPos = 0;
+    std::string::size_type valEnd = 0;
     std::string key;
     std::string value;
 
     while ((keyEnd = line.find('=', keyPos)) != std::string::npos)
     {
-        if ((valPos = line.find_first_not_of("= ", keyEnd)) == std::string::npos)
+        valPos = line.find_first_not_of("= ", keyEnd);
+        if (valPos == std::string::npos)
         {
             break;
         }
-        else
-        {
-            valEnd = line.length();
 
-            key = line.substr(keyPos, keyEnd - keyPos);
-            value = line.substr(valPos, valEnd - valPos);
+        valEnd = line.length();
 
-            key = trim(key, " ");
-            value = trim(value, " ");
+        key = line.substr(keyPos, keyEnd - keyPos);
+        value = line.substr(valPos, valEnd - valPos);
 
-            m_configurationMap.emplace(key, value);
-        }
+        key = trim(key, " ");
+        value = trim(value, " ");
+
+        m_configurationMap.emplace(key, value);
+
         keyPos = valEnd;
     }
 }
 
-
-
-
-
 void Settings::updateConfigurationStruct()
 {
-    if (m_configurationMap["DataSource"] != "")
+    if (!m_configurationMap["DataSource"].empty())
     {
         configuration.rawDataSettings.dataSource = m_configurationMap["DataSource"];
-        snprintf(configuration.sourceInput.fifoPath, sizeof(configuration.sourceInput.fifoPath), "%s",
+        snprintf(configuration.sourceInput.fifoPath,
+                 sizeof(configuration.sourceInput.fifoPath),
+                 "%s",
                  m_configurationMap["DataSource"].c_str());
     }
 
-    if (m_configurationMap["SamplingFrequency"] != "")
+    if (!m_configurationMap["SamplingFrequency"].empty())
     {
         try
         {
@@ -131,27 +108,28 @@ void Settings::updateConfigurationStruct()
                 configuration.rawDataSettings.samplingFrequency / (GPS_CA_CODE_FREQUENCY_HZ / GPS_CA_CODE_LENGTH)));
             configuration.sourceInput.samplingRate = configuration.rawDataSettings.samplingFrequency;
             configuration.acquisitionInput.samplingFrequency = configuration.rawDataSettings.samplingFrequency;
-            configuration.acquisitionInput.numberOfSamplesPerCode = configuration.rawDataSettings.numberOfSamplesPerCode;
+            configuration.acquisitionInput.numberOfSamplesPerCode =
+                configuration.rawDataSettings.numberOfSamplesPerCode;
             configuration.trackingInput.samplingFrequency = configuration.rawDataSettings.samplingFrequency;
             configuration.trackingInput.numberOfSamplesPerCode = configuration.rawDataSettings.numberOfSamplesPerCode;
 
-            int samplesPerCode = configuration.rawDataSettings.numberOfSamplesPerCode;
-            bool isPowerOfTwo = samplesPerCode > 0 && (samplesPerCode & (samplesPerCode - 1)) == 0;
+            const int samplesPerCode = configuration.rawDataSettings.numberOfSamplesPerCode;
+            const bool isPowerOfTwo = samplesPerCode > 0 && (samplesPerCode & (samplesPerCode - 1)) == 0;
             if (!isPowerOfTwo)
             {
                 std::cerr << "Warning: SamplingFrequency=" << configuration.rawDataSettings.samplingFrequency
                           << " yields " << samplesPerCode << " samples per code period, which is not a power of "
                           << "two. The FFT-based acquisition/lookup-table path requires a power-of-two length and "
-                          << "will fail for this configuration." << std::endl;
+                          << "will fail for this configuration." << '\n';
             }
         }
         catch (const std::exception &)
         {
-            std::cerr << "Invalid SamplingFrequency value in config, using default." << std::endl;
+            std::cerr << "Invalid SamplingFrequency value in config, using default." << '\n';
         }
     }
 
-    if (m_configurationMap["AcquisitionMinimumDoppler"] != "")
+    if (!m_configurationMap["AcquisitionMinimumDoppler"].empty())
     {
         try
         {
@@ -162,11 +140,11 @@ void Settings::updateConfigurationStruct()
         }
         catch (const std::exception &)
         {
-            std::cerr << "Invalid AcquisitionMinimumDoppler value in config, using default." << std::endl;
+            std::cerr << "Invalid AcquisitionMinimumDoppler value in config, using default." << '\n';
         }
     }
 
-    if (m_configurationMap["AcquisitionMaximumDoppler"] != "")
+    if (!m_configurationMap["AcquisitionMaximumDoppler"].empty())
     {
         try
         {
@@ -177,11 +155,11 @@ void Settings::updateConfigurationStruct()
         }
         catch (const std::exception &)
         {
-            std::cerr << "Invalid AcquisitionMaximumDoppler value in config, using default." << std::endl;
+            std::cerr << "Invalid AcquisitionMaximumDoppler value in config, using default." << '\n';
         }
     }
 
-    if (m_configurationMap["AcquisitionDopplerSearchRange"] != "")
+    if (!m_configurationMap["AcquisitionDopplerSearchRange"].empty())
     {
         try
         {
@@ -192,11 +170,11 @@ void Settings::updateConfigurationStruct()
         }
         catch (const std::exception &)
         {
-            std::cerr << "Invalid AcquisitionDopplerSearchRange value in config, using default." << std::endl;
+            std::cerr << "Invalid AcquisitionDopplerSearchRange value in config, using default." << '\n';
         }
     }
 
-    if (m_configurationMap["PllBandwidthHz"] != "")
+    if (!m_configurationMap["PllBandwidthHz"].empty())
     {
         try
         {
@@ -204,11 +182,11 @@ void Settings::updateConfigurationStruct()
         }
         catch (const std::exception &)
         {
-            std::cerr << "Invalid PllBandwidthHz value in config, using default." << std::endl;
+            std::cerr << "Invalid PllBandwidthHz value in config, using default." << '\n';
         }
     }
 
-    if (m_configurationMap["DllBandwidthHz"] != "")
+    if (!m_configurationMap["DllBandwidthHz"].empty())
     {
         try
         {
@@ -216,11 +194,11 @@ void Settings::updateConfigurationStruct()
         }
         catch (const std::exception &)
         {
-            std::cerr << "Invalid DllBandwidthHz value in config, using default." << std::endl;
+            std::cerr << "Invalid DllBandwidthHz value in config, using default." << '\n';
         }
     }
 
-    if (m_configurationMap["FllBandwidthHz"] != "")
+    if (!m_configurationMap["FllBandwidthHz"].empty())
     {
         try
         {
@@ -228,11 +206,11 @@ void Settings::updateConfigurationStruct()
         }
         catch (const std::exception &)
         {
-            std::cerr << "Invalid FllBandwidthHz value in config, using default." << std::endl;
+            std::cerr << "Invalid FllBandwidthHz value in config, using default." << '\n';
         }
     }
 
-    if (m_configurationMap["RateAidBandwidthHz"] != "")
+    if (!m_configurationMap["RateAidBandwidthHz"].empty())
     {
         try
         {
@@ -240,11 +218,11 @@ void Settings::updateConfigurationStruct()
         }
         catch (const std::exception &)
         {
-            std::cerr << "Invalid RateAidBandwidthHz value in config, using default." << std::endl;
+            std::cerr << "Invalid RateAidBandwidthHz value in config, using default." << '\n';
         }
     }
 
-    if (m_configurationMap["FllPullInBlocks"] != "")
+    if (!m_configurationMap["FllPullInBlocks"].empty())
     {
         try
         {
@@ -252,11 +230,11 @@ void Settings::updateConfigurationStruct()
         }
         catch (const std::exception &)
         {
-            std::cerr << "Invalid FllPullInBlocks value in config, using default." << std::endl;
+            std::cerr << "Invalid FllPullInBlocks value in config, using default." << '\n';
         }
     }
 
-    if (m_configurationMap["FixOutputIntervalBlocks"] != "")
+    if (!m_configurationMap["FixOutputIntervalBlocks"].empty())
     {
         try
         {
@@ -265,17 +243,10 @@ void Settings::updateConfigurationStruct()
         }
         catch (const std::exception &)
         {
-            std::cerr << "Invalid FixOutputIntervalBlocks value in config, using default." << std::endl;
+            std::cerr << "Invalid FixOutputIntervalBlocks value in config, using default." << '\n';
         }
     }
 }
-
-
-
-
-
-
-
 
 std::string Settings::trim(const std::string &str, const std::string &whitespace = " \t")
 {

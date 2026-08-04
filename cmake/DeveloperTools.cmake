@@ -7,7 +7,8 @@ file(GLOB GPSOPENCL_FORMAT_SOURCES
 )
 
 # clang-format: apply or verify project style on Source/ and Tests/.
-find_program(CLANG_FORMAT_EXE clang-format)
+# Prefer the newest installed LLVM release; unversioned name is the fallback.
+find_program(CLANG_FORMAT_EXE NAMES clang-format-20 clang-format-19 clang-format-18 clang-format)
 if(CLANG_FORMAT_EXE)
     add_custom_target(format
         COMMAND ${CLANG_FORMAT_EXE} -i ${GPSOPENCL_FORMAT_SOURCES}
@@ -26,15 +27,24 @@ else()
 endif()
 
 # clang-tidy: lint Source/*.cpp against build/compile_commands.json.
-find_program(CLANG_TIDY_EXE clang-tidy)
+# Invoked once per file (not one batched call) since clang-tidy has been observed
+# to intermittently corrupt parsing of later files when given many files at once.
+# Prefer the newest installed LLVM release; unversioned name is the fallback.
+find_program(CLANG_TIDY_EXE NAMES clang-tidy-20 clang-tidy-19 clang-tidy-18 clang-tidy)
 if(CLANG_TIDY_EXE)
     file(GLOB GPSOPENCL_TIDY_SOURCES ${CMAKE_SOURCE_DIR}/Source/*.cpp)
     add_custom_target(tidy
-        COMMAND ${CLANG_TIDY_EXE} -p ${CMAKE_BINARY_DIR} ${GPSOPENCL_TIDY_SOURCES}
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         COMMENT "Running clang-tidy over Source/"
-        VERBATIM
     )
+    foreach(GPSOPENCL_TIDY_FILE ${GPSOPENCL_TIDY_SOURCES})
+        add_custom_command(
+            TARGET tidy
+            POST_BUILD
+            COMMAND ${CLANG_TIDY_EXE} -p ${CMAKE_BINARY_DIR} ${GPSOPENCL_TIDY_FILE}
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            VERBATIM
+        )
+    endforeach()
 else()
     message(STATUS "clang-tidy not found; 'tidy' target unavailable")
 endif()
