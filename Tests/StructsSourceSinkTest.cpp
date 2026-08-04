@@ -75,7 +75,7 @@ TEST(ProfilerTest, MeasureStageTime)
 
     profiler.startBlock(1, 0.001);
     {
-        Profiler::ScopedTimer timer(profiler, "acquisition");
+        Profiler::ScopedTimer timer(profiler, Profiler::Stage::Acquisition);
     }
     ProfilerOutput profOut = profiler.finishBlock();
 

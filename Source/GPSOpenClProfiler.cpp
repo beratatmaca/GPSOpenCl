@@ -18,23 +18,22 @@ void Profiler::startBlock(uint32_t blockIndex, double timestamp)
     m_blockStart = std::chrono::high_resolution_clock::now();
 }
 
-void Profiler::recordStageTimeMs(const std::string &stageName, double timeMs)
+void Profiler::recordStageTimeMs(Stage stage, double timeMs)
 {
-    if (stageName == "acquisition")
+    switch (stage)
     {
-        m_currentOutput.acquisitionTimeMs = timeMs;
-    }
-    else if (stageName == "tracking")
-    {
-        m_currentOutput.trackingTimeMs = timeMs;
-    }
-    else if (stageName == "navDecode")
-    {
-        m_currentOutput.navDecodeTimeMs = timeMs;
-    }
-    else if (stageName == "pvtSolve")
-    {
-        m_currentOutput.pvtSolveTimeMs = timeMs;
+        case Stage::Acquisition:
+            m_currentOutput.acquisitionTimeMs = timeMs;
+            break;
+        case Stage::Tracking:
+            m_currentOutput.trackingTimeMs = timeMs;
+            break;
+        case Stage::NavDecode:
+            m_currentOutput.navDecodeTimeMs = timeMs;
+            break;
+        case Stage::PvtSolve:
+            m_currentOutput.pvtSolveTimeMs = timeMs;
+            break;
     }
 }
 

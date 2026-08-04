@@ -26,6 +26,26 @@ bool FileSource::initialize(const SourceInput &input)
         samplesPerBlock =
             static_cast<size_t>(std::round(input.samplingRate / (GPS_CA_CODE_FREQUENCY_HZ / GPS_CA_CODE_LENGTH)));
     }
+
+    if (filePath.find(".bin") != std::string::npos)
+    {
+        m_samplesPerBlock = samplesPerBlock;
+        m_binFile.open(filePath, std::ios::binary);
+        if (!m_binFile.is_open())
+        {
+            return false;
+        }
+
+        m_binFile.seekg(0, std::ios::end);
+        const size_t fileSize = m_binFile.tellg();
+        m_binFile.seekg(0, std::ios::beg);
+
+        m_totalSamples = fileSize / 2;
+        m_byteBuffer.resize(samplesPerBlock * 2);
+        m_streaming = true;
+        return m_totalSamples > 0;
+    }
+
     return loadAllSamples(filePath, samplesPerBlock);
 }
 
@@ -34,6 +54,7 @@ bool FileSource::loadAllSamples(const std::string &filePath, size_t samplesPerBl
     m_samplesPerBlock = samplesPerBlock;
     m_allSamples.clear();
     m_currentBlockIndex = 0;
+    m_streaming = false;
 
     if (filePath.find(".bin") != std::string::npos)
     {
@@ -98,13 +119,44 @@ bool FileSource::readBlock(ComplexFloatVector &outputSamples, SourceOutput &tele
     {
         m_samplesPerBlock = 4096;
     }
-    const size_t startIdx = m_currentBlockIndex * m_samplesPerBlock;
-    if (startIdx + m_samplesPerBlock > m_allSamples.size())
-    {
-        return false;
-    }
 
-    outputSamples.assign(m_allSamples.begin() + startIdx, m_allSamples.begin() + startIdx + m_samplesPerBlock);
+    if (m_streaming)
+    {
+        const size_t startIdx = m_currentBlockIndex * m_samplesPerBlock;
+        if (startIdx + m_samplesPerBlock > m_totalSamples)
+        {
+            return false;
+        }
+
+        const size_t bytesNeeded = m_samplesPerBlock * 2;
+        if (m_byteBuffer.size() < bytesNeeded)
+        {
+            m_byteBuffer.resize(bytesNeeded);
+        }
+        m_binFile.read(reinterpret_cast<char *>(m_byteBuffer.data()), static_cast<std::streamsize>(bytesNeeded));
+        if (static_cast<size_t>(m_binFile.gcount()) < bytesNeeded)
+        {
+            return false;
+        }
+
+        outputSamples.resize(m_samplesPerBlock);
+        for (size_t i = 0; i < m_samplesPerBlock; i++)
+        {
+            auto re = static_cast<float>(m_byteBuffer[2 * i]);
+            auto im = static_cast<float>(m_byteBuffer[(2 * i) + 1]);
+            outputSamples[i] = std::complex<float>(re, im);
+        }
+    }
+    else
+    {
+        const size_t startIdx = m_currentBlockIndex * m_samplesPerBlock;
+        if (startIdx + m_samplesPerBlock > m_allSamples.size())
+        {
+            return false;
+        }
+
+        outputSamples.assign(m_allSamples.begin() + startIdx, m_allSamples.begin() + startIdx + m_samplesPerBlock);
+    }
 
     telemetry.structVersion = STRUCT_VERSION_1;
     telemetry.blockIndex = static_cast<uint32_t>(m_currentBlockIndex);

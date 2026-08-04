@@ -154,11 +154,11 @@ TEST(SingleChannelGroundTruthTest, AcquisitionAndTrackingConvergeForOneChannel)
         channel.trackBlock(block);
     }
 
-    ASSERT_FALSE(sink->trackingOutputs.empty()) << "Expected at least one TrackingOutput to be published";
     EXPECT_EQ(channel.getState(), GPSOpenCl::ChannelState::Tracking)
         << "Expected the channel to reach confirmed Tracking within " << blocksToRun << " blocks";
 
-    const GPSOpenCl::TrackingOutput &lastTracking = sink->trackingOutputs.back();
+    GPSOpenCl::TrackingOutput lastTracking{};
+    ASSERT_TRUE(channel.getTrackingOutput(&lastTracking)) << "Expected tracking state to be available";
     GroundTruthRecord lastTruth = lastRecordForPrn(truth, prn);
     double trackedDopplerDiff = std::fabs(lastTracking.carrierFreqHz - lastTruth.trueDopplerHz);
     EXPECT_LT(trackedDopplerDiff, 50.0) << "PRN " << prn << " tracked Doppler " << lastTracking.carrierFreqHz

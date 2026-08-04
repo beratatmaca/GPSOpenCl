@@ -173,6 +173,8 @@ class NavigationDecoder
      *  @param words30bit Vector of 10 parity-checked 30-bit words. */
     void decodeIonosphericParams(const std::vector<uint32_t> &words30bit);
 
+    std::vector<uint32_t> m_wordsScratch;    ///< Reused word buffer for per-attempt subframe decode.
+
     /** @brief Check exactly one candidate bit position (the current bitOffset) for a parity-valid
      *   subframe at a fixed sample-level bit-edge phase, via tryDecodeAtBitPosition. Advances bitOffset
      *   by 300 on success or by 1 on a failed check (no preamble at this position, or a parity miss),

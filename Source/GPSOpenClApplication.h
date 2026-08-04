@@ -91,11 +91,21 @@ class Application
      *  @return One entry per such channel. */
     std::vector<ChannelDiagnostic> getChannelDiagnostics() const;
 
-    /** @brief Export telemetry to JSON file.
-     *  @param filepath   Output file path.
-     *  @param solution   PVT solution to export.
-     *  @param utcTimeSec Receiver GPS time of week (s), used for the NMEA/timestamp fields. */
-    void exportTelemetryJson(const std::string &filepath, const ReceiverPvtSolution &solution, double utcTimeSec);
+    /** @brief Queue a telemetry JSON export: captures a snapshot of solution and channel state and
+     *   hands it to the output writer thread, which computes satellite orbits and formats the JSON
+     *   off the consumer thread.
+     *  @param filepath    Output file path.
+     *  @param solution    PVT solution to export.
+     *  @param utcTimeSec  Receiver GPS time of week (s), used for the NMEA/timestamp fields.
+     *  @param ggaSentence Pre-generated GGA sentence, reused instead of regenerating.
+     *  @param rmcSentence Pre-generated RMC sentence, reused instead of regenerating.
+     *  @param gsaSentence Pre-generated GSA sentence, reused instead of regenerating. */
+    void exportTelemetryJson(const std::string &filepath,
+                             const ReceiverPvtSolution &solution,
+                             double utcTimeSec,
+                             const std::string &ggaSentence,
+                             const std::string &rmcSentence,
+                             const std::string &gsaSentence);
 
     /** @brief Set telemetry sink.
      *  @param sink Sink implementation. */
@@ -127,18 +137,52 @@ class Application
      *   thread for channel-state finalization. */
     struct AcquisitionResult
     {
-        int channelIndex{0};        ///< Channel index (0-based, PRN - 1) that was searched.
-        double correlateMs{0.0};    ///< Wall-clock duration of the correlate() call (ms).
+        int channelIndex{0};                 ///< Channel index (0-based, PRN - 1) that was searched.
+        double correlateMs{0.0};             ///< Wall-clock duration of the correlate() call (ms).
+        ComplexFloatVector recycledInput;    ///< Job's sample buffer, returned so its allocation is reused.
+    };
+
+    /** @brief Per-satellite state captured for deferred telemetry JSON formatting. */
+    struct SatelliteTelemetry
+    {
+        int prn{0};                  ///< Satellite PRN.
+        bool acquired{false};        ///< True if the channel is acquired.
+        float cn0{0.0f};             ///< Acquisition C/N0 estimate (dB-Hz).
+        float doppler{0.0f};         ///< Acquired Doppler (Hz).
+        bool computeOrbit{false};    ///< True if ephemeris and transmitTime are valid for az/el.
+        GpsEphemeris ephemeris{};    ///< Decoded ephemeris for orbit computation.
+        double transmitTime{0.0};    ///< Transmit time for orbit computation (s).
+    };
+
+    /** @brief Snapshot of everything the telemetry JSON needs, captured cheaply on the consumer
+     *   thread so orbit computation and string formatting run on the output writer thread. */
+    struct TelemetrySnapshot
+    {
+        ReceiverPvtSolution solution{};                ///< PVT solution.
+        double utcTimeSec{0.0};                        ///< Receiver GPS time of week (s).
+        std::vector<int> activePrns;                   ///< PRNs of acquired channels.
+        std::vector<SatelliteTelemetry> satellites;    ///< Per-satellite state.
+        std::string ggaSentence;                       ///< Pre-generated GGA sentence.
+        std::string rmcSentence;                       ///< Pre-generated RMC sentence.
+        std::string gsaSentence;                       ///< Pre-generated GSA sentence.
     };
 
     /** @brief One pending asynchronous text write: either a full file overwrite or a console print,
-     *   so the consumer thread never blocks on disk or stdout I/O. */
+     *   so the consumer thread never blocks on disk or stdout I/O. A job carrying a telemetry
+     *   snapshot has its JSON formatted on the writer thread before the file write. */
     struct AsyncOutputJob
     {
-        bool isConsole{false};    ///< True: write content to stdout. False: overwrite filePath.
-        std::string filePath;     ///< Target file path (unused if isConsole).
-        std::string content;      ///< Text to write.
+        bool isConsole{false};                           ///< True: write content to stdout. False: overwrite filePath.
+        std::string filePath;                            ///< Target file path (unused if isConsole).
+        std::string content;                             ///< Text to write.
+        std::unique_ptr<TelemetrySnapshot> telemetry;    ///< Deferred telemetry snapshot, or null.
     };
+
+    /** @brief Format a telemetry snapshot as JSON. Runs on the output writer thread; performs the
+     *   per-satellite orbit and azimuth/elevation computation.
+     *  @param snapshot Captured telemetry state.
+     *  @return JSON document text. */
+    static std::string formatTelemetryJson(const TelemetrySnapshot &snapshot);
 
     /** @brief Initialize all 32 satellite channels. */
     void initializeChannels();
@@ -169,15 +213,19 @@ class Application
      *   arrived Prompt samples continuously. */
     void updateChannelNavigation();
 
-    /** @brief Track channels in [startIdx, endIdx). Used as the per-worker unit of the tracking pool.
-     *  @param input    IQ samples.
-     *  @param startIdx First channel index (inclusive).
-     *  @param endIdx   Last channel index (exclusive). */
-    void trackChannelRange(const ComplexFloatVector &input, int startIdx, int endIdx);
+    /** @brief Publish every active channel's TrackingOutput through the sink. Runs on the
+     *   dispatching thread after the tracking barrier, so publish cost never extends the barrier. */
+    void publishTrackingOutputs();
 
-    /** @brief Persistent worker thread body: waits for a tracking dispatch, processes its channel
-     *   range, and reports completion. Avoids spawning threads on every block.
-     *  @param workerIndex Index of this worker, used to derive its channel range. */
+    /** @brief Pull channel indices from the shared dispatch cursor and track each one until the
+     *   active-channel list is exhausted. Used as the per-worker unit of the tracking pool, so load
+     *   balances across workers regardless of which PRNs are active.
+     *  @param input IQ samples. */
+    void trackFromCursor(const ComplexFloatVector &input);
+
+    /** @brief Persistent worker thread body: waits for a tracking dispatch, pulls channels from the
+     *   shared cursor, and reports completion. Avoids spawning threads on every block.
+     *  @param workerIndex Index of this worker, used for its duration telemetry slot. */
     void workerLoop(int workerIndex);
 
     /** @brief Start the persistent tracking thread pool. */
@@ -207,6 +255,8 @@ class Application
     std::condition_variable m_startCv;                          ///< Signals workers that a new range is ready.
     std::condition_variable m_doneCv;                           ///< Signals the dispatcher that all workers finished.
     const ComplexFloatVector *m_currentTrackInput{nullptr};     ///< Block being tracked by the current dispatch.
+    std::vector<int> m_activeChannels;                          ///< Channel indices to track this dispatch.
+    std::atomic<int> m_channelCursor{0};                        ///< Next m_activeChannels slot a worker should take.
     std::vector<double> m_workerDurationMs;    ///< Per-worker wall-clock time in trackChannelRange this
                                                ///< block (ms); each worker writes only its own index.
     int m_generation{0};        ///< Incremented on each new dispatch; workers compare against their last-seen value.
@@ -214,6 +264,7 @@ class Application
     bool m_shutdownWorkers{false};                                  ///< Set to stop all workers during destruction.
     int m_numWorkers{0};                                            ///< Active worker count (0 or 1 disables the pool).
 
+    ComplexFloatVector m_acqInputPool;                              ///< Recycled buffer for acquisition job snapshots.
     std::thread m_acquisitionThread;                                ///< Background acquisition worker thread.
     BoundedQueue<AcquisitionJob> m_acquisitionJobQueue{1};          ///< Consumer-to-worker job handoff (one in flight).
     BoundedQueue<AcquisitionResult> m_acquisitionResultQueue{4};    ///< Worker-to-consumer result handoff.

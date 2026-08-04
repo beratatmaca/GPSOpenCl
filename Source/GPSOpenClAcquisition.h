@@ -65,14 +65,6 @@ class Acquisition
      *  @return Number of reference spectra (a divisor of the bin resolution ratio, >= 1). */
     int computeReuseFactor() const;
 
-    /** @brief Circularly shift a frequency-domain spectrum by whole FFT bins. Reproduces exactly (up to
-     *   floating-point rounding) the spectrum of the same time-domain signal additionally modulated by a
-     *   carrier shiftBins * (samplingFrequency / length) Hz higher, per the DFT shift theorem.
-     *  @param input     Reference spectrum, length N.
-     *  @param shiftBins Whole-bin shift amount (0 <= shiftBins < N assumed after reduction).
-     *  @param output    Shifted spectrum, length N. */
-    static void circularShiftFreqDomain(const ComplexFloatVector &input, int shiftBins, ComplexFloatVector *output);
-
     AcquisitionInput m_inputConfig;                     ///< Input parameters.
     std::vector<ComplexFloatVector> m_dopplerSearch;    ///< Pre-computed Doppler replicas.
     int m_numberOfFreqencyBins;                         ///< Number of Doppler bins.

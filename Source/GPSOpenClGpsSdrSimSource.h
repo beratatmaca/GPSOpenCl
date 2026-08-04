@@ -6,7 +6,9 @@
  */
 
 #include "GPSOpenClSource.h"
+#include <cstdint>
 #include <string>
+#include <vector>
 
 namespace GPSOpenCl
 {
@@ -38,14 +40,16 @@ class GpsSdrSimSource : public Source
     bool sendControlCommand(const std::string &command);
 
   private:
-    SourceInput m_inputConfig;      ///< Source configuration.
-    std::string m_dataFifoPath;     ///< Data FIFO path.
-    std::string m_ctrlFifoPath;     ///< Control FIFO path.
-    int m_dataFd{-1};               ///< Data FIFO file descriptor.
-    int m_ctrlFd{-1};               ///< Control FIFO file descriptor.
-    uint32_t m_blockIndex{0};       ///< Current block index.
-    uint32_t m_underrunCount{0};    ///< FIFO underrun count.
-    uint32_t m_overrunCount{0};     ///< FIFO overrun count.
+    SourceInput m_inputConfig;           ///< Source configuration.
+    std::string m_dataFifoPath;          ///< Data FIFO path.
+    std::string m_ctrlFifoPath;          ///< Control FIFO path.
+    int m_dataFd{-1};                    ///< Data FIFO file descriptor.
+    int m_ctrlFd{-1};                    ///< Control FIFO file descriptor.
+    uint32_t m_blockIndex{0};            ///< Current block index.
+    uint32_t m_underrunCount{0};         ///< FIFO underrun count.
+    uint32_t m_overrunCount{0};          ///< FIFO overrun count.
+    size_t m_samplesPerBlock{4096};      ///< Samples per block, computed once in initialize().
+    std::vector<int8_t> m_byteBuffer;    ///< Reused staging buffer for raw FIFO bytes.
 };
 }
 

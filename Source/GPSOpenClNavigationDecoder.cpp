@@ -1,6 +1,7 @@
 #include "GPSOpenClNavigationDecoder.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 
 using namespace GPSOpenCl;
@@ -401,23 +402,27 @@ bool NavigationDecoder::tryDecodeAtBitPosition(int svId,
 
     hadEnoughData = true;
 
-    std::vector<bool> bits;
-    bits.reserve(300);
-    for (int i = 0; i < 300; i++)
+    auto demodulateBit = [&](size_t bitIndex) -> bool
     {
         float sumRe = 0.0f;
-        const size_t base = startSample + (static_cast<size_t>(i) * 20);
+        const size_t base = startSample + (bitIndex * 20);
         for (int k = 0; k < 20; k++)
         {
             sumRe += promptHistory[base + k].real();
         }
-        bits.push_back(sumRe > 0.0f);
+        return sumRe > 0.0f;
+    };
+
+    std::array<bool, 300> bits{};
+    for (size_t i = 0; i < 8; i++)
+    {
+        bits[i] = demodulateBit(i);
     }
 
     uint8_t byteVal = 0;
-    for (int b = 0; b < 8; b++)
+    for (size_t b = 0; b < 8; b++)
     {
-        byteVal = (byteVal << 1) | (bits[static_cast<size_t>(b)] ? 1u : 0u);
+        byteVal = (byteVal << 1) | (bits[b] ? 1u : 0u);
     }
 
     bool inverted = false;
@@ -432,6 +437,11 @@ bool NavigationDecoder::tryDecodeAtBitPosition(int svId,
     else
     {
         return false;
+    }
+
+    for (size_t i = 8; i < 300; i++)
+    {
+        bits[i] = demodulateBit(i);
     }
 
     auto bitAt = [&](size_t idx) -> bool
@@ -465,7 +475,8 @@ bool NavigationDecoder::tryDecodeAtBitPosition(int svId,
         }
     }
 
-    std::vector<uint32_t> words(10, 0);
+    m_wordsScratch.assign(10, 0);
+    std::vector<uint32_t> &words = m_wordsScratch;
     for (int w = 0; w < 10; w++)
     {
         const size_t wordStartBit = static_cast<size_t>(w) * 30;

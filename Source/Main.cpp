@@ -128,7 +128,7 @@ int main(int argc, char **argv)
                     {
                         break;
                     }
-                    if (!blockQueue.push(block))
+                    if (!blockQueue.push(std::move(block)))
                     {
                         break;
                     }

@@ -8,8 +8,8 @@
 #include "GPSOpenClSink.h"
 #include "GPSOpenClStructs.h"
 #include <chrono>
+#include <cstdint>
 #include <memory>
-#include <string>
 #include <utility>
 
 namespace GPSOpenCl
@@ -18,6 +18,16 @@ namespace GPSOpenCl
 class Profiler
 {
   public:
+    /** @brief Pipeline stage identifier, used instead of string keys so recording a stage timing
+     *   costs no allocation or string comparison. */
+    enum class Stage : std::uint8_t
+    {
+        Acquisition,    ///< Acquisition correlate stage.
+        Tracking,       ///< Tracking stage.
+        NavDecode,      ///< Navigation decode stage.
+        PvtSolve        ///< PVT solve stage.
+    };
+
     Profiler();
     ~Profiler();
     Profiler(const Profiler &) = delete;
@@ -39,9 +49,9 @@ class Profiler
     void startBlock(uint32_t blockIndex, double timestamp);
 
     /** @brief Record a stage timing.
-     *  @param stageName Stage name.
-     *  @param timeMs    Stage duration (ms). */
-    void recordStageTimeMs(const std::string &stageName, double timeMs);
+     *  @param stage  Stage identifier.
+     *  @param timeMs Stage duration (ms). */
+    void recordStageTimeMs(Stage stage, double timeMs);
 
     /** @brief Record tracking sub-stage timings for this block.
      *  @param earlyLatePromptGenMs Aggregate earlyLatePromptGen time across active channels (ms).
@@ -61,27 +71,30 @@ class Profiler
      *  @param sink Sink implementation. */
     void setSink(std::shared_ptr<Sink> sink) { m_sink = std::move(sink); }
 
-    /** @brief RAII timer that records stage duration on destruction. */
+    /** @brief RAII timer that records stage duration on destruction. Takes no clock sample at all
+     *   when the profiler is disabled, so a disabled profiler adds no overhead to the timed region. */
     class ScopedTimer
     {
       public:
         /** @brief Start timing a stage.
-         *  @param profiler  Parent profiler.
-         *  @param stageName Stage name. */
-        ScopedTimer(Profiler &profiler, std::string stageName)
-            : m_profiler(profiler),
-              m_stageName(std::move(stageName)),
-              m_start(std::chrono::high_resolution_clock::now())
+         *  @param profiler Parent profiler.
+         *  @param stage    Stage identifier. */
+        ScopedTimer(Profiler &profiler, Stage stage) : m_profiler(profiler), m_stage(stage)
         {
+            if (m_profiler.isEnabled())
+            {
+                m_start = std::chrono::high_resolution_clock::now();
+                m_armed = true;
+            }
         }
 
         ~ScopedTimer()
         {
-            if (m_profiler.isEnabled())
+            if (m_armed && m_profiler.isEnabled())
             {
                 auto end = std::chrono::high_resolution_clock::now();
                 const double durationMs = std::chrono::duration<double, std::milli>(end - m_start).count();
-                m_profiler.recordStageTimeMs(m_stageName, durationMs);
+                m_profiler.recordStageTimeMs(m_stage, durationMs);
             }
         }
 
@@ -92,7 +105,8 @@ class Profiler
 
       private:
         Profiler &m_profiler;                                      ///< Parent profiler.
-        std::string m_stageName;                                   ///< Stage name.
+        Stage m_stage;                                             ///< Stage identifier.
+        bool m_armed{false};                                       ///< True if a start sample was taken.
         std::chrono::high_resolution_clock::time_point m_start;    ///< Start time.
     };
 

@@ -75,11 +75,6 @@ Tracking::Tracking(const Settings::Configuration &conf)
     {
         m_codePhaseStep = m_codeFreq / m_configuration.rawDataSettings.samplingFrequency;
     }
-
-    m_carrSig.resize(m_totalSamples);
-    m_earlyCode.resize(m_totalSamples);
-    m_promptCode.resize(m_totalSamples);
-    m_lateCode.resize(m_totalSamples);
 }
 
 Tracking::Tracking(const TrackingInput &input)
@@ -132,11 +127,6 @@ Tracking::Tracking(const TrackingInput &input)
     {
         m_codePhaseStep = m_codeFreq / m_configuration.rawDataSettings.samplingFrequency;
     }
-
-    m_carrSig.resize(m_totalSamples);
-    m_earlyCode.resize(m_totalSamples);
-    m_promptCode.resize(m_totalSamples);
-    m_lateCode.resize(m_totalSamples);
 }
 
 Tracking::~Tracking() = default;
@@ -179,17 +169,20 @@ void Tracking::doWork(const ComplexFloatVector &input, int prn, ComplexFloatVect
 {
     m_lastChannelState = channelState;
 
-    auto subStageT0 = std::chrono::high_resolution_clock::now();
-    earlyLatePromptGen(prn);
-    auto subStageT1 = std::chrono::high_resolution_clock::now();
-    numericOscillator();
-    auto subStageT2 = std::chrono::high_resolution_clock::now();
-    accumulator(input);
-    auto subStageT3 = std::chrono::high_resolution_clock::now();
-
-    m_earlyLatePromptGenTimeMs = std::chrono::duration<float, std::milli>(subStageT1 - subStageT0).count();
-    m_numericOscillatorTimeMs = std::chrono::duration<float, std::milli>(subStageT2 - subStageT1).count();
-    m_accumulatorTimeMs = std::chrono::duration<float, std::milli>(subStageT3 - subStageT2).count();
+    m_earlyLatePromptGenTimeMs = 0.0f;
+    m_numericOscillatorTimeMs = 0.0f;
+    if (m_timingEnabled)
+    {
+        auto subStageT0 = std::chrono::high_resolution_clock::now();
+        correlator(input, prn);
+        auto subStageT1 = std::chrono::high_resolution_clock::now();
+        m_accumulatorTimeMs = std::chrono::duration<float, std::milli>(subStageT1 - subStageT0).count();
+    }
+    else
+    {
+        correlator(input, prn);
+        m_accumulatorTimeMs = 0.0f;
+    }
 
     if (m_blocksSinceInit < m_fllPullInBlocks)
     {
@@ -230,12 +223,6 @@ void Tracking::doWork(const ComplexFloatVector &input, int prn, ComplexFloatVect
         output->emplace_back(m_Ip, m_Qp);
     }
 
-    if (m_sink)
-    {
-        const TrackingOutput trkOut = getTrackingOutput(prn);
-        m_sink->publishTrackingOutput(trkOut);
-    }
-
     resetAccumulation();
 }
 
@@ -267,30 +254,7 @@ void Tracking::getSubStageTimings(float *earlyLatePromptGenMs, float *numericOsc
     *accumulatorMs = m_accumulatorTimeMs;
 }
 
-void Tracking::earlyLatePromptGen(int prn)
-{
-    const int svIndex = std::clamp(prn - 1, 0, GPS_CA_SV_COUNT - 1);
-    for (int i = 0; i < m_totalSamples; i++)
-    {
-        const double phaseStep = (static_cast<float>(i) * m_codePhaseStep) + m_remCodePhase;
-
-        const int rawEarly = static_cast<int>(std::floor(phaseStep - 0.5 + 1023.0));
-        const int rawPrompt = static_cast<int>(std::floor(phaseStep));
-        const int rawLate = static_cast<int>(std::floor(phaseStep + 0.5));
-
-        const int earlyIndex = ((rawEarly % GPS_CA_CODE_LENGTH) + GPS_CA_CODE_LENGTH) % GPS_CA_CODE_LENGTH;
-        const int promptIndex = ((rawPrompt % GPS_CA_CODE_LENGTH) + GPS_CA_CODE_LENGTH) % GPS_CA_CODE_LENGTH;
-        const int lateIndex = ((rawLate % GPS_CA_CODE_LENGTH) + GPS_CA_CODE_LENGTH) % GPS_CA_CODE_LENGTH;
-
-        m_earlyCode[i] = m_code.m_caCode[svIndex][earlyIndex];
-        m_promptCode[i] = m_code.m_caCode[svIndex][promptIndex];
-        m_lateCode[i] = m_code.m_caCode[svIndex][lateIndex];
-    }
-    m_remCodePhase =
-        static_cast<float>(std::fmod(m_remCodePhase + (static_cast<float>(m_totalSamples) * m_codePhaseStep), 1023.0));
-}
-
-void Tracking::numericOscillator()
+void Tracking::correlator(const ComplexFloatVector &input, int prn)
 {
     const float samplingFreq = m_configuration.rawDataSettings.samplingFrequency;
     if (samplingFreq <= 0.0f)
@@ -298,49 +262,76 @@ void Tracking::numericOscillator()
         return;
     }
 
-    const double phaseStepRad = 2.0 * M_PI * static_cast<double>(m_carrFreq) / samplingFreq;
+    const int svIndex = std::clamp(prn - 1, 0, GPS_CA_SV_COUNT - 1);
+    const char *caCode = m_code.m_caCode[svIndex];
 
+    const double phaseStepRad = 2.0 * M_PI * static_cast<double>(m_carrFreq) / samplingFreq;
     const std::complex<float> step = std::exp(IMAGINARY_UNIT * static_cast<float>(phaseStepRad));
     std::complex<float> phasor = std::exp(IMAGINARY_UNIT * m_remCarrPhase);
 
-    for (int sample = 0; sample < m_totalSamples; sample++)
-    {
-        m_carrSig[sample] = phasor;
-        phasor *= step;
-    }
-
-    const double finalPhase = (phaseStepRad * m_totalSamples) + m_remCarrPhase;
-    m_remCarrPhase = static_cast<float>(std::fmod(finalPhase, 2.0 * M_PI));
-}
-
-void Tracking::accumulator(const ComplexFloatVector &input)
-{
-    m_Ie = 0.0f;
-    m_Qe = 0.0f;
-    m_Ip = 0.0f;
-    m_Qp = 0.0f;
-    m_Il = 0.0f;
-    m_Ql = 0.0f;
-
     const size_t length = std::min(input.size(), static_cast<size_t>(m_totalSamples));
+
+    float ie = 0.0f;
+    float qe = 0.0f;
+    float ip = 0.0f;
+    float qp = 0.0f;
+    float il = 0.0f;
+    float ql = 0.0f;
 
     for (size_t i = 0; i < length; i++)
     {
-        const std::complex<float> carrConj = std::conj(m_carrSig[i]);
-        const std::complex<float> wipeoff = input[i] * carrConj;
+        const float phase = (static_cast<float>(i) * m_codePhaseStep) + m_remCodePhase;
+        int rawPrompt = static_cast<int>(phase);
+        rawPrompt -= (static_cast<float>(rawPrompt) > phase) ? 1 : 0;
+        const float frac = phase - static_cast<float>(rawPrompt);
+
+        int promptIndex = rawPrompt;
+        while (promptIndex >= GPS_CA_CODE_LENGTH)
+        {
+            promptIndex -= GPS_CA_CODE_LENGTH;
+        }
+        while (promptIndex < 0)
+        {
+            promptIndex += GPS_CA_CODE_LENGTH;
+        }
+
+        int earlyIndex = (frac < 0.5f) ? promptIndex - 1 : promptIndex;
+        earlyIndex += (earlyIndex < 0) ? GPS_CA_CODE_LENGTH : 0;
+        int lateIndex = (frac < 0.5f) ? promptIndex : promptIndex + 1;
+        lateIndex -= (lateIndex >= GPS_CA_CODE_LENGTH) ? GPS_CA_CODE_LENGTH : 0;
+
+        const float earlyChip = caCode[earlyIndex];
+        const float promptChip = caCode[promptIndex];
+        const float lateChip = caCode[lateIndex];
+
+        const std::complex<float> wipeoff = input[i] * std::conj(phasor);
+        phasor *= step;
 
         const float re = wipeoff.real();
         const float im = wipeoff.imag();
 
-        m_Ie += re * m_earlyCode[i];
-        m_Qe += im * m_earlyCode[i];
+        ie += re * earlyChip;
+        qe += im * earlyChip;
 
-        m_Ip += re * m_promptCode[i];
-        m_Qp += im * m_promptCode[i];
+        ip += re * promptChip;
+        qp += im * promptChip;
 
-        m_Il += re * m_lateCode[i];
-        m_Ql += im * m_lateCode[i];
+        il += re * lateChip;
+        ql += im * lateChip;
     }
+
+    m_Ie = ie;
+    m_Qe = qe;
+    m_Ip = ip;
+    m_Qp = qp;
+    m_Il = il;
+    m_Ql = ql;
+
+    m_remCodePhase =
+        static_cast<float>(std::fmod(m_remCodePhase + (static_cast<float>(m_totalSamples) * m_codePhaseStep), 1023.0));
+
+    const double finalPhase = (phaseStepRad * m_totalSamples) + m_remCarrPhase;
+    m_remCarrPhase = static_cast<float>(std::fmod(finalPhase, 2.0 * M_PI));
 }
 
 float Tracking::computeFllError() const

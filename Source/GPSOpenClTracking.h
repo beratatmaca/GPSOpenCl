@@ -10,7 +10,6 @@
 
 #include "GPSOpenClCode.h"
 #include "GPSOpenClSettings.h"
-#include "GPSOpenClSink.h"
 #include "GPSOpenClStructs.h"
 
 namespace GPSOpenCl
@@ -51,15 +50,18 @@ class Tracking
     TrackingOutput getTrackingOutput(int prn) const;
 
     /** @brief Get this instance's most recent doWork() sub-stage timings (ms), for aggregation into
-     *   ProfilerOutput. Values reflect only the last call, not accumulated across blocks.
-     *  @param earlyLatePromptGenMs Output: earlyLatePromptGen duration (ms).
-     *  @param numericOscillatorMs  Output: numericOscillator duration (ms).
-     *  @param accumulatorMs        Output: accumulator duration (ms). */
+     *   ProfilerOutput. Values reflect only the last call, not accumulated across blocks. Replica
+     *   generation, carrier NCO, and accumulation run as one fused correlator pass, so its whole
+     *   duration is reported through accumulatorMs and the first two outputs are always zero.
+     *  @param earlyLatePromptGenMs Output: always zero (stage fused into the correlator pass).
+     *  @param numericOscillatorMs  Output: always zero (stage fused into the correlator pass).
+     *  @param accumulatorMs        Output: fused correlator pass duration (ms). */
     void getSubStageTimings(float *earlyLatePromptGenMs, float *numericOscillatorMs, float *accumulatorMs) const;
 
-    /** @brief Set telemetry sink.
-     *  @param sink Sink implementation. */
-    void setSink(std::shared_ptr<Sink> sink) { m_sink = std::move(sink); }
+    /** @brief Enable or disable the correlator timing clock samples in doWork(), so a disabled
+     *   profiler adds no per-block clock overhead to the tracking workers.
+     *  @param enabled True to take timing samples. */
+    void setTimingEnabled(bool enabled) { m_timingEnabled = enabled; }
 
     /** @brief Get smoothed carrier lock indicator.
      *  @return Value near +1 when phase-locked, near 0 when unlocked. */
@@ -87,16 +89,12 @@ class Tracking
     static float loopFilterTau2(double noiseBandwidthHz);
 
   private:
-    /** @brief Generate Early/Prompt/Late code replicas.
-     *  @param prn Satellite PRN. */
-    void earlyLatePromptGen(int prn);
-
-    /** @brief Generate NCO phase ramp. */
-    void numericOscillator();
-
-    /** @brief Accumulate correlator outputs.
-     *  @param input Carrier-wiped IQ samples. */
-    void accumulator(const ComplexFloatVector &input);
+    /** @brief Fused correlator pass: generates the Early/Prompt/Late code replica indices and the
+     *   carrier NCO phasor incrementally, wipes the carrier off each input sample, and accumulates
+     *   all six correlator sums in a single loop over the block, with no intermediate buffers.
+     *  @param input Raw IQ samples.
+     *  @param prn   Satellite PRN. */
+    void correlator(const ComplexFloatVector &input, int prn);
 
     /** @brief Compute the cross/dot frequency discriminator from consecutive prompt correlator samples.
      *  @return Frequency error estimate (Hz). */
@@ -150,11 +148,9 @@ class Tracking
     Code m_code;                                ///< C/A code generator.
     Settings::Configuration m_configuration;    ///< Application configuration.
     TrackingInput m_inputConfig;                ///< Tracking parameters.
-    std::shared_ptr<Sink> m_sink{nullptr};      ///< Telemetry sink.
 
     int m_totalSamples;                         ///< Samples per code period.
 
-    ComplexFloatVector m_carrSig;               ///< Carrier-wiped signal buffer.
     float m_pllTau1;                            ///< PLL loop filter tau1 (s).
     float m_pllTau2;                            ///< PLL loop filter tau2 (s).
     float m_carrFreqBasis;                      ///< Nominal carrier frequency (Hz).
@@ -174,9 +170,6 @@ class Tracking
     int m_blocksSinceInit;          ///< Blocks processed since last initTrackingState().
     int m_fllPullInBlocks;          ///< Blocks of FLL pull-in before PLL takes over.
 
-    FloatVector m_earlyCode;        ///< Early code replica.
-    FloatVector m_promptCode;       ///< Prompt code replica.
-    FloatVector m_lateCode;         ///< Late code replica.
     float m_dllTau1;                ///< DLL loop filter tau1 (s).
     float m_dllTau2;                ///< DLL loop filter tau2 (s).
     float m_codeFreqBasis;          ///< Nominal code frequency (Hz).
@@ -199,6 +192,7 @@ class Tracking
     float m_codeLockEma;            ///< Smoothed code lock ratio.
     uint32_t m_lastChannelState;    ///< Owning channel's state, for telemetry.
 
+    bool m_timingEnabled{true};     ///< True to take correlator timing samples in doWork().
     float m_earlyLatePromptGenTimeMs{0.0f};    ///< Last doWork() call's earlyLatePromptGen duration (ms).
     float m_numericOscillatorTimeMs{0.0f};     ///< Last doWork() call's numericOscillator duration (ms).
     float m_accumulatorTimeMs{0.0f};           ///< Last doWork() call's accumulator duration (ms).

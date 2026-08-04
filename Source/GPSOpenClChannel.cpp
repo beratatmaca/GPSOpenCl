@@ -77,11 +77,6 @@ void Channel::resetAcquisitionMetrics()
     m_acquisitionPeakRatio = 0.0f;
 }
 
-void Channel::checkAcquisition() const
-{
-    std::cout << "SV ID " << m_svId << " C/N0 : " << m_acquisitionCN0 << "\n";
-}
-
 void Channel::getAcquisitionResults(int *peakIndex,
                                     float *peakValue,
                                     float *peakFrequency,
@@ -111,10 +106,16 @@ void Channel::setAcquired(bool acquired)
 void Channel::setSink(std::shared_ptr<Sink> sink)
 {
     m_sink = std::move(sink);
-    if (m_tracking != nullptr)
+}
+
+bool Channel::getTrackingOutput(TrackingOutput *out) const
+{
+    if (m_tracking == nullptr)
     {
-        m_tracking->setSink(m_sink);
+        return false;
     }
+    *out = m_tracking->getTrackingOutput(m_svId);
+    return true;
 }
 
 void Channel::initTracking(const Settings::Configuration &conf, float dopplerHz, float codePhaseChips)
@@ -122,8 +123,8 @@ void Channel::initTracking(const Settings::Configuration &conf, float dopplerHz,
     if (m_tracking == nullptr)
     {
         m_tracking = std::make_unique<Tracking>(conf);
-        m_tracking->setSink(m_sink);
     }
+    m_tracking->setTimingEnabled(m_trackingTimingEnabled);
     m_tracking->initTrackingState(dopplerHz, codePhaseChips);
     resetNavigationState();
 
@@ -273,8 +274,68 @@ void Channel::evaluateLockState()
     }
 }
 
+void Channel::compactNavigationHistory()
+{
+    if (m_promptHistory.size() < NAV_HISTORY_COMPACT_THRESHOLD)
+    {
+        return;
+    }
+
+    size_t dropSamples = 0;
+    if (m_bitSyncPhase >= 0)
+    {
+        const auto phase = static_cast<size_t>(m_bitSyncPhase);
+        const size_t currentReadSample = phase + (m_navBitOffset * 20);
+        const size_t anchorSample = std::min(m_lastSubframeStartSample, currentReadSample);
+        const size_t margin = phase + 40;
+        if (anchorSample > margin)
+        {
+            dropSamples = ((anchorSample - margin) / 20) * 20;
+        }
+    }
+    else if (!m_bitSyncSearchPositions.empty())
+    {
+        size_t minSearchedBits = m_bitSyncSearchPositions[0];
+        for (const size_t position : m_bitSyncSearchPositions)
+        {
+            minSearchedBits = std::min(minSearchedBits, position);
+        }
+        if (minSearchedBits > 2)
+        {
+            dropSamples = (minSearchedBits - 2) * 20;
+        }
+    }
+
+    if (dropSamples < NAV_HISTORY_COMPACT_MIN_DROP || dropSamples > m_promptHistory.size())
+    {
+        return;
+    }
+
+    const auto dropOffset = static_cast<std::ptrdiff_t>(dropSamples);
+    m_promptHistory.erase(m_promptHistory.begin(), m_promptHistory.begin() + dropOffset);
+    m_codePhaseHistory.erase(m_codePhaseHistory.begin(), m_codePhaseHistory.begin() + dropOffset);
+    m_cumulativeDriftChipsHistory.erase(m_cumulativeDriftChipsHistory.begin(),
+                                        m_cumulativeDriftChipsHistory.begin() + dropOffset);
+
+    const size_t dropBits = dropSamples / 20;
+    if (m_bitSyncPhase >= 0)
+    {
+        m_lastSubframeStartSample -= dropSamples;
+        m_navBitOffset -= dropBits;
+    }
+    else
+    {
+        for (size_t &position : m_bitSyncSearchPositions)
+        {
+            position = (position > dropBits) ? position - dropBits : 0;
+        }
+    }
+}
+
 bool Channel::updateNavigation(NavigationDecoder &decoder)
 {
+    compactNavigationHistory();
+
     GpsEphemeris ephem = GpsEphemeris();
     size_t subframeStartSample = 0;
     if (!decoder.processPromptSignal(m_svId,

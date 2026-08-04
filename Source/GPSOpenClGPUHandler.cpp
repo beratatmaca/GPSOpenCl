@@ -124,7 +124,7 @@ int GpuHandler::buildProgram()
             return m_error;
         }
 
-        m_error = clBuildProgram(m_programList[i], 0, nullptr, nullptr, nullptr, nullptr);
+        m_error = clBuildProgram(m_programList[i], 0, nullptr, "-cl-mad-enable -cl-denorms-are-zero", nullptr, nullptr);
         if (m_error < 0)
         {
 

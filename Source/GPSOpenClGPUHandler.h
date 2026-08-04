@@ -34,13 +34,14 @@ class GpuHandler
     /** @brief Acquisition kernel index. */
     using GPSOpenClAcquisitionKernelListType = enum GPSOpenClAcquisitionKernelList : std::uint8_t
     {
-        FFTInit = 0,              ///< FFT initialization kernel.
-        FFTStage,                 ///< FFT stage kernel.
-        FFTScale,                 ///< FFT IFFT scaling kernel.
-        ComplexMultiplier,        ///< Complex multiplication kernel.
-        Absolute,                 ///< Magnitude squared kernel.
-        Sum,                      ///< Reduction sum kernel.
-        AcquisitionKernelCount    ///< Total acquisition kernel count.
+        FFTInit = 0,               ///< FFT initialization kernel.
+        FFTStage,                  ///< FFT stage kernel.
+        FFTScale,                  ///< FFT IFFT scaling kernel.
+        ComplexMultiplier,         ///< Complex multiplication kernel.
+        Absolute,                  ///< Magnitude squared kernel.
+        Sum,                       ///< Reduction sum kernel.
+        ComplexMultiplierBatch,    ///< Batched per-Doppler-bin complex multiplication kernel.
+        AcquisitionKernelCount     ///< Total acquisition kernel count.
     };
 
     /** @brief Create OpenCL device and context.
@@ -78,7 +79,8 @@ class GpuHandler
                                                                     "fft_scale",
                                                                     "complexMultiplier",
                                                                     "absolute",
-                                                                    "sum"};
+                                                                    "sum",
+                                                                    "complexMultiplierBatch"};
 };
 }
 

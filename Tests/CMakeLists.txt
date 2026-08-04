@@ -95,12 +95,16 @@ file(
   ${CMAKE_CURRENT_BINARY_DIR}
 )
 
-file(
-  COPY 
-  ${CMAKE_SOURCE_DIR}/Kernels
-  DESTINATION 
-  ${CMAKE_CURRENT_BINARY_DIR}
+# Copy kernels at build time so edits to .cl files reach the runtime search path on rebuild.
+add_custom_command(
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/Kernels/Acquisition.cl
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different
+          ${CMAKE_SOURCE_DIR}/Kernels/Acquisition.cl
+          ${CMAKE_CURRENT_BINARY_DIR}/Kernels/Acquisition.cl
+  DEPENDS ${CMAKE_SOURCE_DIR}/Kernels/Acquisition.cl
 )
+add_custom_target(GPSOpenClTestKernels DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/Kernels/Acquisition.cl)
+add_dependencies(GPSOpenClTest GPSOpenClTestKernels)
 
 file(
   COPY 

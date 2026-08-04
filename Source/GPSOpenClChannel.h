@@ -61,8 +61,16 @@ class Channel
                                float *cno,
                                float *peakRatio) const;
 
-    /** @brief Check if acquisition threshold is met. */
-    void checkAcquisition() const;
+    /** @brief Enable or disable tracking correlator timing samples; applied to the tracking engine
+     *   when it is (re)created, so a disabled profiler costs no clock reads per block.
+     *  @param enabled True to take timing samples. */
+    void setTrackingTimingEnabled(bool enabled) { m_trackingTimingEnabled = enabled; }
+
+    /** @brief Get the tracking engine's current output snapshot, for publishing from the consumer
+     *   thread after the tracking barrier instead of inside the tracking workers.
+     *  @param out Output struct, filled on success.
+     *  @return True if a tracking engine exists. */
+    bool getTrackingOutput(TrackingOutput *out) const;
 
     /** @brief Check if satellite is acquired.
      *  @return True if acquired. */
@@ -185,8 +193,18 @@ class Channel
     int getBitSyncPhase() const { return m_bitSyncPhase; }
 
   private:
+    static constexpr size_t NAV_HISTORY_COMPACT_THRESHOLD = 30'000;    ///< History length that triggers compaction.
+    static constexpr size_t NAV_HISTORY_COMPACT_MIN_DROP = 10'000;     ///< Minimum samples to drop per compaction.
+
     /** @brief Reset navigation decode state without reinitializing the tracking loop. */
     void resetNavigationState();
+
+    /** @brief Discard prompt/code-phase/drift history older than the navigation decoder and PVT
+     *   solver can still reference, rebasing every sample-indexed field by the dropped count. Only
+     *   whole nav bits (multiples of 20 samples) are dropped so the bit-sync phase stays valid.
+     *   Bounds per-channel memory and keeps the history vectors inside their initial reservation,
+     *   so the tracking path never reallocates them. */
+    void compactNavigationHistory();
 
     /** @brief Evaluate lock quality and drive channel state transitions. */
     void evaluateLockState();
@@ -227,6 +245,7 @@ class Channel
     int m_confirmProgress;                           ///< Leaky-bucket progress toward confirming lock.
     int m_lossProgress;                              ///< Leaky-bucket progress toward declaring lock lost.
     int m_blocksInConfirming;                        ///< Blocks spent in Confirming since last acquisition.
+    bool m_trackingTimingEnabled{true};              ///< Whether the tracking engine takes timing samples.
     float m_carrierLockThreshold;                    ///< Min carrier lock indicator to count as locked.
     float m_codeLockRatioTolerance;                  ///< Max |codeLockRatio - 1.0| to count as locked.
     int m_confirmDebounceBlocks;                     ///< Good blocks needed to confirm tracking.

@@ -44,10 +44,11 @@ ZmqSink::~ZmqSink()
 void ZmqSink::publish(const std::string &identifier, const void *data, size_t size)
 {
     SinkMessage message;
-    message.identifier = identifier;
-    message.data.resize(size);
-    std::memcpy(message.data.data(), data, size);
-    m_queue.tryPush(std::move(message));
+    if (!message.fill(identifier, data, size))
+    {
+        return;
+    }
+    m_queue.tryPush(message);
 }
 
 void ZmqSink::senderThreadLoop()
@@ -61,13 +62,13 @@ void ZmqSink::senderThreadLoop()
             continue;
         }
 
-        int rc = zmq_send(m_publisher, message.identifier.data(), message.identifier.size(), ZMQ_SNDMORE);
+        int rc = zmq_send(m_publisher, message.identifier, message.identifierLength, ZMQ_SNDMORE);
         if (rc < 0)
         {
             std::cerr << "ZmqSink: identifier frame send failed: " << zmq_strerror(zmq_errno()) << '\n';
             continue;
         }
-        rc = zmq_send(m_publisher, message.data.data(), message.data.size(), 0);
+        rc = zmq_send(m_publisher, message.data, message.dataLength, 0);
         if (rc < 0)
         {
             std::cerr << "ZmqSink: data frame send failed: " << zmq_strerror(zmq_errno()) << '\n';

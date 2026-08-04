@@ -26,10 +26,11 @@ FileSink::~FileSink()
 void FileSink::publish(const std::string &identifier, const void *data, size_t size)
 {
     SinkMessage message;
-    message.identifier = identifier;
-    message.data.resize(size);
-    std::memcpy(message.data.data(), data, size);
-    m_queue.tryPush(std::move(message));
+    if (!message.fill(identifier, data, size))
+    {
+        return;
+    }
+    m_queue.tryPush(message);
 }
 
 void FileSink::writerThreadLoop()
@@ -42,13 +43,13 @@ void FileSink::writerThreadLoop()
             continue;
         }
 
-        auto nameLen = static_cast<uint32_t>(message.identifier.size());
-        auto dataLen = static_cast<uint32_t>(message.data.size());
+        auto nameLen = static_cast<uint32_t>(message.identifierLength);
+        auto dataLen = static_cast<uint32_t>(message.dataLength);
 
         m_file.write(reinterpret_cast<const char *>(&nameLen), sizeof(nameLen));
-        m_file.write(message.identifier.data(), nameLen);
+        m_file.write(message.identifier, nameLen);
         m_file.write(reinterpret_cast<const char *>(&dataLen), sizeof(dataLen));
-        m_file.write(message.data.data(), static_cast<std::streamsize>(message.data.size()));
+        m_file.write(message.data, static_cast<std::streamsize>(dataLen));
     }
 }
 }

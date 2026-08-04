@@ -7,6 +7,8 @@
 
 #include "GPSOpenClStructs.h"
 #include <cstddef>
+#include <cstdint>
+#include <cstring>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -17,12 +19,49 @@ namespace GPSOpenCl
 /** @brief Owned copy of one publish() call's identifier and struct bytes, queued for a background
  *   writer thread. Sink implementations that do real I/O (file writes, network sends) should copy
  *   into this on their real-time-facing publish() call and hand the actual I/O to a dedicated
- *   thread, so a slow write never stalls the caller. */
+ *   thread, so a slow write never stalls the caller. Uses fixed inline storage so queueing a
+ *   message performs no heap allocation on the publishing thread. */
 struct SinkMessage
 {
-    std::string identifier;    ///< Topic/module name.
-    std::vector<char> data;    ///< Copied struct bytes.
+    static constexpr size_t MAX_IDENTIFIER_BYTES = 32;    ///< Inline identifier capacity.
+    static constexpr size_t MAX_DATA_BYTES = 512;         ///< Inline payload capacity.
+
+    uint16_t identifierLength{0};                         ///< Used bytes of identifier.
+    uint16_t dataLength{0};                               ///< Used bytes of data.
+    char identifier[MAX_IDENTIFIER_BYTES];                ///< Topic/module name (not NUL-terminated).
+    char data[MAX_DATA_BYTES];                            ///< Copied struct bytes.
+
+    /** @brief Fill from a publish() call, truncating nothing: returns false if either field does
+     *   not fit, in which case the message must not be queued.
+     *  @param id   Topic/module name.
+     *  @param src  Pointer to struct data.
+     *  @param size Size of data (bytes).
+     *  @return True if the message fits the inline storage. */
+    bool fill(const std::string &id, const void *src, size_t size)
+    {
+        if (id.size() > MAX_IDENTIFIER_BYTES || size > MAX_DATA_BYTES)
+        {
+            return false;
+        }
+        identifierLength = static_cast<uint16_t>(id.size());
+        dataLength = static_cast<uint16_t>(size);
+        std::memcpy(identifier, id.data(), id.size());
+        std::memcpy(data, src, size);
+        return true;
+    }
 };
+
+static_assert(sizeof(SourceOutput) <= SinkMessage::MAX_DATA_BYTES, "SourceOutput exceeds SinkMessage capacity");
+static_assert(sizeof(AcquisitionOutput) <= SinkMessage::MAX_DATA_BYTES,
+              "AcquisitionOutput exceeds SinkMessage capacity");
+static_assert(sizeof(TrackingOutput) <= SinkMessage::MAX_DATA_BYTES, "TrackingOutput exceeds SinkMessage capacity");
+static_assert(sizeof(NavDecoderOutput) <= SinkMessage::MAX_DATA_BYTES, "NavDecoderOutput exceeds SinkMessage capacity");
+static_assert(sizeof(PvtSolverOutput) <= SinkMessage::MAX_DATA_BYTES, "PvtSolverOutput exceeds SinkMessage capacity");
+static_assert(sizeof(AtmosphericOutput) <= SinkMessage::MAX_DATA_BYTES,
+              "AtmosphericOutput exceeds SinkMessage capacity");
+static_assert(sizeof(NmeaGeneratorOutput) <= SinkMessage::MAX_DATA_BYTES,
+              "NmeaGeneratorOutput exceeds SinkMessage capacity");
+static_assert(sizeof(ProfilerOutput) <= SinkMessage::MAX_DATA_BYTES, "ProfilerOutput exceeds SinkMessage capacity");
 
 /** @brief Abstract telemetry output interface. Publish calls are serialized by this base class,
  *   so concrete implementations (including test doubles) don't each need their own locking even

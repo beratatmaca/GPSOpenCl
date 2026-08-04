@@ -6,6 +6,7 @@
  */
 
 #include "GPSOpenClSource.h"
+#include <cstdint>
 #include <fstream>
 #include <string>
 #include <vector>
@@ -34,17 +35,23 @@ class FileSource : public Source
      *  @return True if block read. */
     bool readBlock(ComplexFloatVector &outputSamples, SourceOutput &telemetry) override;
 
-    /** @brief Load all samples from file at once.
+    /** @brief Load all samples from a text file at once. Binary .bin captures are streamed one
+     *   block at a time by readBlock() instead, so resident memory stays one block regardless of
+     *   capture size.
      *  @param filePath        File path.
      *  @param samplesPerBlock Samples per block.
      *  @return True if loaded. */
     bool loadAllSamples(const std::string &filePath, size_t samplesPerBlock);
 
   private:
-    SourceInput m_inputConfig;          ///< Source configuration.
-    ComplexFloatVector m_allSamples;    ///< All loaded samples.
-    size_t m_currentBlockIndex;         ///< Current block index.
-    size_t m_samplesPerBlock;           ///< Samples per block.
+    SourceInput m_inputConfig;           ///< Source configuration.
+    ComplexFloatVector m_allSamples;     ///< All loaded samples (text-file path only).
+    size_t m_currentBlockIndex;          ///< Current block index.
+    size_t m_samplesPerBlock;            ///< Samples per block.
+    std::ifstream m_binFile;             ///< Open stream for a binary capture.
+    bool m_streaming{false};             ///< True when reading a .bin capture block by block.
+    size_t m_totalSamples{0};            ///< Total samples in the streamed capture.
+    std::vector<int8_t> m_byteBuffer;    ///< Reused staging buffer for raw file bytes.
 };
 }
 
