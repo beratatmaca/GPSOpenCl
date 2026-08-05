@@ -35,26 +35,18 @@ class Settings
         int numberOfSamplesPerCode{};    ///< Samples per code period.
     };
 
-    /** @brief Acquisition search parameters. */
-    struct AcquisitionSettings
-    {
-        int acquisitionDopplerMinimum;        ///< Min Doppler search (Hz).
-        int acquisitionDopplerMaximum;        ///< Max Doppler search (Hz).
-        int acquisitionDopplerSearchRange;    ///< Doppler bin step (Hz).
-    };
-
     /** @brief Full application configuration. */
     struct Configuration
     {
-        RawDataSettings rawDataSettings;              ///< Raw data settings.
-        AcquisitionSettings acquisitionSettings{};    ///< Acquisition settings.
-        SourceInput sourceInput;                      ///< Source module input.
-        AcquisitionInput acquisitionInput;            ///< Acquisition module input.
-        TrackingInput trackingInput;                  ///< Tracking module input.
-        NavDecoderInput navDecoderInput;              ///< Nav decoder module input.
-        PvtSolverInput pvtSolverInput;                ///< PVT solver module input.
-        AtmosphericInput atmosphericInput;            ///< Atmospheric module input.
-        NmeaGeneratorInput nmeaGeneratorInput;        ///< NMEA generator module input.
+        RawDataSettings rawDataSettings;          ///< Raw data settings.
+        SourceInput sourceInput;                  ///< Source module input.
+        AcquisitionInput acquisitionInput;        ///< Acquisition module input.
+        TrackingInput trackingInput;              ///< Tracking module input.
+        NavDecoderInput navDecoderInput;          ///< Nav decoder module input.
+        PvtSolverInput pvtSolverInput;            ///< PVT solver module input.
+        AtmosphericInput atmosphericInput;        ///< Atmospheric module input.
+        NmeaGeneratorInput nmeaGeneratorInput;    ///< NMEA generator module input.
+        ProfilerInput profilerInput;              ///< Profiler module input.
     } configuration;
 
   private:

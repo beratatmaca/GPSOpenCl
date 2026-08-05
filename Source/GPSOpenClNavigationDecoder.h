@@ -102,10 +102,14 @@ class NavigationDecoder
      *  @return Ephemeris struct. */
     static GpsEphemeris outputToEphemeris(const NavDecoderOutput &out);
 
-    /** @brief Decode one navigation subframe into ephemeris.
+    /** @brief Decode one navigation subframe into ephemeris. Subframes 1-3 fill their ephemeris
+     *   fields; subframes 4 and 5 carry no ephemeris payload (subframe 4 page 18 updates the
+     *   decoder's ionospheric parameters) but still decode successfully with svId, tow, and
+     *   subframeId set, so callers can refresh their subframe time anchor every 6 seconds
+     *   instead of only when an ephemeris subframe arrives.
      *  @param words30bit Vector of 10 parity-checked 30-bit words.
      *  @param ephem      Output ephemeris.
-     *  @return True if subframe decoded. */
+     *  @return True if subframe decoded (any subframe ID with valid preamble, parity, and mask). */
     bool decodeSubframe(const std::vector<uint32_t> &words30bit, GpsEphemeris &ephem);
 
     /** @brief Decode one navigation subframe into output struct.

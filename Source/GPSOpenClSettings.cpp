@@ -1,7 +1,9 @@
 #include "GPSOpenClSettings.h"
 
+#include <cmath>
 #include <fstream>
 #include <iostream>
+#include <stdexcept>
 #include <vector>
 
 using namespace GPSOpenCl;
@@ -12,9 +14,6 @@ Settings::Settings() : m_confFileName("DefaultConf.ini")
     configuration.rawDataSettings.dataSource = "capture.dat";
     configuration.rawDataSettings.samplingFrequency = 4096000.0f;
     configuration.rawDataSettings.numberOfSamplesPerCode = 4096;
-    configuration.acquisitionSettings.acquisitionDopplerMinimum = -4000;
-    configuration.acquisitionSettings.acquisitionDopplerMaximum = 4000;
-    configuration.acquisitionSettings.acquisitionDopplerSearchRange = 500;
 }
 
 Settings::~Settings() = default;
@@ -103,9 +102,17 @@ void Settings::updateConfigurationStruct()
     {
         try
         {
-            configuration.rawDataSettings.samplingFrequency = std::stof(m_configurationMap["SamplingFrequency"]);
-            configuration.rawDataSettings.numberOfSamplesPerCode = static_cast<int>(std::round(
-                configuration.rawDataSettings.samplingFrequency / (GPS_CA_CODE_FREQUENCY_HZ / GPS_CA_CODE_LENGTH)));
+            const float samplingFrequency = std::stof(m_configurationMap["SamplingFrequency"]);
+            const double samplesPerCodeReal =
+                std::round(static_cast<double>(samplingFrequency) / (GPS_CA_CODE_FREQUENCY_HZ / GPS_CA_CODE_LENGTH));
+            if (!std::isfinite(samplingFrequency) || samplingFrequency <= 0.0f || samplesPerCodeReal < 1.0 ||
+                samplesPerCodeReal > 16777216.0)
+            {
+                throw std::invalid_argument("SamplingFrequency out of range");
+            }
+
+            configuration.rawDataSettings.samplingFrequency = samplingFrequency;
+            configuration.rawDataSettings.numberOfSamplesPerCode = static_cast<int>(samplesPerCodeReal);
             configuration.sourceInput.samplingRate = configuration.rawDataSettings.samplingFrequency;
             configuration.acquisitionInput.samplingFrequency = configuration.rawDataSettings.samplingFrequency;
             configuration.acquisitionInput.numberOfSamplesPerCode =
@@ -133,10 +140,8 @@ void Settings::updateConfigurationStruct()
     {
         try
         {
-            configuration.acquisitionSettings.acquisitionDopplerMinimum =
-                std::stoi(m_configurationMap["AcquisitionMinimumDoppler"]);
             configuration.acquisitionInput.acquisitionDopplerMinimum =
-                configuration.acquisitionSettings.acquisitionDopplerMinimum;
+                std::stoi(m_configurationMap["AcquisitionMinimumDoppler"]);
         }
         catch (const std::exception &)
         {
@@ -148,10 +153,8 @@ void Settings::updateConfigurationStruct()
     {
         try
         {
-            configuration.acquisitionSettings.acquisitionDopplerMaximum =
-                std::stoi(m_configurationMap["AcquisitionMaximumDoppler"]);
             configuration.acquisitionInput.acquisitionDopplerMaximum =
-                configuration.acquisitionSettings.acquisitionDopplerMaximum;
+                std::stoi(m_configurationMap["AcquisitionMaximumDoppler"]);
         }
         catch (const std::exception &)
         {
@@ -163,14 +166,71 @@ void Settings::updateConfigurationStruct()
     {
         try
         {
-            configuration.acquisitionSettings.acquisitionDopplerSearchRange =
-                std::stoi(m_configurationMap["AcquisitionDopplerSearchRange"]);
             configuration.acquisitionInput.acquisitionDopplerSearchRange =
-                configuration.acquisitionSettings.acquisitionDopplerSearchRange;
+                std::stoi(m_configurationMap["AcquisitionDopplerSearchRange"]);
         }
         catch (const std::exception &)
         {
             std::cerr << "Invalid AcquisitionDopplerSearchRange value in config, using default." << '\n';
+        }
+    }
+
+    if (configuration.acquisitionInput.acquisitionDopplerSearchRange <= 0 ||
+        configuration.acquisitionInput.acquisitionDopplerMinimum >=
+            configuration.acquisitionInput.acquisitionDopplerMaximum)
+    {
+        std::cerr << "Invalid Doppler search configuration (range must be positive and minimum below maximum), "
+                     "using defaults."
+                  << '\n';
+        const AcquisitionInput defaults{};
+        configuration.acquisitionInput.acquisitionDopplerMinimum = defaults.acquisitionDopplerMinimum;
+        configuration.acquisitionInput.acquisitionDopplerMaximum = defaults.acquisitionDopplerMaximum;
+        configuration.acquisitionInput.acquisitionDopplerSearchRange = defaults.acquisitionDopplerSearchRange;
+    }
+
+    if (!m_configurationMap["AcquisitionCn0Threshold"].empty())
+    {
+        try
+        {
+            const double threshold = std::stod(m_configurationMap["AcquisitionCn0Threshold"]);
+            if (!std::isfinite(threshold) || threshold <= 0.0)
+            {
+                throw std::invalid_argument("AcquisitionCn0Threshold out of range");
+            }
+            configuration.acquisitionInput.acquisitionCn0ThresholdDbHz = threshold;
+        }
+        catch (const std::exception &)
+        {
+            std::cerr << "Invalid AcquisitionCn0Threshold value in config, using default." << '\n';
+        }
+    }
+
+    if (!m_configurationMap["TrackingTelemetryIntervalBlocks"].empty())
+    {
+        try
+        {
+            const int interval = std::stoi(m_configurationMap["TrackingTelemetryIntervalBlocks"]);
+            if (interval < 1)
+            {
+                throw std::invalid_argument("TrackingTelemetryIntervalBlocks out of range");
+            }
+            configuration.trackingInput.telemetryIntervalBlocks = interval;
+        }
+        catch (const std::exception &)
+        {
+            std::cerr << "Invalid TrackingTelemetryIntervalBlocks value in config, using default." << '\n';
+        }
+    }
+
+    if (!m_configurationMap["ProfilerEnabled"].empty())
+    {
+        try
+        {
+            configuration.profilerInput.enabled = (std::stoi(m_configurationMap["ProfilerEnabled"]) != 0) ? 1 : 0;
+        }
+        catch (const std::exception &)
+        {
+            std::cerr << "Invalid ProfilerEnabled value in config, using default." << '\n';
         }
     }
 

@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-# Plotly Dash dashboard: subscribes to GPS receiver telemetry over ZMQ (8 wire struct types)
+# Plotly Dash dashboard: subscribes to GPSOpenCl receiver telemetry over ZMQ or the binary wire log
 import argparse
+import collections
+import datetime
 import math
 import os
 import struct
-import sys
 import threading
 import time
 
@@ -12,8 +13,43 @@ import dash
 from dash import dcc, html
 from dash.dependencies import Input, Output
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
-# Float safety and bounds formatting helpers
+# Dark chart chrome tokens from the validated reference palette
+PAGE_BG = "#0d0d0d"
+SURFACE = "#1a1a19"
+WELL_BG = "#141413"
+INK = "#ffffff"
+INK_2 = "#c3c2b7"
+MUTED = "#898781"
+GRID = "#2c2c2a"
+BASELINE = "#383835"
+BORDER = "1px solid rgba(255,255,255,0.10)"
+FONT_STACK = "system-ui, -apple-system, 'Segoe UI', sans-serif"
+
+# Validated dark categorical slots, assigned to a PRN once and never re-ranked
+SERIES = ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300", "#9085e9", "#e66767"]
+
+# Status palette: channel/stream state only, never series identity
+ST_GOOD = "#0ca30c"
+ST_WARN = "#fab219"
+ST_SERIOUS = "#ec835a"
+ST_CRIT = "#d03b3b"
+ST_IDLE = "#4a4a47"
+
+STATE_LABELS = {0: "Idle", 1: "Confirming", 2: "Tracking"}
+STATE_COLORS = {0: ST_IDLE, 1: ST_WARN, 2: ST_GOOD}
+ACQ_CN0_THRESHOLD = 43.0
+BLOCK_DEADLINE_MS = 1.0
+
+# Wall-clock spacing between stored history samples per stream
+HISTORY_DECIMATE_SEC = 0.25
+
+
+def series_color(prn):
+    return SERIES[(prn - 1) % len(SERIES)]
+
+
 def safe_float(val, default=0.0):
     try:
         f = float(val)
@@ -23,6 +59,7 @@ def safe_float(val, default=0.0):
         pass
     return default
 
+
 def fmt_float(val, prec=2, unit="", default="--"):
     f = safe_float(val, None)
     if f is None:
@@ -30,44 +67,58 @@ def fmt_float(val, prec=2, unit="", default="--"):
     formatted = f"{f:.{prec}f}"
     return f"{formatted} {unit}".strip() if unit else formatted
 
-# Global in-memory thread-safe telemetry store
+
+def stat_new():
+    return {"last": 0.0, "count": 0, "mean": 0.0, "max": 0.0}
+
+
+def stat_update(st, value):
+    st["last"] = value
+    st["count"] += 1
+    st["mean"] += (value - st["mean"]) / st["count"]
+    st["max"] = max(st["max"], value)
+
+
+def channel_new(prn):
+    return {
+        "prn": prn,
+        "acquired": False,
+        "state": 0,
+        "cn0": 0.0,
+        "acqDoppler": 0.0,
+        "peakRatio": 0.0,
+        "carrierFreqHz": 0.0,
+        "codeFreqHz": 0.0,
+        "carrierError": 0.0,
+        "codeError": 0.0,
+        "Ip": 0.0,
+        "Qp": 0.0,
+        "carrierLock": 0.0,
+        "codeLock": 0.0,
+        "hasAtmo": False,
+        "azimuth": 0.0,
+        "elevation": 0.0,
+        "ionoDelay": 0.0,
+        "tropoDelay": 0.0,
+        "hasNav": False,
+        "weekNumber": 0,
+        "tow": 0.0,
+        "subframeMask": 0,
+        "toe": 0.0,
+        "toc": 0.0,
+        "af0": 0.0,
+        "e": 0.0,
+        "sqrtA": 0.0,
+        "acqStat": stat_new(),
+        "trkStat": stat_new(),
+        "lastTrackSample": 0.0,
+    }
+
+
 GLOBAL_STATE = {
-    "source": {
-        "blockIndex": 0,
-        "timestamp": 0.0,
-        "fifoUnderruns": 0,
-        "fifoOverruns": 0
-    },
-    "satellites": {
-        prn: {
-            "prn": prn,
-            "acquired": False,
-            "state": 0,
-            "stateLabel": "Acquiring",
-            "carrierLockIndicator": 0.0,
-            "codeLockRatio": 0.0,
-            "cn0": 0.0,
-            "doppler": 0.0,
-            "peakRatio": 0.0,
-            "peakIndex": 0,
-            "carrierFreqHz": 0.0,
-            "codeFreqHz": 1023000.0,
-            "carrierError": 0.0,
-            "codeError": 0.0,
-            "Ie": 0.0, "Ip": 0.0, "Il": 0.0,
-            "Qe": 0.0, "Qp": 0.0, "Ql": 0.0,
-            "azimuth": (prn * 11.25) % 360,
-            "elevation": 15.0 + ((prn * 7) % 70),
-            "ionoDelay": 0.0,
-            "tropoDelay": 0.0,
-            "weekNumber": 0,
-            "tow": 0.0,
-            "subframeMask": 0,
-            "af0": 0.0,
-            "e": 0.0,
-            "sqrtA": 0.0
-        } for prn in range(1, 33)
-    },
+    "source": {"blockIndex": 0, "timestamp": 0.0, "fifoUnderruns": 0, "fifoOverruns": 0},
+    "channels": {prn: channel_new(prn) for prn in range(1, 33)},
+    "trackHistory": {prn: collections.deque(maxlen=1200) for prn in range(1, 33)},
     "pvt": {
         "valid": False,
         "latitude": 0.0,
@@ -81,8 +132,15 @@ GLOBAL_STATE = {
         "gdop": 0.0,
         "pdop": 0.0,
         "hdop": 0.0,
-        "vdop": 0.0
+        "vdop": 0.0,
+        "satellitesUsed": 0,
+        "maxResidualMeters": 0.0,
+        "fixCount": 0,
+        "firstFixTime": 0.0,
+        "lastFixTime": 0.0,
     },
+    "pvtHistory": collections.deque(maxlen=2400),
+    "pvtLastSample": 0.0,
     "profiler": {
         "blockIndex": 0,
         "timestamp": 0.0,
@@ -90,618 +148,1083 @@ GLOBAL_STATE = {
         "trackMs": 0.0,
         "navMs": 0.0,
         "pvtMs": 0.0,
-        "totalMs": 0.0
+        "totalMs": 0.0,
+        "elpGenMs": 0.0,
+        "ncoMs": 0.0,
+        "accumMs": 0.0,
+        "maxWorkerMs": 0.0,
     },
-    "nmea": [],
+    "stageStats": {name: stat_new() for name in ("acq", "track", "nav", "pvt", "total")},
+    "profilerHistory": collections.deque(maxlen=1200),
+    "profilerLastSample": 0.0,
     "events": [],
-    "last_update": 0.0
+    "lastUpdate": 0.0,
 }
 STATE_LOCK = threading.Lock()
 
+
 def add_event(level, module, message):
-    t_str = time.strftime('%H:%M:%S')
-    evt = f"[{t_str}] [{level.upper()}] [{module}] {message}"
+    stamp = time.strftime("%H:%M:%S")
+    evt = f"[{stamp}] [{level.upper()}] [{module}] {message}"
     if not GLOBAL_STATE["events"] or GLOBAL_STATE["events"][-1] != evt:
         GLOBAL_STATE["events"].append(evt)
-        if len(GLOBAL_STATE["events"]) > 100:
+        if len(GLOBAL_STATE["events"]) > 200:
             GLOBAL_STATE["events"].pop(0)
 
-# Telemetry subscriber background thread (ZMQ + binary log stream)
+
+def parse_source(data):
+    fields = struct.unpack("<IIdII", data[:24])
+    src = GLOBAL_STATE["source"]
+    src["blockIndex"] = fields[1]
+    src["timestamp"] = safe_float(fields[2])
+    src["fifoUnderruns"] = fields[3]
+    src["fifoOverruns"] = fields[4]
+
+
+def parse_acquisition(data):
+    if len(data) >= 64:
+        fields = struct.unpack("<IiidddddId", data[:64])
+        correlate_ms = safe_float(fields[9])
+    else:
+        fields = struct.unpack("<IiidddddI", data[:56])
+        correlate_ms = None
+    prn = fields[1]
+    if not 1 <= prn <= 32:
+        return
+    ch = GLOBAL_STATE["channels"][prn]
+    was_acquired = ch["acquired"]
+    ch["acqDoppler"] = safe_float(fields[4])
+    ch["cn0"] = safe_float(fields[6])
+    ch["peakRatio"] = safe_float(fields[7])
+    ch["acquired"] = bool(fields[8])
+    if correlate_ms is not None and correlate_ms > 0.0:
+        stat_update(ch["acqStat"], correlate_ms)
+    if not was_acquired and ch["acquired"]:
+        add_event(
+            "INFO",
+            "ACQ",
+            f"PRN {prn:02d} acquired (C/N0 {fmt_float(ch['cn0'], 1)} dB-Hz, Doppler {fmt_float(ch['acqDoppler'], 1)} Hz)",
+        )
+
+
+def parse_tracking(data, now):
+    if len(data) >= 116:
+        fields = struct.unpack("<IiddddddddddIddd", data[:116])
+        correlator_ms = safe_float(fields[15])
+    else:
+        fields = struct.unpack("<IiddddddddddIdd", data[:108])
+        correlator_ms = None
+    prn = fields[1]
+    if not 1 <= prn <= 32:
+        return
+    ch = GLOBAL_STATE["channels"][prn]
+    old_state = ch["state"]
+    ch["carrierFreqHz"] = safe_float(fields[2])
+    ch["codeFreqHz"] = safe_float(fields[3])
+    ch["carrierError"] = safe_float(fields[4])
+    ch["codeError"] = safe_float(fields[5])
+    ch["Ip"] = safe_float(fields[7])
+    ch["Qp"] = safe_float(fields[10])
+    ch["state"] = fields[12]
+    ch["carrierLock"] = safe_float(fields[13])
+    ch["codeLock"] = safe_float(fields[14])
+    if correlator_ms is not None and correlator_ms > 0.0:
+        stat_update(ch["trkStat"], correlator_ms)
+    if ch["state"] != old_state:
+        add_event("INFO", "TRACK", f"PRN {prn:02d} -> {STATE_LABELS.get(ch['state'], '?')}")
+    if now - ch["lastTrackSample"] >= HISTORY_DECIMATE_SEC:
+        ch["lastTrackSample"] = now
+        GLOBAL_STATE["trackHistory"][prn].append(
+            (
+                now,
+                ch["carrierFreqHz"],
+                ch["codeError"],
+                ch["carrierLock"],
+                ch["codeLock"],
+            )
+        )
+
+
+def parse_navdecoder(data):
+    fields = struct.unpack("<IiidiI21d", data[:196])
+    prn = fields[1]
+    if not 1 <= prn <= 32:
+        return
+    ch = GLOBAL_STATE["channels"][prn]
+    ch["hasNav"] = True
+    ch["weekNumber"] = fields[2]
+    ch["tow"] = safe_float(fields[3])
+    subframe_id = fields[4]
+    ch["toc"] = safe_float(fields[6])
+    ch["af0"] = safe_float(fields[7])
+    ch["toe"] = safe_float(fields[11])
+    ch["sqrtA"] = safe_float(fields[12])
+    ch["e"] = safe_float(fields[13])
+    if 1 <= subframe_id <= 5:
+        bit = 1 << (subframe_id - 1)
+        if not ch["subframeMask"] & bit:
+            ch["subframeMask"] |= bit
+            add_event("INFO", "NAV", f"PRN {prn:02d} decoded subframe {subframe_id} (TOW {fmt_float(ch['tow'], 0)} s)")
+
+
+def parse_pvt(data, now):
+    if len(data) >= 116:
+        fields = struct.unpack("<I12dIId", data[:116])
+        sats_used = fields[14]
+        max_residual = safe_float(fields[15])
+    else:
+        fields = struct.unpack("<I12dI", data[:104])
+        sats_used = 0
+        max_residual = 0.0
+    pvt = GLOBAL_STATE["pvt"]
+    was_valid = pvt["valid"]
+    pvt["ecefX"] = safe_float(fields[1])
+    pvt["ecefY"] = safe_float(fields[2])
+    pvt["ecefZ"] = safe_float(fields[3])
+    pvt["latitude"] = safe_float(fields[4])
+    pvt["longitude"] = safe_float(fields[5])
+    pvt["altitude"] = safe_float(fields[6])
+    pvt["clockBiasMeters"] = safe_float(fields[7])
+    pvt["clockBiasSeconds"] = safe_float(fields[8])
+    pvt["gdop"] = safe_float(fields[9])
+    pvt["pdop"] = safe_float(fields[10])
+    pvt["hdop"] = safe_float(fields[11])
+    pvt["vdop"] = safe_float(fields[12])
+    pvt["valid"] = bool(fields[13])
+    pvt["satellitesUsed"] = sats_used
+    pvt["maxResidualMeters"] = max_residual
+    if pvt["valid"]:
+        pvt["fixCount"] += 1
+        pvt["lastFixTime"] = now
+        if pvt["firstFixTime"] == 0.0:
+            pvt["firstFixTime"] = now
+            add_event(
+                "SUCCESS",
+                "PVT",
+                f"First fix: {fmt_float(pvt['latitude'], 5)}, {fmt_float(pvt['longitude'], 5)}, "
+                f"alt {fmt_float(pvt['altitude'], 1)} m, HDOP {fmt_float(pvt['hdop'], 2)}",
+            )
+    if not was_valid and pvt["valid"] and pvt["fixCount"] > 1:
+        add_event("INFO", "PVT", "Fix re-established")
+    if now - GLOBAL_STATE["pvtLastSample"] >= HISTORY_DECIMATE_SEC:
+        GLOBAL_STATE["pvtLastSample"] = now
+        GLOBAL_STATE["pvtHistory"].append(
+            (
+                now,
+                pvt["valid"],
+                pvt["latitude"],
+                pvt["longitude"],
+                pvt["altitude"],
+                pvt["clockBiasMeters"],
+                pvt["hdop"],
+                pvt["satellitesUsed"],
+                pvt["maxResidualMeters"],
+            )
+        )
+
+
+def parse_atmospheric(data):
+    fields = struct.unpack("<Ii4d", data[:40])
+    prn = fields[1]
+    if not 1 <= prn <= 32:
+        return
+    ch = GLOBAL_STATE["channels"][prn]
+    ch["hasAtmo"] = True
+    ch["ionoDelay"] = safe_float(fields[2])
+    ch["tropoDelay"] = safe_float(fields[3])
+    ch["azimuth"] = safe_float(fields[4])
+    ch["elevation"] = safe_float(fields[5])
+
+
+def parse_profiler(data, now):
+    fields = struct.unpack("<II10d", data[: struct.calcsize("<II10d")])
+    prof = GLOBAL_STATE["profiler"]
+    prof["blockIndex"] = fields[1]
+    prof["timestamp"] = safe_float(fields[2])
+    prof["acqMs"] = safe_float(fields[3])
+    prof["trackMs"] = safe_float(fields[4])
+    prof["navMs"] = safe_float(fields[5])
+    prof["pvtMs"] = safe_float(fields[6])
+    prof["totalMs"] = safe_float(fields[7])
+    prof["elpGenMs"] = safe_float(fields[8])
+    prof["ncoMs"] = safe_float(fields[9])
+    prof["accumMs"] = safe_float(fields[10])
+    prof["maxWorkerMs"] = safe_float(fields[11])
+    stats = GLOBAL_STATE["stageStats"]
+    stat_update(stats["acq"], prof["acqMs"])
+    stat_update(stats["track"], prof["trackMs"])
+    stat_update(stats["nav"], prof["navMs"])
+    stat_update(stats["pvt"], prof["pvtMs"])
+    stat_update(stats["total"], prof["totalMs"])
+    if now - GLOBAL_STATE["profilerLastSample"] >= HISTORY_DECIMATE_SEC:
+        GLOBAL_STATE["profilerLastSample"] = now
+        GLOBAL_STATE["profilerHistory"].append(
+            (now, prof["acqMs"], prof["trackMs"], prof["navMs"], prof["pvtMs"], prof["totalMs"], prof["maxWorkerMs"])
+        )
+
+
+# Minimum payload length accepted per topic (version-1 prefix)
+MIN_LENGTHS = {
+    "SourceOutput": 24,
+    "AcquisitionOutput": 56,
+    "TrackingOutput": 108,
+    "NavDecoderOutput": 196,
+    "PvtSolverOutput": 104,
+    "AtmosphericOutput": 40,
+    "ProfilerOutput": 88,
+}
+
+
 class TelemetrySubscriberThread(threading.Thread):
-    def __init__(self, endpoint="ipc:///tmp/gpsopencl/telemetry.sock", log_file="build/telemetry_wire.log"):
+    def __init__(self, endpoint, log_file):
         super().__init__(daemon=True)
         self.endpoint = endpoint
         self.log_file = log_file
         self.running = True
+        self.zmq_active = False
 
     def run(self):
         zmq_thread = threading.Thread(target=self._run_zmq, daemon=True)
         zmq_thread.start()
-
         file_thread = threading.Thread(target=self._run_file_tail, daemon=True)
         file_thread.start()
-
         zmq_thread.join()
         file_thread.join()
 
     def _run_zmq(self):
         try:
             import zmq
+
             context = zmq.Context()
             socket = context.socket(zmq.SUB)
             socket.connect(self.endpoint)
             socket.setsockopt_string(zmq.SUBSCRIBE, "")
-            print(f"[Subscriber] Connected to ZMQ endpoint: {self.endpoint}")
-
+            print(f"[Subscriber] Listening on ZMQ endpoint: {self.endpoint}")
             while self.running:
                 topic = socket.recv_string()
                 data = socket.recv()
+                self.zmq_active = True
                 self.process_msg(topic, data)
-        except Exception as e:
-            print(f"[Subscriber] ZMQ note: {e}")
+        except Exception as exc:
+            print(f"[Subscriber] ZMQ unavailable ({exc}); falling back to wire log tail")
 
     def _run_file_tail(self):
-        print(f"[Subscriber] Tailing binary telemetry file: {self.log_file}...")
+        print(f"[Subscriber] Tailing binary telemetry log: {self.log_file}")
+        # Offset of the next unread record, kept across reopens so records are never double-counted
+        tail_offset = 0
+        corrupt = False
         while self.running:
-            if not os.path.exists(self.log_file):
+            if self.zmq_active or not os.path.exists(self.log_file):
                 time.sleep(0.5)
                 continue
-
             try:
+                size = os.path.getsize(self.log_file)
+                # A shrunken file means a new receiver run truncated the log: restart from the top
+                if size < tail_offset:
+                    tail_offset = 0
+                    corrupt = False
+                if corrupt or size <= tail_offset:
+                    time.sleep(0.5)
+                    continue
                 with open(self.log_file, "rb") as f:
-                    while self.running:
-                        len_bytes = f.read(4)
-                        if not len_bytes or len(len_bytes) < 4:
-                            time.sleep(0.05)
-                            continue
-                        name_len = struct.unpack("<I", len_bytes)[0]
-                        if name_len > 256:
-                            continue
+                    f.seek(tail_offset)
+                    while self.running and not self.zmq_active:
+                        record_start = f.tell()
+                        header = f.read(4)
+                        if len(header) < 4:
+                            tail_offset = record_start
+                            break
+                        name_len = struct.unpack("<I", header)[0]
+                        if name_len == 0 or name_len > 256:
+                            print("[Subscriber] Corrupt record framing in wire log; tail stopped until truncation")
+                            corrupt = True
+                            break
                         name_bytes = f.read(name_len)
-                        if len(name_bytes) < name_len:
-                            time.sleep(0.05)
-                            continue
-                        topic = name_bytes.decode('ascii', errors='ignore')
-
-                        data_len_bytes = f.read(4)
-                        if len(data_len_bytes) < 4:
-                            time.sleep(0.05)
-                            continue
-                        data_len = struct.unpack("<I", data_len_bytes)[0]
-
+                        len_bytes = f.read(4)
+                        if len(name_bytes) < name_len or len(len_bytes) < 4:
+                            tail_offset = record_start
+                            break
+                        data_len = struct.unpack("<I", len_bytes)[0]
+                        if data_len > 4096:
+                            print("[Subscriber] Corrupt record framing in wire log; tail stopped until truncation")
+                            corrupt = True
+                            break
                         data = f.read(data_len)
                         if len(data) < data_len:
-                            time.sleep(0.05)
-                            continue
-
-                        self.process_msg(topic, data)
+                            tail_offset = record_start
+                            break
+                        tail_offset = f.tell()
+                        self.process_msg(name_bytes.decode("ascii", errors="ignore"), data)
+                time.sleep(0.1)
             except Exception:
                 time.sleep(0.5)
 
     def process_msg(self, topic, data):
+        min_len = MIN_LENGTHS.get(topic)
+        if min_len is None or len(data) < min_len:
+            return
         try:
             with STATE_LOCK:
                 now = time.time()
-                GLOBAL_STATE["last_update"] = now
-
-                if topic == "SourceOutput" and len(data) >= 24:
-                    fields = struct.unpack("<IIdII", data[:24])
-                    GLOBAL_STATE["source"]["blockIndex"] = fields[1]
-                    GLOBAL_STATE["source"]["timestamp"] = safe_float(fields[2])
-                    GLOBAL_STATE["source"]["fifoUnderruns"] = fields[3]
-                    GLOBAL_STATE["source"]["fifoOverruns"] = fields[4]
-
-                elif topic == "AcquisitionOutput" and len(data) >= 56:
-                    fields = struct.unpack("<IiidddddI", data[:56])
-                    prn = fields[1]
-                    if 1 <= prn <= 32:
-                        sv = GLOBAL_STATE["satellites"][prn]
-                        was_acq = sv["acquired"]
-                        sv["peakIndex"] = fields[2]
-                        sv["doppler"] = safe_float(fields[4])
-                        sv["cn0"] = safe_float(fields[6])
-                        sv["peakRatio"] = safe_float(fields[7])
-                        sv["acquired"] = bool(fields[8])
-                        if not was_acq and sv["acquired"]:
-                            add_event("INFO", "ACQUISITION", f"SV PRN {prn:02d} acquired! (C/N0: {fmt_float(sv['cn0'], 1)} dB-Hz, Doppler: {fmt_float(sv['doppler'], 1)} Hz)")
-
-                elif topic == "TrackingOutput" and len(data) >= 108:
-                    fields = struct.unpack("<IiddddddddddIdd", data[:108])
-                    prn = fields[1]
-                    if 1 <= prn <= 32:
-                        sv = GLOBAL_STATE["satellites"][prn]
-                        sv["carrierFreqHz"] = safe_float(fields[2])
-                        sv["codeFreqHz"] = safe_float(fields[3])
-                        sv["carrierError"] = safe_float(fields[4])
-                        sv["codeError"] = safe_float(fields[5])
-                        sv["Ie"], sv["Ip"], sv["Il"] = safe_float(fields[6]), safe_float(fields[7]), safe_float(fields[8])
-                        sv["Qe"], sv["Qp"], sv["Ql"] = safe_float(fields[9]), safe_float(fields[10]), safe_float(fields[11])
-                        sv["state"] = fields[12]
-                        sv["stateLabel"] = {0: "Acquiring", 1: "Confirming", 2: "Tracking"}.get(fields[12], "Unknown")
-                        sv["carrierLockIndicator"] = safe_float(fields[13])
-                        sv["codeLockRatio"] = safe_float(fields[14])
-                        sv["acquired"] = fields[12] >= 2
-
-                elif topic == "NavDecoderOutput" and len(data) >= 188:
-                    fields = struct.unpack("<IiidII20d", data[:188])
-                    prn = fields[1]
-                    if 1 <= prn <= 32:
-                        sv = GLOBAL_STATE["satellites"][prn]
-                        sv["weekNumber"] = fields[2]
-                        sv["tow"] = safe_float(fields[3])
-                        subframe_id = fields[4]
-                        if 1 <= subframe_id <= 5:
-                            sv["subframeMask"] |= (1 << (subframe_id - 1))
-                        sv["af0"] = safe_float(fields[7])
-                        sv["e"] = safe_float(fields[12])
-                        sv["sqrtA"] = safe_float(fields[11])
-                        add_event("INFO", "NAV_DECODER", f"Decoded Subframe {subframe_id} for PRN {prn:02d} (TOW: {fmt_float(sv['tow'], 0)}s)")
-
-                elif topic == "PvtSolverOutput" and len(data) >= 104:
-                    fields = struct.unpack("<I12dI", data[:104])
-                    was_valid = GLOBAL_STATE["pvt"]["valid"]
-                    GLOBAL_STATE["pvt"]["ecefX"] = safe_float(fields[1])
-                    GLOBAL_STATE["pvt"]["ecefY"] = safe_float(fields[2])
-                    GLOBAL_STATE["pvt"]["ecefZ"] = safe_float(fields[3])
-                    GLOBAL_STATE["pvt"]["latitude"] = safe_float(fields[4])
-                    GLOBAL_STATE["pvt"]["longitude"] = safe_float(fields[5])
-                    GLOBAL_STATE["pvt"]["altitude"] = safe_float(fields[6])
-                    GLOBAL_STATE["pvt"]["clockBiasMeters"] = safe_float(fields[7])
-                    GLOBAL_STATE["pvt"]["clockBiasSeconds"] = safe_float(fields[8])
-                    GLOBAL_STATE["pvt"]["gdop"] = safe_float(fields[9])
-                    GLOBAL_STATE["pvt"]["pdop"] = safe_float(fields[10])
-                    GLOBAL_STATE["pvt"]["hdop"] = safe_float(fields[11])
-                    GLOBAL_STATE["pvt"]["vdop"] = safe_float(fields[12])
-                    GLOBAL_STATE["pvt"]["valid"] = bool(fields[13])
-
-                    if not was_valid and GLOBAL_STATE["pvt"]["valid"]:
-                        add_event("SUCCESS", "PVT_SOLVER", f"3D WGS-84 Position Fix Solved: Lat={fmt_float(fields[4], 5)}°, Lon={fmt_float(fields[5], 5)}°, Alt={fmt_float(fields[6], 1)}m | HDOP: {fmt_float(fields[11], 2)}")
-
-                elif topic == "AtmosphericOutput" and len(data) >= 40:
-                    fields = struct.unpack("<Ii4d", data[:40])
-                    prn = fields[1]
-                    if 1 <= prn <= 32:
-                        sv = GLOBAL_STATE["satellites"][prn]
-                        sv["ionoDelay"] = safe_float(fields[2])
-                        sv["tropoDelay"] = safe_float(fields[3])
-                        sv["azimuth"] = safe_float(fields[4])
-                        sv["elevation"] = safe_float(fields[5])
-
-                elif topic == "NmeaGeneratorOutput" and len(data) >= 260:
-                    sentence = data[4:260].decode('ascii', errors='ignore').rstrip('\x00\r\n')
-                    if sentence and (not GLOBAL_STATE["nmea"] or GLOBAL_STATE["nmea"][-1] != sentence):
-                        GLOBAL_STATE["nmea"].append(sentence)
-                        if len(GLOBAL_STATE["nmea"]) > 50:
-                            GLOBAL_STATE["nmea"].pop(0)
-
-                elif topic == "ProfilerOutput" and len(data) >= 56:
-                    fields = struct.unpack("<II6d", data[:56])
-                    GLOBAL_STATE["profiler"]["blockIndex"] = fields[1]
-                    GLOBAL_STATE["profiler"]["timestamp"] = safe_float(fields[2])
-                    GLOBAL_STATE["profiler"]["acqMs"] = safe_float(fields[3])
-                    GLOBAL_STATE["profiler"]["trackMs"] = safe_float(fields[4])
-                    GLOBAL_STATE["profiler"]["navMs"] = safe_float(fields[5])
-                    GLOBAL_STATE["profiler"]["pvtMs"] = safe_float(fields[6])
-                    GLOBAL_STATE["profiler"]["totalMs"] = safe_float(fields[7])
-        except Exception as e:
+                GLOBAL_STATE["lastUpdate"] = now
+                if topic == "SourceOutput":
+                    parse_source(data)
+                elif topic == "AcquisitionOutput":
+                    parse_acquisition(data)
+                elif topic == "TrackingOutput":
+                    parse_tracking(data, now)
+                elif topic == "NavDecoderOutput":
+                    parse_navdecoder(data)
+                elif topic == "PvtSolverOutput":
+                    parse_pvt(data, now)
+                elif topic == "AtmosphericOutput":
+                    parse_atmospheric(data)
+                elif topic == "ProfilerOutput":
+                    parse_profiler(data, now)
+        except Exception:
             pass
 
-# Dash application and responsive single-page layout
-app = dash.Dash(__name__, title="GPSOpenCl - Comprehensive GNSS Telemetry Dashboard")
+
+def apply_chrome(fig, height, uirev, showlegend=False):
+    fig.update_layout(
+        paper_bgcolor=SURFACE,
+        plot_bgcolor=SURFACE,
+        font=dict(color=INK_2, size=11, family=FONT_STACK),
+        margin=dict(l=48, r=12, t=8, b=32),
+        height=height,
+        uirevision=uirev,
+        showlegend=showlegend,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0, bgcolor="rgba(0,0,0,0)"),
+    )
+    fig.update_xaxes(
+        gridcolor=GRID, linecolor=BASELINE, zerolinecolor=BASELINE, tickcolor=BASELINE, tickfont=dict(color=MUTED)
+    )
+    fig.update_yaxes(
+        gridcolor=GRID, linecolor=BASELINE, zerolinecolor=BASELINE, tickcolor=BASELINE, tickfont=dict(color=MUTED)
+    )
+    return fig
+
+
+def to_dt(timestamps):
+    return [datetime.datetime.fromtimestamp(t) for t in timestamps]
+
+
+CARD_STYLE = {
+    "backgroundColor": SURFACE,
+    "padding": "14px",
+    "borderRadius": "10px",
+    "border": BORDER,
+    "overflow": "hidden",
+}
+
+TILE_LABEL_STYLE = {"fontSize": "12px", "color": MUTED}
+TILE_VALUE_STYLE = {"fontSize": "20px", "fontWeight": "600", "color": INK, "marginTop": "4px", "whiteSpace": "nowrap"}
+TILE_VALUE_COMPACT_STYLE = {"fontSize": "14px", "fontWeight": "600", "color": INK, "marginTop": "6px", "lineHeight": "1.35"}
+H3_STYLE = {"margin": "0 0 10px 0", "fontSize": "14px", "fontWeight": "600", "color": INK}
+TH_STYLE = {"textAlign": "left", "padding": "5px 8px", "color": MUTED, "fontWeight": "500", "whiteSpace": "nowrap"}
+TD_STYLE = {"padding": "5px 8px", "color": INK_2, "whiteSpace": "nowrap"}
+TD_NUM_STYLE = {**TD_STYLE, "fontVariantNumeric": "tabular-nums"}
+
+
+def card(title, children, extra_style=None):
+    style = dict(CARD_STYLE)
+    if extra_style:
+        style.update(extra_style)
+    return html.Div(style=style, children=[html.H3(title, style=H3_STYLE)] + children)
+
+
+def stat_tile(label, value_id, compact=False):
+    return html.Div(
+        style=CARD_STYLE,
+        children=[
+            html.Div(label, style=TILE_LABEL_STYLE),
+            html.Div(id=value_id, children="--", style=TILE_VALUE_COMPACT_STYLE if compact else TILE_VALUE_STYLE),
+        ],
+    )
+
+
+def data_table(headers, rows, empty_text):
+    if not rows:
+        body = [html.Tr(html.Td(empty_text, colSpan=len(headers), style={"padding": "10px", "color": MUTED}))]
+    else:
+        body = rows
+    return html.Table(
+        style={"width": "100%", "borderCollapse": "collapse", "fontSize": "11px"},
+        children=[
+            html.Thead(html.Tr([html.Th(h, style=TH_STYLE) for h in headers])),
+            html.Tbody(body),
+        ],
+    )
+
+
+def table_row(cells):
+    return html.Tr([html.Td(c, style=TD_NUM_STYLE) for c in cells], style={"borderBottom": f"1px solid {GRID}"})
+
+
+app = dash.Dash(__name__, title="GPSOpenCl Telemetry")
 
 app.layout = html.Div(
     style={
-        "backgroundColor": "#0b1329",
-        "color": "#f8fafc",
-        "fontFamily": "'Inter', '-apple-system', 'Segoe UI', sans-serif",
+        "backgroundColor": PAGE_BG,
+        "color": INK_2,
+        "fontFamily": FONT_STACK,
         "minHeight": "100vh",
-        "padding": "20px",
-        "boxSizing": "border-box"
+        "padding": "18px",
+        "boxSizing": "border-box",
     },
     children=[
-        # Top header and status bar
         html.Div(
             style={
                 "display": "flex",
                 "justifyContent": "space-between",
                 "alignItems": "center",
-                "backgroundColor": "#1e293b",
-                "padding": "16px 24px",
-                "borderRadius": "12px",
-                "border": "1px solid #334155",
-                "boxShadow": "0 4px 14px rgba(0,0,0,0.4)",
-                "marginBottom": "20px"
+                "backgroundColor": SURFACE,
+                "padding": "14px 20px",
+                "borderRadius": "10px",
+                "border": BORDER,
+                "marginBottom": "16px",
             },
             children=[
-                html.Div([
-                    html.H1("GPSOpenCl — Real-Time Telemetry & Visual Analytics", style={"margin": 0, "fontSize": "22px", "fontWeight": "700", "color": "#38bdf8"}),
-                    html.P("Single-Page Crash-Safe Receiver State, Signal Tracking & Event Monitor", style={"margin": "4px 0 0 0", "fontSize": "13px", "color": "#94a3b8"})
-                ]),
                 html.Div(
-                    style={"display": "flex", "gap": "16px", "alignItems": "center"},
-                    children=[
-                        html.Div(id="status-badge", children="STREAM ONLINE", style={"backgroundColor": "#059669", "color": "#ffffff", "padding": "6px 14px", "borderRadius": "20px", "fontSize": "12px", "fontWeight": "600", "letterSpacing": "0.5px"}),
-                        html.Div(id="last-update", children="Updated: Just now", style={"fontSize": "12px", "color": "#94a3b8"})
+                    [
+                        html.H1("GPSOpenCl receiver telemetry", style={"margin": 0, "fontSize": "18px", "fontWeight": "600", "color": INK}),
+                        html.P("Acquisition, tracking, navigation, PVT and pipeline timing", style={"margin": "3px 0 0 0", "fontSize": "12px", "color": MUTED}),
                     ]
-                )
-            ]
+                ),
+                html.Div(
+                    style={"display": "flex", "gap": "14px", "alignItems": "center"},
+                    children=[
+                        html.Div(
+                            id="status-badge",
+                            children="WAITING",
+                            style={"backgroundColor": ST_IDLE, "color": INK, "padding": "5px 12px", "borderRadius": "16px", "fontSize": "11px", "fontWeight": "600"},
+                        ),
+                        html.Div(id="last-update", children="No data yet", style={"fontSize": "12px", "color": MUTED}),
+                    ],
+                ),
+            ],
         ),
-
-        # Row 1: KPI metric cards
         html.Div(
-            style={"display": "grid", "gridTemplateColumns": "repeat(5, 1fr)", "gap": "14px", "marginBottom": "20px"},
+            style={"display": "grid", "gridTemplateColumns": "repeat(6, 1fr)", "gap": "12px", "marginBottom": "16px"},
             children=[
-                html.Div(
-                    style={"backgroundColor": "#1e293b", "padding": "16px", "borderRadius": "10px", "border": "1px solid #334155", "borderLeft": "4px solid #10b981", "overflow": "hidden"},
-                    children=[
-                        html.Div("Acquired Channels", style={"fontSize": "12px", "color": "#94a3b8"}),
-                        html.Div(id="card-sat-count", children="0 / 32", style={"fontSize": "22px", "fontWeight": "700", "color": "#10b981", "marginTop": "4px", "whiteSpace": "nowrap", "overflow": "hidden", "textOverflow": "ellipsis"})
-                    ]
-                ),
-                html.Div(
-                    style={"backgroundColor": "#1e293b", "padding": "16px", "borderRadius": "10px", "border": "1px solid #334155", "borderLeft": "4px solid #38bdf8", "overflow": "hidden"},
-                    children=[
-                        html.Div("WGS-84 Location Fix", style={"fontSize": "12px", "color": "#94a3b8"}),
-                        html.Div(id="card-location", children="Acquiring...", style={"fontSize": "13px", "fontWeight": "600", "color": "#38bdf8", "marginTop": "6px", "whiteSpace": "nowrap", "overflow": "hidden", "textOverflow": "ellipsis"})
-                    ]
-                ),
-                html.Div(
-                    style={"backgroundColor": "#1e293b", "padding": "16px", "borderRadius": "10px", "border": "1px solid #334155", "borderLeft": "4px solid #f59e0b", "overflow": "hidden"},
-                    children=[
-                        html.Div("Ellipsoidal Height", style={"fontSize": "12px", "color": "#94a3b8"}),
-                        html.Div(id="card-altitude", children="--", style={"fontSize": "20px", "fontWeight": "700", "color": "#f59e0b", "marginTop": "4px", "whiteSpace": "nowrap", "overflow": "hidden", "textOverflow": "ellipsis"})
-                    ]
-                ),
-                html.Div(
-                    style={"backgroundColor": "#1e293b", "padding": "16px", "borderRadius": "10px", "border": "1px solid #334155", "borderLeft": "4px solid #a855f7", "overflow": "hidden"},
-                    children=[
-                        html.Div("Dilution of Precision (DOP)", style={"fontSize": "12px", "color": "#94a3b8"}),
-                        html.Div(id="card-dop", children="--", style={"fontSize": "16px", "fontWeight": "700", "color": "#a855f7", "marginTop": "6px", "whiteSpace": "nowrap", "overflow": "hidden", "textOverflow": "ellipsis"})
-                    ]
-                ),
-                html.Div(
-                    style={"backgroundColor": "#1e293b", "padding": "16px", "borderRadius": "10px", "border": "1px solid #334155", "borderLeft": "4px solid #ec4899", "overflow": "hidden"},
-                    children=[
-                        html.Div("Block Processing Time", style={"fontSize": "12px", "color": "#94a3b8"}),
-                        html.Div(id="card-latency", children="--", style={"fontSize": "20px", "fontWeight": "700", "color": "#ec4899", "marginTop": "4px", "whiteSpace": "nowrap", "overflow": "hidden", "textOverflow": "ellipsis"})
-                    ]
-                )
-            ]
+                stat_tile("Position fix", "tile-fix", compact=True),
+                stat_tile("Altitude", "tile-alt"),
+                stat_tile("Satellites used / tracked", "tile-sats"),
+                stat_tile("HDOP / PDOP", "tile-dop"),
+                stat_tile("Block time (mean / WCET)", "tile-block", compact=True),
+                stat_tile("Blocks processed", "tile-blocks"),
+            ],
         ),
-
-        # Row 2: skyplot, C/N0, and Doppler graphs
         html.Div(
-            style={"display": "grid", "gridTemplateColumns": "1fr 1fr 1fr", "gap": "16px", "marginBottom": "20px"},
+            style={"display": "grid", "gridTemplateColumns": "1fr 1fr", "gap": "12px", "marginBottom": "16px"},
             children=[
-                html.Div(
-                    style={"backgroundColor": "#1e293b", "padding": "16px", "borderRadius": "12px", "border": "1px solid #334155", "overflow": "hidden"},
-                    children=[
-                        html.H3("Satellite Skyplot (Azimuth & Elevation)", style={"margin": "0 0 12px 0", "fontSize": "15px", "color": "#f8fafc"}),
-                        dcc.Graph(id="skyplot-graph", config={"displayModeBar": False}, style={"height": "300px"})
-                    ]
-                ),
-                html.Div(
-                    style={"backgroundColor": "#1e293b", "padding": "16px", "borderRadius": "12px", "border": "1px solid #334155", "overflow": "hidden"},
-                    children=[
-                        html.H3("Carrier-to-Noise Ratio (C/N0 dB-Hz)", style={"margin": "0 0 12px 0", "fontSize": "15px", "color": "#f8fafc"}),
-                        dcc.Graph(id="cn0-graph", config={"displayModeBar": False}, style={"height": "300px"})
-                    ]
-                ),
-                html.Div(
-                    style={"backgroundColor": "#1e293b", "padding": "16px", "borderRadius": "12px", "border": "1px solid #334155", "overflow": "hidden"},
-                    children=[
-                        html.H3("Carrier Doppler Shift (Hz)", style={"margin": "0 0 12px 0", "fontSize": "15px", "color": "#f8fafc"}),
-                        dcc.Graph(id="doppler-graph", config={"displayModeBar": False}, style={"height": "300px"})
-                    ]
-                )
-            ]
+                card("Channel status", [html.Div(id="channel-board")]),
+                card("Acquisition C/N0 by channel", [dcc.Graph(id="cn0-graph", config={"displayModeBar": False})]),
+            ],
         ),
-
-        # Row 3: tracking discriminator errors and profiler
         html.Div(
-            style={"display": "grid", "gridTemplateColumns": "1fr 1fr", "gap": "16px", "marginBottom": "20px"},
+            style={"display": "grid", "gridTemplateColumns": "1fr 1fr", "gap": "12px", "marginBottom": "16px"},
             children=[
+                card("Skyplot (solved azimuth / elevation)", [dcc.Graph(id="skyplot-graph", config={"displayModeBar": False})]),
+                card("Doppler by channel", [dcc.Graph(id="doppler-graph", config={"displayModeBar": False})]),
+            ],
+        ),
+        card(
+            "Tracking history",
+            [
                 html.Div(
-                    style={"backgroundColor": "#1e293b", "padding": "16px", "borderRadius": "12px", "border": "1px solid #334155", "overflow": "hidden"},
+                    style={"display": "flex", "gap": "10px", "alignItems": "center", "marginBottom": "8px"},
                     children=[
-                        html.H3("PLL Carrier & DLL Code Discriminator Errors", style={"margin": "0 0 12px 0", "fontSize": "15px", "color": "#f8fafc"}),
-                        dcc.Graph(id="tracking-error-graph", config={"displayModeBar": False}, style={"height": "280px"})
-                    ]
+                        html.Div("Channels", style={"fontSize": "12px", "color": MUTED}),
+                        dcc.Dropdown(
+                            id="track-prn-select",
+                            options=[],
+                            value=[],
+                            multi=True,
+                            persistence=True,
+                            placeholder="Tracked channels (default: first four)",
+                            style={"minWidth": "360px", "flex": "1", "backgroundColor": WELL_BG, "color": "#111111", "fontSize": "12px"},
+                        ),
+                    ],
                 ),
-                html.Div(
-                    style={"backgroundColor": "#1e293b", "padding": "16px", "borderRadius": "12px", "border": "1px solid #334155", "overflow": "hidden"},
-                    children=[
-                        html.H3("Pipeline Per-Stage Processing Latency (ms)", style={"margin": "0 0 12px 0", "fontSize": "15px", "color": "#f8fafc"}),
-                        dcc.Graph(id="profiler-graph", config={"displayModeBar": False}, style={"height": "280px"})
-                    ]
-                )
-            ]
+                dcc.Graph(id="tracking-graph", config={"displayModeBar": False}),
+            ],
+            {"marginBottom": "16px"},
         ),
-
-        # Row 4: decoded satellite ephemeris table
         html.Div(
-            style={"backgroundColor": "#1e293b", "padding": "16px", "borderRadius": "12px", "border": "1px solid #334155", "marginBottom": "20px", "overflow": "hidden"},
+            style={"display": "grid", "gridTemplateColumns": "1fr 1fr", "gap": "12px", "marginBottom": "16px"},
             children=[
-                html.H3("Decoded Satellite Ephemerides & Atmospheric Delays", style={"margin": "0 0 12px 0", "fontSize": "15px", "color": "#f8fafc"}),
-                html.Div(id="ephemeris-table-container", style={"overflowX": "auto", "maxHeight": "300px", "overflowY": "auto"})
-            ]
-        ),
-
-        # Row 5: software events feed and NMEA stream
-        html.Div(
-            style={"display": "grid", "gridTemplateColumns": "1fr 1fr", "gap": "16px", "marginBottom": "20px"},
-            children=[
-                html.Div(
-                    style={"backgroundColor": "#1e293b", "padding": "16px", "borderRadius": "12px", "border": "1px solid #334155", "overflow": "hidden"},
-                    children=[
-                        html.H3("Real-Time Software Lifecycle & Event Monitor Log", style={"margin": "0 0 12px 0", "fontSize": "15px", "color": "#f8fafc"}),
-                        html.Pre(
-                            id="software-events-window",
-                            style={
-                                "backgroundColor": "#060a12",
-                                "color": "#10b981",
-                                "padding": "12px",
-                                "borderRadius": "8px",
-                                "fontFamily": "'JetBrains Mono', 'Fira Code', monospace",
-                                "fontSize": "11px",
-                                "height": "300px",
-                                "overflowY": "auto",
-                                "whiteSpace": "pre-wrap",
-                                "wordBreak": "break-all",
-                                "border": "1px solid #1e293b"
-                            }
-                        )
-                    ]
+                card("Per-channel compute time (ms)", [html.Div(id="timing-table", style={"overflowX": "auto", "maxHeight": "320px", "overflowY": "auto"})]),
+                card(
+                    "Application status",
+                    [
+                        html.Div(id="app-status-table", style={"marginBottom": "10px"}),
+                        html.Div(id="stage-table"),
+                    ],
                 ),
-                html.Div(
-                    style={"backgroundColor": "#1e293b", "padding": "16px", "borderRadius": "12px", "border": "1px solid #334155", "overflow": "hidden"},
-                    children=[
-                        html.H3("NMEA-0183 Live Telemetry Output Stream", style={"margin": "0 0 12px 0", "fontSize": "15px", "color": "#f8fafc"}),
-                        html.Pre(
-                            id="nmea-log-window",
-                            style={
-                                "backgroundColor": "#060a12",
-                                "color": "#38bdf8",
-                                "padding": "12px",
-                                "borderRadius": "8px",
-                                "fontFamily": "'JetBrains Mono', 'Fira Code', monospace",
-                                "fontSize": "11px",
-                                "height": "300px",
-                                "overflowY": "auto",
-                                "whiteSpace": "pre-wrap",
-                                "wordBreak": "break-all",
-                                "border": "1px solid #1e293b"
-                            }
-                        )
-                    ]
-                )
-            ]
+            ],
         ),
-
-        # Timer Component for Continuous Updates (1s interval)
-        dcc.Interval(id="interval-component", interval=1000, n_intervals=0)
-    ]
+        card(
+            "Pipeline stage timing",
+            [dcc.Graph(id="profiler-graph", config={"displayModeBar": False})],
+            {"marginBottom": "16px"},
+        ),
+        html.Div(
+            style={"display": "grid", "gridTemplateColumns": "1fr 2fr", "gap": "12px", "marginBottom": "16px"},
+            children=[
+                card("PVT solution", [html.Div(id="pvt-table")]),
+                card("PVT history", [dcc.Graph(id="pvt-graph", config={"displayModeBar": False})]),
+            ],
+        ),
+        html.Div(
+            style={"display": "grid", "gridTemplateColumns": "2fr 1fr", "gap": "12px", "marginBottom": "16px"},
+            children=[
+                card("Position fix map", [dcc.Graph(id="map-graph", config={"displayModeBar": False})]),
+                card(
+                    "Channel details",
+                    [html.Div(id="channel-table", style={"overflowX": "auto", "maxHeight": "430px", "overflowY": "auto"})],
+                ),
+            ],
+        ),
+        card(
+            "Event log",
+            [
+                html.Pre(
+                    id="events-window",
+                    style={
+                        "backgroundColor": WELL_BG,
+                        "color": INK_2,
+                        "padding": "10px",
+                        "borderRadius": "8px",
+                        "fontFamily": "ui-monospace, monospace",
+                        "fontSize": "11px",
+                        "height": "220px",
+                        "overflowY": "auto",
+                        "whiteSpace": "pre-wrap",
+                        "margin": 0,
+                    },
+                )
+            ],
+            {"marginBottom": "16px"},
+        ),
+        dcc.Interval(id="interval-component", interval=1000, n_intervals=0),
+    ],
 )
 
-# Dash callback: single state-lock read, consistent UI update
+
+def build_cn0_figure(channels):
+    prns = [f"{ch['prn']:02d}" for ch in channels]
+    groups = {2: ("Tracking", ST_GOOD), 1: ("Confirming", ST_WARN), 0: ("Idle", ST_IDLE)}
+    fig = go.Figure()
+    for state, (label, color) in groups.items():
+        xs = [f"{ch['prn']:02d}" for ch in channels if ch["state"] == state]
+        ys = [max(ch["cn0"], 0.0) for ch in channels if ch["state"] == state]
+        if xs:
+            fig.add_trace(
+                go.Bar(
+                    x=xs,
+                    y=ys,
+                    name=label,
+                    marker=dict(color=color, line=dict(width=0)),
+                    hovertemplate="PRN %{x}: %{y:.1f} dB-Hz<extra>" + label + "</extra>",
+                )
+            )
+    fig.add_hline(y=ACQ_CN0_THRESHOLD, line=dict(color=MUTED, width=1, dash="dot"))
+    fig.add_annotation(
+        x=1.0,
+        xref="paper",
+        y=ACQ_CN0_THRESHOLD,
+        text=f"acq threshold {ACQ_CN0_THRESHOLD:.0f}",
+        showarrow=False,
+        yshift=8,
+        xanchor="right",
+        font=dict(color=MUTED, size=10),
+    )
+    apply_chrome(fig, 300, "cn0", showlegend=True)
+    fig.update_layout(bargap=0.35, barmode="overlay")
+    fig.update_xaxes(categoryorder="array", categoryarray=prns, tickfont=dict(size=9))
+    fig.update_yaxes(title_text="C/N0 (dB-Hz)", range=[0, 60], title_font=dict(color=MUTED, size=11))
+    return fig
+
+
+def build_skyplot_figure(channels):
+    fig = go.Figure()
+    visible = [ch for ch in channels if ch["hasAtmo"] and ch["state"] >= 1]
+    for state in (1, 2):
+        members = [ch for ch in visible if ch["state"] == state]
+        if not members:
+            continue
+        fig.add_trace(
+            go.Scatterpolar(
+                r=[90.0 - ch["elevation"] for ch in members],
+                theta=[ch["azimuth"] for ch in members],
+                mode="markers+text",
+                name=STATE_LABELS[state],
+                text=[f"{ch['prn']:02d}" for ch in members],
+                textposition="top center",
+                textfont=dict(color=INK_2, size=10),
+                marker=dict(size=10, color=STATE_COLORS[state], line=dict(color=SURFACE, width=2)),
+                hovertemplate="PRN %{text}: az %{theta:.1f} deg, el %{customdata:.1f} deg<extra></extra>",
+                customdata=[ch["elevation"] for ch in members],
+            )
+        )
+    fig.update_layout(
+        polar=dict(
+            bgcolor=SURFACE,
+            radialaxis=dict(range=[0, 90], showticklabels=False, gridcolor=GRID, linecolor=BASELINE),
+            angularaxis=dict(direction="clockwise", rotation=90, gridcolor=GRID, linecolor=BASELINE, tickfont=dict(color=MUTED)),
+        ),
+    )
+    apply_chrome(fig, 320, "skyplot", showlegend=True)
+    fig.update_layout(margin=dict(l=30, r=30, t=25, b=25))
+    return fig
+
+
+def build_doppler_figure(channels):
+    active = [ch for ch in channels if ch["state"] >= 1 or ch["acquired"]]
+    xs = [f"{ch['prn']:02d}" for ch in active]
+    ys = [ch["carrierFreqHz"] if ch["state"] >= 1 else ch["acqDoppler"] for ch in active]
+    labels = ["tracked" if ch["state"] >= 1 else "acquisition" for ch in active]
+    fig = go.Figure(
+        go.Bar(
+            x=xs,
+            y=ys,
+            marker=dict(color=SERIES[0], line=dict(width=0)),
+            customdata=labels,
+            hovertemplate="PRN %{x}: %{y:.1f} Hz (%{customdata})<extra></extra>",
+        )
+    )
+    apply_chrome(fig, 320, "doppler")
+    fig.update_layout(bargap=0.35)
+    fig.update_yaxes(title_text="Doppler (Hz)", title_font=dict(color=MUTED, size=11))
+    return fig
+
+
+TRACK_PANELS = (
+    ("Carrier Doppler (Hz)", 1),
+    ("DLL code error (chips)", 2),
+    ("Carrier lock indicator", 3),
+    ("Code lock ratio", 4),
+)
+
+
+def build_tracking_figure(track_history, selected_prns):
+    fig = make_subplots(rows=2, cols=2, subplot_titles=[p[0] for p in TRACK_PANELS], vertical_spacing=0.16, horizontal_spacing=0.08)
+    for prn in selected_prns:
+        history = list(track_history.get(prn, ()))
+        if not history:
+            continue
+        times = to_dt([s[0] for s in history])
+        color = series_color(prn)
+        for panel_index, (_, field) in enumerate(TRACK_PANELS):
+            fig.add_trace(
+                go.Scatter(
+                    x=times,
+                    y=[s[field] for s in history],
+                    mode="lines",
+                    name=f"PRN {prn:02d}",
+                    legendgroup=f"prn{prn}",
+                    showlegend=panel_index == 0,
+                    line=dict(color=color, width=2),
+                    hovertemplate="PRN " + f"{prn:02d}" + ": %{y:.3f}<extra></extra>",
+                ),
+                row=panel_index // 2 + 1,
+                col=panel_index % 2 + 1,
+            )
+    apply_chrome(fig, 480, "tracking", showlegend=True)
+    fig.update_layout(hovermode="x unified", margin=dict(l=48, r=12, t=40, b=32))
+    fig.update_annotations(font=dict(color=INK_2, size=12))
+    return fig
+
+
+def build_profiler_figure(profiler_history):
+    history = list(profiler_history)
+    fig = go.Figure()
+    if history:
+        times = to_dt([s[0] for s in history])
+        stage_series = (
+            ("Total", 5, SERIES[0]),
+            ("Tracking", 2, SERIES[1]),
+            ("Acquisition", 1, SERIES[2]),
+            ("Nav decode", 3, SERIES[3]),
+            ("PVT solve", 4, SERIES[4]),
+        )
+        for name, field, color in stage_series:
+            fig.add_trace(
+                go.Scatter(
+                    x=times,
+                    y=[s[field] for s in history],
+                    mode="lines",
+                    name=name,
+                    line=dict(color=color, width=2),
+                )
+            )
+        fig.add_hline(y=BLOCK_DEADLINE_MS, line=dict(color=ST_CRIT, width=1, dash="dot"))
+        fig.add_annotation(
+            x=1.0,
+            xref="paper",
+            y=BLOCK_DEADLINE_MS,
+            text="1 ms real-time deadline",
+            showarrow=False,
+            yshift=8,
+            xanchor="right",
+            font=dict(color=ST_CRIT, size=10),
+        )
+    apply_chrome(fig, 300, "profiler", showlegend=True)
+    fig.update_layout(hovermode="x unified")
+    fig.update_yaxes(title_text="Stage time (ms)", title_font=dict(color=MUTED, size=11))
+    return fig
+
+
+PVT_PANELS = (
+    ("Altitude (m)", 4),
+    ("Clock bias (m)", 5),
+    ("Satellites used", 7),
+    ("Max residual (m)", 8),
+)
+
+
+def build_pvt_figure(pvt_history):
+    fig = make_subplots(rows=2, cols=2, subplot_titles=[p[0] for p in PVT_PANELS], vertical_spacing=0.16, horizontal_spacing=0.08)
+    history = [s for s in pvt_history if s[1]]
+    if history:
+        times = to_dt([s[0] for s in history])
+        for panel_index, (_, field) in enumerate(PVT_PANELS):
+            fig.add_trace(
+                go.Scatter(
+                    x=times,
+                    y=[s[field] for s in history],
+                    mode="lines",
+                    line=dict(color=SERIES[0], width=2),
+                    hovertemplate="%{y:.2f}<extra></extra>",
+                ),
+                row=panel_index // 2 + 1,
+                col=panel_index % 2 + 1,
+            )
+    apply_chrome(fig, 380, "pvt")
+    fig.update_layout(hovermode="x unified", margin=dict(l=48, r=12, t=40, b=32))
+    fig.update_annotations(font=dict(color=INK_2, size=12))
+    return fig
+
+
+def build_map_figure(pvt, pvt_history):
+    fixes = [s for s in pvt_history if s[1]]
+    lats = [s[2] for s in fixes]
+    lons = [s[3] for s in fixes]
+    has_fix = bool(fixes)
+    use_maplibre = hasattr(go, "Scattermap")
+    trace_cls = go.Scattermap if use_maplibre else go.Scattermapbox
+    fig = go.Figure()
+    if has_fix:
+        fig.add_trace(
+            trace_cls(
+                lat=lats,
+                lon=lons,
+                mode="lines",
+                name="Fix trail",
+                line=dict(color=SERIES[0], width=2),
+                hoverinfo="skip",
+            )
+        )
+        fig.add_trace(
+            trace_cls(
+                lat=[lats[-1]],
+                lon=[lons[-1]],
+                mode="markers",
+                name="Current fix",
+                marker=dict(color=ST_GOOD, size=14),
+                hovertemplate="%{lat:.6f}, %{lon:.6f}<extra>Current fix</extra>",
+            )
+        )
+    center = dict(lat=lats[-1] if has_fix else 0.0, lon=lons[-1] if has_fix else 0.0)
+    map_config = dict(style="open-street-map", center=center, zoom=15 if has_fix else 1)
+    layout = dict(
+        paper_bgcolor=SURFACE,
+        font=dict(color=INK_2, size=11, family=FONT_STACK),
+        margin=dict(l=0, r=0, t=0, b=0),
+        height=430,
+        uirevision=f"map-{has_fix}",
+        showlegend=has_fix,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0, bgcolor="rgba(0,0,0,0)"),
+    )
+    if use_maplibre:
+        layout["map"] = map_config
+    else:
+        layout["mapbox"] = map_config
+    fig.update_layout(**layout)
+    return fig
+
+
+def build_channel_board(channels):
+    chips = []
+    for ch in channels:
+        color = STATE_COLORS.get(ch["state"], ST_IDLE)
+        label = STATE_LABELS.get(ch["state"], "?")
+        cn0_text = fmt_float(ch["cn0"], 1) if ch["cn0"] > 0 else "--"
+        chips.append(
+            html.Div(
+                style={
+                    "backgroundColor": WELL_BG,
+                    "border": f"1px solid {GRID}",
+                    "borderRadius": "8px",
+                    "padding": "6px 4px",
+                    "textAlign": "center",
+                },
+                children=[
+                    html.Div(
+                        style={"display": "flex", "alignItems": "center", "justifyContent": "center", "gap": "4px"},
+                        children=[
+                            html.Span(style={"width": "8px", "height": "8px", "borderRadius": "50%", "backgroundColor": color, "display": "inline-block"}),
+                            html.Span(f"{ch['prn']:02d}", style={"fontSize": "12px", "fontWeight": "600", "color": INK}),
+                        ],
+                    ),
+                    html.Div(label, style={"fontSize": "10px", "color": MUTED, "marginTop": "2px"}),
+                    html.Div(cn0_text, style={"fontSize": "10px", "color": INK_2, "fontVariantNumeric": "tabular-nums"}),
+                ],
+            )
+        )
+    return html.Div(style={"display": "grid", "gridTemplateColumns": "repeat(8, 1fr)", "gap": "6px"}, children=chips)
+
+
+def build_timing_table(channels):
+    rows = []
+    for ch in channels:
+        acq = ch["acqStat"]
+        trk = ch["trkStat"]
+        if acq["count"] == 0 and trk["count"] == 0:
+            continue
+        rows.append(
+            table_row(
+                [
+                    f"{ch['prn']:02d}",
+                    STATE_LABELS.get(ch["state"], "?"),
+                    str(acq["count"]),
+                    fmt_float(acq["last"], 2) if acq["count"] else "--",
+                    fmt_float(acq["mean"], 2) if acq["count"] else "--",
+                    fmt_float(acq["max"], 2) if acq["count"] else "--",
+                    str(trk["count"]),
+                    fmt_float(trk["last"], 4) if trk["count"] else "--",
+                    fmt_float(trk["mean"], 4) if trk["count"] else "--",
+                    fmt_float(trk["max"], 4) if trk["count"] else "--",
+                ]
+            )
+        )
+    headers = ["PRN", "State", "Acq runs", "Acq last", "Acq mean", "Acq WCET", "Trk blocks", "Trk last", "Trk mean", "Trk WCET"]
+    return data_table(headers, rows, "No per-channel timing received yet (requires struct v2 telemetry)")
+
+
+def build_stage_table(stage_stats):
+    labels = (("total", "Total block"), ("track", "Tracking"), ("acq", "Acquisition"), ("nav", "Nav decode"), ("pvt", "PVT solve"))
+    rows = []
+    for key, label in labels:
+        st = stage_stats[key]
+        if st["count"] == 0:
+            continue
+        rows.append(table_row([label, fmt_float(st["last"], 3), fmt_float(st["mean"], 3), fmt_float(st["max"], 3)]))
+    return data_table(["Stage", "Last (ms)", "Nominal (ms)", "WCET (ms)"], rows, "No profiler telemetry yet")
+
+
+def build_app_status_table(source, profiler, stage_stats, channels, data_age):
+    tracked = sum(1 for ch in channels if ch["state"] == 2)
+    confirming = sum(1 for ch in channels if ch["state"] == 1)
+    total_stat = stage_stats["total"]
+    margin_text = "--"
+    if total_stat["count"]:
+        margin = (1.0 - total_stat["mean"] / BLOCK_DEADLINE_MS) * 100.0
+        margin_text = f"{margin:.1f} % of the 1 ms block budget"
+    imbalance_text = "--"
+    if profiler["trackMs"] > 0.0 and profiler["maxWorkerMs"] > 0.0:
+        imbalance_text = f"{profiler['trackMs'] - profiler['maxWorkerMs']:.3f} ms barrier overhead"
+    rows = [
+        ("Stream", "live" if data_age < 3.0 else f"stale ({data_age:.0f} s since last message)"),
+        ("Block index", f"{source['blockIndex']}"),
+        ("Stream time", fmt_float(source["timestamp"], 2, "s")),
+        ("FIFO underruns / overruns", f"{source['fifoUnderruns']} / {source['fifoOverruns']}"),
+        ("Channels tracking / confirming", f"{tracked} / {confirming}"),
+        ("Real-time margin", margin_text),
+        ("Tracking worker imbalance", imbalance_text),
+        ("Correlator / NCO / accumulate", f"{fmt_float(profiler['elpGenMs'], 3)} / {fmt_float(profiler['ncoMs'], 3)} / {fmt_float(profiler['accumMs'], 3)} ms"),
+    ]
+    body = [
+        html.Tr(
+            [html.Td(k, style={**TD_STYLE, "color": MUTED}), html.Td(v, style=TD_NUM_STYLE)],
+            style={"borderBottom": f"1px solid {GRID}"},
+        )
+        for k, v in rows
+    ]
+    return html.Table(style={"width": "100%", "borderCollapse": "collapse", "fontSize": "11px"}, children=[html.Tbody(body)])
+
+
+def build_pvt_table(pvt, fix_availability):
+    rows = [
+        ("Fix valid", "yes" if pvt["valid"] else "no"),
+        ("Latitude", fmt_float(pvt["latitude"], 6, "deg")),
+        ("Longitude", fmt_float(pvt["longitude"], 6, "deg")),
+        ("Altitude", fmt_float(pvt["altitude"], 2, "m")),
+        ("ECEF X / Y / Z", f"{fmt_float(pvt['ecefX'], 1)} / {fmt_float(pvt['ecefY'], 1)} / {fmt_float(pvt['ecefZ'], 1)} m"),
+        ("Clock bias", f"{fmt_float(pvt['clockBiasMeters'], 2)} m ({fmt_float(pvt['clockBiasSeconds'] * 1e6, 3)} us)"),
+        ("GDOP / PDOP", f"{fmt_float(pvt['gdop'], 2)} / {fmt_float(pvt['pdop'], 2)}"),
+        ("HDOP / VDOP", f"{fmt_float(pvt['hdop'], 2)} / {fmt_float(pvt['vdop'], 2)}"),
+        ("Satellites used", str(pvt["satellitesUsed"]) if pvt["satellitesUsed"] else "--"),
+        ("Max residual", fmt_float(pvt["maxResidualMeters"], 2, "m") if pvt["satellitesUsed"] else "--"),
+        ("Fix count", str(pvt["fixCount"])),
+        ("Fix availability (last minute)", f"{fix_availability:.0f} %" if fix_availability >= 0 else "--"),
+        ("First fix", time.strftime("%H:%M:%S", time.localtime(pvt["firstFixTime"])) if pvt["firstFixTime"] else "--"),
+    ]
+    body = [
+        html.Tr(
+            [html.Td(k, style={**TD_STYLE, "color": MUTED}), html.Td(v, style=TD_NUM_STYLE)],
+            style={"borderBottom": f"1px solid {GRID}"},
+        )
+        for k, v in rows
+    ]
+    return html.Table(style={"width": "100%", "borderCollapse": "collapse", "fontSize": "11px"}, children=[html.Tbody(body)])
+
+
+def build_channel_table(channels):
+    rows = []
+    for ch in channels:
+        if ch["state"] == 0 and not ch["hasNav"]:
+            continue
+        subframes = f"{ch['subframeMask']:05b}" if ch["hasNav"] else "--"
+        azel = f"{fmt_float(ch['azimuth'], 0)} / {fmt_float(ch['elevation'], 0)}" if ch["hasAtmo"] else "--"
+        atmo = f"{fmt_float(ch['ionoDelay'], 1)} / {fmt_float(ch['tropoDelay'], 1)}" if ch["hasAtmo"] else "--"
+        rows.append(
+            table_row(
+                [
+                    f"{ch['prn']:02d}",
+                    STATE_LABELS.get(ch["state"], "?"),
+                    fmt_float(ch["cn0"], 1),
+                    fmt_float(ch["carrierFreqHz"], 1),
+                    fmt_float(ch["carrierLock"], 2),
+                    fmt_float(ch["codeLock"], 2),
+                    subframes,
+                    fmt_float(ch["tow"], 0) if ch["hasNav"] else "--",
+                    azel,
+                    atmo,
+                ]
+            )
+        )
+    headers = ["PRN", "State", "C/N0", "Doppler", "Carrier lock", "Code lock", "Subframes", "TOW", "Az / El", "Iono / Tropo (m)"]
+    return data_table(headers, rows, "No active channels yet")
+
+
 @app.callback(
     [
-        Output("card-sat-count", "children"),
-        Output("card-location", "children"),
-        Output("card-altitude", "children"),
-        Output("card-dop", "children"),
-        Output("card-latency", "children"),
-        Output("skyplot-graph", "figure"),
+        Output("status-badge", "children"),
+        Output("status-badge", "style"),
+        Output("last-update", "children"),
+        Output("tile-fix", "children"),
+        Output("tile-alt", "children"),
+        Output("tile-sats", "children"),
+        Output("tile-dop", "children"),
+        Output("tile-block", "children"),
+        Output("tile-blocks", "children"),
+        Output("channel-board", "children"),
         Output("cn0-graph", "figure"),
+        Output("skyplot-graph", "figure"),
         Output("doppler-graph", "figure"),
-        Output("tracking-error-graph", "figure"),
+        Output("track-prn-select", "options"),
+        Output("tracking-graph", "figure"),
+        Output("timing-table", "children"),
+        Output("app-status-table", "children"),
+        Output("stage-table", "children"),
         Output("profiler-graph", "figure"),
-        Output("ephemeris-table-container", "children"),
-        Output("software-events-window", "children"),
-        Output("nmea-log-window", "children"),
-        Output("last-update", "children")
+        Output("pvt-table", "children"),
+        Output("pvt-graph", "figure"),
+        Output("map-graph", "figure"),
+        Output("channel-table", "children"),
+        Output("events-window", "children"),
     ],
-    [Input("interval-component", "n_intervals")]
+    [Input("interval-component", "n_intervals"), Input("track-prn-select", "value")],
 )
-def update_dashboard(n):
-    try:
-        with STATE_LOCK:
-            sats = list(GLOBAL_STATE["satellites"].values())
-            pvt = dict(GLOBAL_STATE["pvt"])
-            profiler = dict(GLOBAL_STATE["profiler"])
-            nmea_lines = list(GLOBAL_STATE["nmea"])
-            events = list(GLOBAL_STATE["events"])
-            last_t = GLOBAL_STATE["last_update"]
+def update_dashboard(_, selected_prns):
+    with STATE_LOCK:
+        channels = [dict(ch, acqStat=dict(ch["acqStat"]), trkStat=dict(ch["trkStat"])) for ch in GLOBAL_STATE["channels"].values()]
+        track_history = {prn: list(dq) for prn, dq in GLOBAL_STATE["trackHistory"].items() if dq}
+        pvt = dict(GLOBAL_STATE["pvt"])
+        pvt_history = list(GLOBAL_STATE["pvtHistory"])
+        profiler = dict(GLOBAL_STATE["profiler"])
+        stage_stats = {k: dict(v) for k, v in GLOBAL_STATE["stageStats"].items()}
+        profiler_history = list(GLOBAL_STATE["profilerHistory"])
+        source = dict(GLOBAL_STATE["source"])
+        events = list(GLOBAL_STATE["events"])
+        last_update = GLOBAL_STATE["lastUpdate"]
 
-        # 1. KPI cards
-        acq_count = sum(1 for s in sats if s.get("acquired"))
-        sat_count_str = f"{acq_count} / {len(sats)}"
+    now = time.time()
+    data_age = now - last_update if last_update > 0 else float("inf")
+    if last_update == 0:
+        badge_text, badge_color = "WAITING", ST_IDLE
+    elif data_age < 3.0:
+        badge_text, badge_color = "LIVE", ST_GOOD
+    elif data_age < 15.0:
+        badge_text, badge_color = "STALE", ST_WARN
+    else:
+        badge_text, badge_color = "OFFLINE", ST_CRIT
+    badge_style = {"backgroundColor": badge_color, "color": INK, "padding": "5px 12px", "borderRadius": "16px", "fontSize": "11px", "fontWeight": "600"}
+    update_text = f"Last message {time.strftime('%H:%M:%S', time.localtime(last_update))}" if last_update else "No data yet"
 
-        lat, lon, alt = pvt.get("latitude", 0.0), pvt.get("longitude", 0.0), pvt.get("altitude", 0.0)
-        if pvt.get("valid"):
-            location_str = f"{fmt_float(abs(lat), 4)}°{'N' if lat>=0 else 'S'}, {fmt_float(abs(lon), 4)}°{'E' if lon>=0 else 'W'}"
-            alt_str = fmt_float(alt, 1, "m")
-            dop_str = f"HDOP: {fmt_float(pvt.get('hdop'), 2)} | PDOP: {fmt_float(pvt.get('pdop'), 2)}"
-        else:
-            location_str = "Acquiring Ephemeris..."
-            alt_str = "--"
-            dop_str = "--"
+    if pvt["valid"]:
+        lat, lon = pvt["latitude"], pvt["longitude"]
+        fix_text = f"{abs(lat):.5f} {'N' if lat >= 0 else 'S'}, {abs(lon):.5f} {'E' if lon >= 0 else 'W'}"
+        alt_text = fmt_float(pvt["altitude"], 1, "m")
+        dop_text = f"{fmt_float(pvt['hdop'], 2)} / {fmt_float(pvt['pdop'], 2)}"
+    else:
+        fix_text = "No fix"
+        alt_text = "--"
+        dop_text = "--"
+    tracked = sum(1 for ch in channels if ch["state"] == 2)
+    sats_text = f"{pvt['satellitesUsed'] if pvt['valid'] else 0} / {tracked}"
+    total_stat = stage_stats["total"]
+    block_text = f"{fmt_float(total_stat['mean'], 3)} / {fmt_float(total_stat['max'], 3)} ms" if total_stat["count"] else "--"
+    blocks_text = f"{source['blockIndex']:,}" if source["blockIndex"] else "--"
 
-        tot_ms = profiler.get("totalMs", 0.0)
-        latency_str = fmt_float(tot_ms, 2, "ms") if tot_ms > 0 else "--"
+    tracked_prns = sorted(track_history.keys())
+    options = [{"label": f"PRN {prn:02d}", "value": prn} for prn in tracked_prns]
+    shown_prns = [p for p in (selected_prns or []) if p in track_history] or tracked_prns[:4]
 
-        # 2. Skyplot Graph
-        r_vals = [90 - safe_float(s["elevation"], 0.0) for s in sats if s.get("acquired")]
-        theta_vals = [safe_float(s["azimuth"], 0.0) for s in sats if s.get("acquired")]
-        labels = [f"PRN {s['prn']:02d}" for s in sats if s.get("acquired")]
+    recent = [s for s in pvt_history if now - s[0] <= 60.0]
+    fix_availability = 100.0 * sum(1 for s in recent if s[1]) / len(recent) if recent else -1.0
 
-        skyplot_fig = go.Figure(go.Scatterpolar(
-            r=r_vals,
-            theta=theta_vals,
-            mode="markers+text",
-            text=labels,
-            textposition="top center",
-            marker=dict(size=11, color="#38bdf8", line=dict(color="#0284c7", width=2))
-        ))
-        skyplot_fig.update_layout(
-            polar=dict(
-                radialaxis=dict(visible=True, range=[0, 90], showticklabels=False, color="#475569"),
-                angularaxis=dict(direction="clockwise", color="#94a3b8"),
-                bgcolor="#0b1329"
-            ),
-            paper_bgcolor="#1e293b",
-            margin=dict(l=25, r=25, t=15, b=15),
-            font=dict(color="#f8fafc", size=10),
-            height=300,
-            autosize=False
-        )
+    return (
+        badge_text,
+        badge_style,
+        update_text,
+        fix_text,
+        alt_text,
+        sats_text,
+        dop_text,
+        block_text,
+        blocks_text,
+        build_channel_board(channels),
+        build_cn0_figure(channels),
+        build_skyplot_figure(channels),
+        build_doppler_figure(channels),
+        options,
+        build_tracking_figure(track_history, shown_prns),
+        build_timing_table(channels),
+        build_app_status_table(source, profiler, stage_stats, channels, data_age),
+        build_stage_table(stage_stats),
+        build_profiler_figure(profiler_history),
+        build_pvt_table(pvt, fix_availability),
+        build_pvt_figure(pvt_history),
+        build_map_figure(pvt, pvt_history),
+        build_channel_table(channels),
+        "\n".join(reversed(events)) if events else "Waiting for telemetry events...",
+    )
 
-        # 3. C/N0 Bar Chart
-        prns = [f"P{s['prn']:02d}" for s in sats]
-        cn0s = [safe_float(s["cn0"], 0.0) for s in sats]
-        cn0_colors = ["#10b981" if c >= 40 else "#f59e0b" if c >= 35 else "#ef4444" for c in cn0s]
 
-        cn0_fig = go.Figure(go.Bar(x=prns, y=cn0s, marker_color=cn0_colors))
-        cn0_fig.update_layout(
-            paper_bgcolor="#1e293b",
-            plot_bgcolor="#0b1329",
-            margin=dict(l=25, r=15, t=15, b=35),
-            font=dict(color="#f8fafc", size=10),
-            xaxis=dict(gridcolor="#1e293b"),
-            yaxis=dict(title="C/N0 (dB-Hz)", range=[0, 60], gridcolor="#1e293b"),
-            height=300,
-            autosize=False
-        )
-
-        # 4. Carrier Doppler Graph
-        dopplers = [safe_float(s["doppler"], 0.0) for s in sats]
-        doppler_fig = go.Figure(go.Bar(x=prns, y=dopplers, marker_color="#a855f7"))
-        doppler_fig.update_layout(
-            paper_bgcolor="#1e293b",
-            plot_bgcolor="#0b1329",
-            margin=dict(l=25, r=15, t=15, b=35),
-            font=dict(color="#f8fafc", size=10),
-            xaxis=dict(gridcolor="#1e293b"),
-            yaxis=dict(title="Doppler Shift (Hz)", gridcolor="#1e293b"),
-            height=300,
-            autosize=False
-        )
-
-        # 5. Tracking error graph (carrier & code)
-        carr_errs = [safe_float(s["carrierError"], 0.0) for s in sats]
-        code_errs = [safe_float(s["codeError"], 0.0) for s in sats]
-
-        tracking_error_fig = go.Figure()
-        tracking_error_fig.add_trace(go.Scatter(x=prns, y=carr_errs, mode="lines+markers", name="PLL Carrier Error (Hz)", line=dict(color="#38bdf8", width=2)))
-        tracking_error_fig.add_trace(go.Scatter(x=prns, y=code_errs, mode="lines+markers", name="DLL Code Error (Chips)", line=dict(color="#f59e0b", width=2)))
-        tracking_error_fig.update_layout(
-            paper_bgcolor="#1e293b",
-            plot_bgcolor="#0b1329",
-            margin=dict(l=25, r=15, t=15, b=35),
-            font=dict(color="#f8fafc", size=10),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-            xaxis=dict(gridcolor="#1e293b"),
-            yaxis=dict(gridcolor="#1e293b"),
-            height=280,
-            autosize=False
-        )
-
-        # 6. Profiler Stage Latency Graph
-        stages = ["Acquisition", "Tracking", "Nav Decode", "PVT Solve"]
-        latencies = [
-            safe_float(profiler.get("acqMs"), 0.0),
-            safe_float(profiler.get("trackMs"), 0.0),
-            safe_float(profiler.get("navMs"), 0.0),
-            safe_float(profiler.get("pvtMs"), 0.0)
-        ]
-        stage_colors = ["#38bdf8", "#10b981", "#a855f7", "#ec4899"]
-
-        profiler_fig = go.Figure(go.Bar(x=stages, y=latencies, marker_color=stage_colors))
-        profiler_fig.update_layout(
-            paper_bgcolor="#1e293b",
-            plot_bgcolor="#0b1329",
-            margin=dict(l=25, r=15, t=15, b=35),
-            font=dict(color="#f8fafc", size=10),
-            xaxis=dict(gridcolor="#1e293b"),
-            yaxis=dict(title="Execution Time (ms)", gridcolor="#1e293b"),
-            height=280,
-            autosize=False
-        )
-
-        # 7. Ephemeris and atmospheric delays table
-        table_rows = []
-        for s in sats:
-            if s.get("acquired"):
-                mask_str = f"SBF {bin(s.get('subframeMask', 0))[2:].zfill(5)}"
-                table_rows.append(html.Tr([
-                    html.Td(f"PRN {s['prn']:02d}", style={"padding": "6px 8px", "fontWeight": "600", "color": "#38bdf8"}),
-                    html.Td(s.get("stateLabel", "Acquiring"), style={"padding": "6px 8px", "color": "#10b981"}),
-                    html.Td(fmt_float(s['cn0'], 1, "dB-Hz"), style={"padding": "6px 8px"}),
-                    html.Td(fmt_float(s['doppler'], 1, "Hz"), style={"padding": "6px 8px"}),
-                    html.Td(mask_str, style={"padding": "6px 8px", "fontFamily": "monospace", "color": "#10b981"}),
-                    html.Td(fmt_float(s['tow'], 0, "s"), style={"padding": "6px 8px"}),
-                    html.Td(fmt_float(s['ionoDelay'], 2, "m"), style={"padding": "6px 8px"}),
-                    html.Td(fmt_float(s['tropoDelay'], 2, "m"), style={"padding": "6px 8px"}),
-                    html.Td(f"{fmt_float(s['azimuth'], 1)}° / {fmt_float(s['elevation'], 1)}°", style={"padding": "6px 8px"})
-                ], style={"borderBottom": "1px solid #334155"}))
-
-        ephem_table = html.Table(
-            style={"width": "100%", "borderCollapse": "collapse", "fontSize": "11px", "color": "#f8fafc", "tableLayout": "fixed"},
-            children=[
-                html.Thead(html.Tr([
-                    html.Th("PRN", style={"textAlign": "left", "padding": "6px 8px", "color": "#94a3b8"}),
-                    html.Th("State", style={"textAlign": "left", "padding": "6px 8px", "color": "#94a3b8"}),
-                    html.Th("C/N0", style={"textAlign": "left", "padding": "6px 8px", "color": "#94a3b8"}),
-                    html.Th("Doppler", style={"textAlign": "left", "padding": "6px 8px", "color": "#94a3b8"}),
-                    html.Th("Subframes", style={"textAlign": "left", "padding": "6px 8px", "color": "#94a3b8"}),
-                    html.Th("TOW", style={"textAlign": "left", "padding": "6px 8px", "color": "#94a3b8"}),
-                    html.Th("Iono Delay", style={"textAlign": "left", "padding": "6px 8px", "color": "#94a3b8"}),
-                    html.Th("Tropo Delay", style={"textAlign": "left", "padding": "6px 8px", "color": "#94a3b8"}),
-                    html.Th("Az / El", style={"textAlign": "left", "padding": "6px 8px", "color": "#94a3b8"})
-                ])),
-                html.Tbody(table_rows if table_rows else [html.Tr(html.Td("Acquiring satellite channels...", colSpan=9, style={"padding": "12px", "color": "#94a3b8"}))])
-            ]
-        )
-
-        # 8. Logs
-        events_text = "\n".join(reversed(events)) if events else "System Initialized. Awaiting software telemetry events..."
-        nmea_text = "\n".join(nmea_lines) if nmea_lines else "Waiting for live NMEA telemetry stream..."
-        upd_str = f"Updated: {time.strftime('%H:%M:%S', time.localtime(last_t))}" if last_t > 0 else "Waiting for stream..."
-
-        return (
-            sat_count_str,
-            location_str,
-            alt_str,
-            dop_str,
-            latency_str,
-            skyplot_fig,
-            cn0_fig,
-            doppler_fig,
-            tracking_error_fig,
-            profiler_fig,
-            ephem_table,
-            events_text,
-            nmea_text,
-            upd_str
-        )
-    except Exception as e:
-        empty_fig = go.Figure()
-        empty_fig.update_layout(paper_bgcolor="#1e293b", plot_bgcolor="#0b1329", font={"color": "#94a3b8"})
-        return "0 / 32", "System Recovering...", "--", "--", "--", empty_fig, empty_fig, empty_fig, empty_fig, empty_fig, html.Div("Re-synchronizing stream..."), f"Notice: {e}", "Re-synchronizing...", f"Updated: {time.strftime('%H:%M:%S')}"
-
-# Main entry point
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="GPSOpenCl All-Telemetry Dashboard")
+    parser = argparse.ArgumentParser(description="GPSOpenCl telemetry dashboard")
     parser.add_argument("--port", type=int, default=8050, help="Web server port")
     parser.add_argument("--endpoint", type=str, default="ipc:///tmp/gpsopencl/telemetry.sock", help="ZMQ PUB socket endpoint")
     parser.add_argument("--log-file", type=str, default="build/telemetry_wire.log", help="Binary telemetry log file")
     args = parser.parse_args()
 
-    # Start background telemetry subscriber
-    sub_thread = TelemetrySubscriberThread(args.endpoint, args.log_file)
-    sub_thread.start()
+    subscriber = TelemetrySubscriberThread(args.endpoint, args.log_file)
+    subscriber.start()
 
-    print(f"Starting GPSOpenCl Visual Analytics Dashboard on http://localhost:{args.port}")
+    print(f"GPSOpenCl dashboard on http://localhost:{args.port}")
     try:
         app.run(host="0.0.0.0", port=args.port, debug=False)
     except AttributeError:

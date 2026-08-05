@@ -85,4 +85,29 @@ TEST(TrackingCarrierAidingTest, CodeFreqTracksDopplerScaledRateWithinFewBlocks)
         << " blocks -- carrier aiding should make this fast even though the DLL's own 2 Hz bandwidth "
         << "alone would need far longer to settle";
 }
+
+TEST(TrackingFllDiscriminatorTest, PullsInFullBinAcquisitionError)
+{
+    const double freqHz = 375.0;
+    const double theta = 2.0 * M_PI * freqHz * 0.001;
+
+    const float error = GPSOpenCl::Tracking::computeFllError(1.0, 0.0, std::cos(theta), std::sin(theta));
+
+    EXPECT_NEAR(error, freqHz, 0.5);
+}
+
+TEST(TrackingFllDiscriminatorTest, MeasuresSmallFrequencyOffset)
+{
+    const double freqHz = 50.0;
+    const double theta = 2.0 * M_PI * freqHz * 0.001;
+
+    const float error = GPSOpenCl::Tracking::computeFllError(1.0, 0.0, std::cos(theta), std::sin(theta));
+
+    EXPECT_NEAR(error, freqHz, 0.5);
+}
+
+TEST(TrackingFllDiscriminatorTest, ZeroInputGivesZeroError)
+{
+    EXPECT_EQ(GPSOpenCl::Tracking::computeFllError(0.0, 0.0, 0.0, 0.0), 0.0f);
+}
 }

@@ -42,6 +42,12 @@ class Acquisition
      *  @param acqChannel Target channel for results. */
     void correlate(const ComplexFloatVector &input, Compute *gpu, Code *code, Channel *acqChannel);
 
+    /** @brief Get the number of forward-FFT reference spectra computed per correlate() call: the
+     *   bin-resolution to search-spacing ratio when the spacing divides the FFT bin resolution
+     *   exactly, or one spectrum per Doppler bin (no shift reuse) otherwise.
+     *  @return Reference spectrum count, >= 1. */
+    int getReuseFactor() const { return m_reuseFactor; }
+
   private:
     /** @brief Build the Doppler frequency search table. */
     void createDopplerSearchTable();
@@ -59,10 +65,12 @@ class Acquisition
      *   per bin. Exact (not an approximation) whenever the Doppler bin spacing evenly divides the FFT's
      *   own bin resolution (samplingFrequency / numberOfSamplesPerCode): shifting a time-domain signal by
      *   exp(j*2*pi*m*n/N) for integer m is identical, in exact arithmetic, to circularly rotating its
-     *   N-point DFT by m bins. Falls back to 1 (no reuse, one forward FFT per bin, matching the original
-     *   algorithm exactly) whenever that divisibility doesn't hold, so correctness never depends on the
-     *   configured search spacing.
-     *  @return Number of reference spectra (a divisor of the bin resolution ratio, >= 1). */
+     *   N-point DFT by m bins. Falls back to one reference per Doppler bin (shift always zero, one
+     *   forward FFT per bin, matching the original algorithm exactly) whenever that divisibility
+     *   doesn't hold, so correctness never depends on the configured search spacing. A fallback of 1
+     *   would be wrong: in correlate() a reuse factor of 1 means every bin is derived by shifting a
+     *   single reference, which is only exact when the spacing equals the bin resolution.
+     *  @return Number of reference spectra, >= 1. */
     int computeReuseFactor() const;
 
     AcquisitionInput m_inputConfig;                     ///< Input parameters.

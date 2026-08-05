@@ -36,10 +36,13 @@ add_executable(
     ${CMAKE_SOURCE_DIR}/Source/GPSOpenClZmqSink.cpp
     ${CMAKE_SOURCE_DIR}/Source/GPSOpenClProfiler.cpp
     GPUTest.cpp
+    AcquisitionTest.cpp
     CaCodeTest.cpp
     SettingsTest.cpp
     TrackingTest.cpp
     NavigationDecoderTest.cpp
+    ApplicationTest.cpp
+    BoundedQueueTest.cpp
     PVTSolverTest.cpp
     NmeaGeneratorTest.cpp
     AtmosphericCorrectionsTest.cpp

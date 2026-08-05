@@ -1,10 +1,29 @@
 #include "GPSOpenClZmqSink.h"
 #include <cstring>
+#include <filesystem>
 #include <iostream>
 #include <utility>
 
 namespace GPSOpenCl
 {
+namespace
+{
+void ensureIpcDirectoryExists(const std::string &endpoint)
+{
+    const std::string ipcPrefix = "ipc://";
+    if (endpoint.compare(0, ipcPrefix.size(), ipcPrefix) != 0)
+    {
+        return;
+    }
+    const std::filesystem::path socketPath(endpoint.substr(ipcPrefix.size()));
+    if (socketPath.has_parent_path())
+    {
+        std::error_code ec;
+        std::filesystem::create_directories(socketPath.parent_path(), ec);
+    }
+}
+}
+
 ZmqSink::ZmqSink(std::string endpoint) : m_endpoint(std::move(endpoint)), m_queue(1024)
 {
 #ifdef GPSOPENCL_ENABLE_ZMQ
@@ -15,7 +34,16 @@ ZmqSink::ZmqSink(std::string endpoint) : m_endpoint(std::move(endpoint)), m_queu
         m_publisher = zmq_socket(m_context, ZMQ_PUB);
         if (m_publisher != nullptr)
         {
-            zmq_bind(m_publisher, m_endpoint.c_str());
+            ensureIpcDirectoryExists(m_endpoint);
+            const int lingerMs = 0;
+            zmq_setsockopt(m_publisher, ZMQ_LINGER, &lingerMs, sizeof(lingerMs));
+            if (zmq_bind(m_publisher, m_endpoint.c_str()) != 0)
+            {
+                std::cerr << "ZmqSink: bind to " << m_endpoint << " failed: " << zmq_strerror(zmq_errno())
+                          << " -- telemetry will not be published" << '\n';
+                zmq_close(m_publisher);
+                m_publisher = nullptr;
+            }
         }
     }
 #endif

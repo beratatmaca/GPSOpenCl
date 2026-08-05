@@ -1,17 +1,13 @@
 #include "GPSOpenClAcquisition.h"
 
+#include <algorithm>
 #include <cmath>
 #include <iostream>
 
 using namespace GPSOpenCl;
 
 Acquisition::Acquisition(const Settings::Configuration &conf)
-    : m_inputConfig{STRUCT_VERSION_1,
-                    conf.acquisitionSettings.acquisitionDopplerMinimum,
-                    conf.acquisitionSettings.acquisitionDopplerMaximum,
-                    conf.acquisitionSettings.acquisitionDopplerSearchRange,
-                    conf.rawDataSettings.samplingFrequency,
-                    conf.rawDataSettings.numberOfSamplesPerCode},
+    : m_inputConfig(conf.acquisitionInput),
       m_numberOfFreqencyBins(((m_inputConfig.acquisitionDopplerMaximum - m_inputConfig.acquisitionDopplerMinimum) /
                               m_inputConfig.acquisitionDopplerSearchRange) +
                              1),
@@ -72,9 +68,11 @@ void Acquisition::exp(int length, float frequency, float samplingRate, float pha
 
 int Acquisition::computeReuseFactor() const
 {
+    const int perBinFallback = std::max(m_numberOfFreqencyBins, 1);
+
     if (m_length <= 0 || m_freqSpacing <= 0.0f || m_samplingFrequency <= 0.0f)
     {
-        return 1;
+        return perBinFallback;
     }
 
     const float binResolution = m_samplingFrequency / static_cast<float>(m_length);
@@ -83,7 +81,7 @@ int Acquisition::computeReuseFactor() const
 
     if (rounded < 1 || rounded > m_numberOfFreqencyBins || std::fabs(ratio - static_cast<float>(rounded)) > 1e-3f)
     {
-        return 1;
+        return perBinFallback;
     }
 
     return rounded;
@@ -101,8 +99,11 @@ void Acquisition::correlate(const ComplexFloatVector &input, Compute *gpu, Code 
     {
         if (gpu->complexMultiplyThenFftToSlot(input, m_dopplerSearch[r], Compute::FFTForward, r) != 0)
         {
-            std::cerr << "Acquisition::correlate: forward FFT failed (samplesPerCode=" << m_length
-                      << " is not a power of two); skipping correlation for SV " << acqChannel->m_svId << '\n';
+            std::cerr << "Acquisition::correlate: forward FFT failed for SV " << acqChannel->m_svId
+                      << " (samplesPerCode=" << m_length
+                      << "; requires a power of two, otherwise the compute device reported an error); skipping "
+                         "correlation"
+                      << '\n';
             return;
         }
     }

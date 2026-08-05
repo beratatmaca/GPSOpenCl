@@ -13,6 +13,7 @@
 
 #include <memory>
 #include <mutex>
+#include <string>
 
 namespace GPSOpenCl
 {
@@ -157,6 +158,30 @@ class Channel
      *  @return True if complete. */
     bool hasCompleteEphemeris() const;
 
+    /** @brief Merge one decoded subframe into an accumulated ephemeris. Subframes 1-3 copy their
+     *   payload fields and set their bit in seenSubframeMask; subframes 4-5 only refresh the
+     *   svId/tow/subframeId header. Enforces broadcast data-set consistency: the just-decoded
+     *   subframe is taken as the current data set, and any previously accumulated subframe whose
+     *   issue-of-data disagrees (IODC low 8 bits vs IODE from subframes 2/3, per IS-GPS-200
+     *   20.3.3.4.1) has its mask bit cleared so a satellite mid-upload cannot silently mix orbit
+     *   and clock parameters from two different data sets.
+     *  @param decoded          Freshly decoded subframe.
+     *  @param accumulated      Accumulated ephemeris, updated in place.
+     *  @param seenSubframeMask Bitmask of accumulated subframes (bit N-1 = subframe N), updated. */
+    static void mergeSubframe(const GpsEphemeris &decoded, GpsEphemeris &accumulated, uint8_t &seenSubframeMask);
+
+    /** @brief Take (and clear) console output describing state transitions since the last call.
+     *   Transitions are detected inside trackBlock() on a tracking worker thread, where a blocking
+     *   stdout write would stall the whole tracking barrier, so the message is buffered here and
+     *   drained by the consumer thread after the barrier.
+     *  @return Buffered transition message(s), empty if none. */
+    std::string takePendingStateMessage()
+    {
+        std::string message = std::move(m_pendingStateMessage);
+        m_pendingStateMessage.clear();
+        return message;
+    }
+
     /** @brief Get accumulated ephemeris.
      *  @return Ephemeris struct. */
     const GpsEphemeris &getAccumulatedEphemeris() const { return m_accumulatedEphemeris; }
@@ -246,6 +271,7 @@ class Channel
     size_t m_lastSubframeStartSample;                ///< Last subframe start sample.
 
     ChannelState m_state;                            ///< Current lifecycle state.
+    std::string m_pendingStateMessage;               ///< Buffered state-transition console output.
     int m_confirmProgress;                           ///< Leaky-bucket progress toward confirming lock.
     int m_lossProgress;                              ///< Leaky-bucket progress toward declaring lock lost.
     int m_blocksInConfirming;                        ///< Blocks spent in Confirming since last acquisition.

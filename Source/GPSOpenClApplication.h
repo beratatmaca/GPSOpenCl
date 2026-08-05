@@ -57,6 +57,33 @@ class Application
      *  @return True if valid solution. */
     bool computeNavigationSolution(ReceiverPvtSolution &solution);
 
+    /** @brief Reconstruct a satellite's transmit time from its subframe anchor. The sub-millisecond
+     *   anchor term exists because the subframe's leading bit edge does not fall on a receiver
+     *   block boundary: the decoder's edge refinement guarantees the anchor block contains the
+     *   edge, which arrives (1023 - anchorChipsRaw) chips after that block starts. Without it every
+     *   satellite's transmit time is quantized to the 1 ms block grid, which puts up to 1 ms
+     *   (300 km) of per-satellite error on the pseudoranges.
+     *  @param subframeStartTow TOW at the subframe's leading bit edge (s).
+     *  @param elapsedSeconds   Whole code periods elapsed since the anchor block (s).
+     *  @param driftChips       Accumulated code-frequency drift since the anchor block (chips).
+     *  @param anchorChipsRaw   DLL code phase at the anchor block (chips, 0-1023).
+     *  @return Satellite transmit time (s of week). */
+    static double
+        computeTransmitTime(double subframeStartTow, double elapsedSeconds, double driftChips, double anchorChipsRaw);
+
+    /** @brief C/A millisecond-ambiguity resolution. Every satellite received the same epoch, so
+     *   each transmit time plus its modeled travel time (impliedArrivals) must agree across the
+     *   constellation to well under a millisecond; a bit edge attributed one block off in the
+     *   decoder shifts a satellite's transmit time by an integer millisecond. Snaps every satellite
+     *   whose offset from the constellation median sits within 0.25 ms of a whole millisecond back
+     *   onto the median cluster. The median cluster does not need to hold the true epoch: a common
+     *   whole-millisecond shift across all satellites is absorbed by the receiver clock bias in the
+     *   WLS solve, so cross-satellite consistency is what matters, not absolute truth.
+     *  @param transmitTimes   Per-satellite transmit times (s), corrected in place.
+     *  @param impliedArrivals Per-satellite modeled arrival instants (s), same order. */
+    static void snapTransmitTimesToMedianArrival(std::vector<double> &transmitTimes,
+                                                 const std::vector<double> &impliedArrivals);
+
     /** @brief One satellite's transmit-time/pseudorange reconstruction from the last
      *   computeNavigationSolution() call, for diagnostics and ground-truth verification. */
     struct PseudorangeSample
@@ -197,7 +224,7 @@ class Application
      *   initialization on success, and telemetry publish. Must run on the consumer thread only,
      *   since it mutates channel lifecycle state that the tracking worker pool also touches.
      *  @param channelIndex Channel index (0-based, PRN - 1) whose search just completed. */
-    void finalizeAcquisition(int channelIndex);
+    void finalizeAcquisition(int channelIndex, double correlateMs);
 
     /** @brief Persistent background acquisition thread body: waits for a job, runs the correlation
      *   search, and reports completion. Keeps the ~tens-of-ms Doppler search off the consumer
@@ -249,6 +276,7 @@ class Application
     std::shared_ptr<Sink> m_sink{nullptr};                      ///< Telemetry sink.
     std::shared_ptr<Source> m_source{nullptr};                  ///< Sample source.
     Profiler m_profiler;                                        ///< Processing time profiler.
+    uint32_t m_currentBlockIndex{0};                            ///< Block index of the block being processed.
 
     std::vector<std::thread> m_workers;                         ///< Persistent tracking worker threads.
     std::mutex m_poolMutex;                                     ///< Guards the pool dispatch state below.
@@ -259,7 +287,7 @@ class Application
     std::atomic<int> m_channelCursor{0};                        ///< Next m_activeChannels slot a worker should take.
     std::vector<double> m_workerDurationMs;    ///< Per-worker wall-clock time in trackChannelRange this
                                                ///< block (ms); each worker writes only its own index.
-    int m_generation{0};        ///< Incremented on each new dispatch; workers compare against their last-seen value.
+    uint64_t m_generation{0};    ///< Incremented on each new dispatch; workers compare against their last-seen value.
     int m_pendingWorkers{0};    ///< Workers still processing the current dispatch.
     bool m_shutdownWorkers{false};                                  ///< Set to stop all workers during destruction.
     int m_numWorkers{0};                                            ///< Active worker count (0 or 1 disables the pool).

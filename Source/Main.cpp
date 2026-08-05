@@ -107,6 +107,7 @@ int main(int argc, char **argv)
     };
 
     GPSOpenCl::BoundedQueue<SignalBlock> blockQueue(16);
+    GPSOpenCl::BoundedQueue<GPSOpenCl::ComplexFloatVector> recycleQueue(16);
 
     std::cout << "\n=============================================" << '\n';
     std::cout << "   GPS Processing Pipeline Starting (Real-Time Loop)" << '\n';
@@ -122,6 +123,7 @@ int main(int argc, char **argv)
                 {
                     SignalBlock block;
                     block.blockIndex = blockIdx;
+                    recycleQueue.tryPop(block.samples);
                     GPSOpenCl::SourceOutput telemetry{};
                     const bool ok = source->readBlock(block.samples, telemetry);
                     if (!ok || block.samples.empty())
@@ -148,6 +150,7 @@ int main(int argc, char **argv)
         while (blockQueue.pop(block))
         {
             app.processBlock(block.samples, block.blockIndex);
+            recycleQueue.tryPush(std::move(block.samples));
         }
     }
     catch (const std::exception &e)

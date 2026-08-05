@@ -53,6 +53,7 @@ Application::Application(const Settings::Configuration &conf)
     m_acquisition = std::make_unique<Acquisition>(m_configuration);
 
     m_pvtSolver.setIonosphericParams(conf.atmosphericInput);
+    m_profiler.setEnabled(conf.profilerInput.enabled != 0);
 
     initializeChannels();
     startWorkerPool();
@@ -84,10 +85,10 @@ void Application::searchOneChannel(const ComplexFloatVector &input, int channelI
     }
 
     m_acquisition->correlate(input, m_gpu.get(), m_code.get(), &m_channels[channelIndex]);
-    finalizeAcquisition(channelIndex);
+    finalizeAcquisition(channelIndex, 0.0);
 }
 
-void Application::finalizeAcquisition(int channelIndex)
+void Application::finalizeAcquisition(int channelIndex, double correlateMs)
 {
     Channel &channel = m_channels[channelIndex];
 
@@ -104,7 +105,8 @@ void Application::finalizeAcquisition(int channelIndex)
     std::ostringstream acqMsg;
     acqMsg << "SV ID " << channel.m_svId << " C/N0 : " << cn0 << "\n";
 
-    const float acquisitionCn0ThresholdDbHz = 43.0f;
+    const auto acquisitionCn0ThresholdDbHz =
+        static_cast<float>(m_configuration.acquisitionInput.acquisitionCn0ThresholdDbHz);
     if (cn0 >= acquisitionCn0ThresholdDbHz)
     {
         channel.setAcquired(true);
@@ -123,12 +125,13 @@ void Application::finalizeAcquisition(int channelIndex)
     AsyncOutputJob acqConsoleJob;
     acqConsoleJob.isConsole = true;
     acqConsoleJob.content = acqMsg.str();
-    m_outputQueue.push(std::move(acqConsoleJob));
+    m_outputQueue.tryPush(std::move(acqConsoleJob));
 
     if (m_sink)
     {
         AcquisitionOutput acqOut;
-        acqOut.structVersion = STRUCT_VERSION_1;
+        acqOut.structVersion = STRUCT_VERSION_2;
+        acqOut.correlateMs = correlateMs;
         acqOut.prn = channel.m_svId;
         acqOut.peakIndex = peakIndex;
         acqOut.peakValue = static_cast<double>(peakValue);
@@ -146,15 +149,26 @@ void Application::acquisitionWorkerLoop()
     AcquisitionJob job;
     while (m_acquisitionJobQueue.pop(job))
     {
-        auto start = std::chrono::high_resolution_clock::now();
-        m_acquisition->correlate(job.input, m_gpu.get(), m_code.get(), &m_channels[job.channelIndex]);
-        auto end = std::chrono::high_resolution_clock::now();
+        try
+        {
+            auto start = std::chrono::high_resolution_clock::now();
+            m_acquisition->correlate(job.input, m_gpu.get(), m_code.get(), &m_channels[job.channelIndex]);
+            auto end = std::chrono::high_resolution_clock::now();
 
-        AcquisitionResult result;
-        result.channelIndex = job.channelIndex;
-        result.correlateMs = std::chrono::duration<double, std::milli>(end - start).count();
-        result.recycledInput = std::move(job.input);
-        m_acquisitionResultQueue.tryPush(std::move(result));
+            AcquisitionResult result;
+            result.channelIndex = job.channelIndex;
+            result.correlateMs = std::chrono::duration<double, std::milli>(end - start).count();
+            result.recycledInput = std::move(job.input);
+            m_acquisitionResultQueue.tryPush(std::move(result));
+        }
+        catch (const std::exception &e)
+        {
+            std::cerr << "Acquisition worker: channel " << (job.channelIndex + 1) << " search threw: " << e.what()
+                      << '\n';
+            AcquisitionResult result;
+            result.channelIndex = job.channelIndex;
+            m_acquisitionResultQueue.tryPush(std::move(result));
+        }
     }
 }
 
@@ -163,23 +177,30 @@ void Application::outputWriterLoop()
     AsyncOutputJob job;
     while (m_outputQueue.pop(job))
     {
-        if (job.telemetry)
+        try
         {
-            job.content = formatTelemetryJson(*job.telemetry);
-            job.telemetry.reset();
-        }
-        if (job.isConsole)
-        {
-            std::cout << job.content;
-        }
-        else
-        {
-            std::ofstream file(job.filePath);
-            if (file.is_open())
+            if (job.telemetry)
             {
-                file << job.content;
-                file.close();
+                job.content = formatTelemetryJson(*job.telemetry);
+                job.telemetry.reset();
             }
+            if (job.isConsole)
+            {
+                std::cout << job.content;
+            }
+            else
+            {
+                std::ofstream file(job.filePath);
+                if (file.is_open())
+                {
+                    file << job.content;
+                    file.close();
+                }
+            }
+        }
+        catch (const std::exception &e)
+        {
+            std::cerr << "Output writer: job dropped after exception: " << e.what() << '\n';
         }
     }
 }
@@ -217,7 +238,7 @@ void Application::trackFromCursor(const ComplexFloatVector &input)
 
 void Application::workerLoop(int workerIndex)
 {
-    int lastSeenGeneration = 0;
+    uint64_t lastSeenGeneration = 0;
 
     while (true)
     {
@@ -335,7 +356,25 @@ void Application::trackSatellites(const ComplexFloatVector &input)
 
 void Application::publishTrackingOutputs()
 {
+    for (const int channelIndex : m_activeChannels)
+    {
+        std::string message = m_channels[channelIndex].takePendingStateMessage();
+        if (!message.empty())
+        {
+            AsyncOutputJob consoleJob;
+            consoleJob.isConsole = true;
+            consoleJob.content = std::move(message);
+            m_outputQueue.tryPush(std::move(consoleJob));
+        }
+    }
+
     if (!m_sink)
+    {
+        return;
+    }
+
+    const auto interval = static_cast<uint32_t>(std::max(m_configuration.trackingInput.telemetryIntervalBlocks, 1));
+    if (m_currentBlockIndex % interval != 0)
     {
         return;
     }
@@ -396,6 +435,38 @@ std::vector<Application::ChannelDiagnostic> Application::getChannelDiagnostics()
     return diagnostics;
 }
 
+double Application::computeTransmitTime(double subframeStartTow,
+                                        double elapsedSeconds,
+                                        double driftChips,
+                                        double anchorChipsRaw)
+{
+    const double anchorChips = anchorChipsRaw - 1023.0;
+    return subframeStartTow + elapsedSeconds + ((driftChips + anchorChips) / GPS_CA_CODE_FREQUENCY_HZ);
+}
+
+void Application::snapTransmitTimesToMedianArrival(std::vector<double> &transmitTimes,
+                                                   const std::vector<double> &impliedArrivals)
+{
+    if (transmitTimes.empty() || transmitTimes.size() != impliedArrivals.size())
+    {
+        return;
+    }
+
+    std::vector<double> sortedArrivals = impliedArrivals;
+    std::sort(sortedArrivals.begin(), sortedArrivals.end());
+    const double medianArrival = sortedArrivals[sortedArrivals.size() / 2];
+
+    for (size_t i = 0; i < transmitTimes.size(); i++)
+    {
+        const double offsetMs = (medianArrival - impliedArrivals[i]) * 1000.0;
+        const double wholeMs = std::round(offsetMs);
+        if (wholeMs != 0.0 && std::fabs(offsetMs - wholeMs) < 0.25)
+        {
+            transmitTimes[i] += wholeMs * 0.001;
+        }
+    }
+}
+
 bool Application::computeNavigationSolution(ReceiverPvtSolution &solution)
 {
     std::vector<GpsEphemeris> ephemerides;
@@ -433,16 +504,9 @@ bool Application::computeNavigationSolution(ReceiverPvtSolution &solution)
         const double driftChips = static_cast<double>(channel.getCumulativeDriftChipsAtSample(promptCount - 1)) -
             static_cast<double>(channel.getCumulativeDriftChipsAtSample(subframeStartSample));
 
-        // Sub-millisecond anchor: the subframe's leading bit edge does not fall on a receiver block
-        // boundary. The decoder's coherent edge refinement guarantees the anchor block contains the
-        // edge, which arrives (1023 - codePhase) chips after that block starts. Without this term
-        // every satellite's transmit time is quantized to the 1 ms block grid, which puts up to
-        // 1 ms (300 km) of per-satellite error on the pseudoranges.
         const double anchorChipsRaw = static_cast<double>(channel.getCodePhaseAtSample(subframeStartSample));
-        const double anchorChips = anchorChipsRaw - 1023.0;
 
-        const double transmitTime =
-            subframeStartTow + elapsedSeconds + ((driftChips + anchorChips) / GPS_CA_CODE_FREQUENCY_HZ);
+        const double transmitTime = computeTransmitTime(subframeStartTow, elapsedSeconds, driftChips, anchorChipsRaw);
 
         ephemerides.push_back(channel.getAccumulatedEphemeris());
         transmitTimes.push_back(transmitTime);
@@ -469,11 +533,6 @@ bool Application::computeNavigationSolution(ReceiverPvtSolution &solution)
 
     const EcefPosition referenceEcef = m_pvtSolver.getReferenceEcef();
 
-    // C/A millisecond-ambiguity resolution: every satellite received the same epoch, so each
-    // transmit time plus its modeled travel time from the reference position must agree across the
-    // constellation to well under a millisecond. A bit-edge attributed one block off in the decoder
-    // shifts a satellite's transmit time by an integer millisecond; snap such outliers back to the
-    // constellation median.
     {
         std::vector<double> impliedArrivals(transmitTimes.size());
         for (size_t i = 0; i < transmitTimes.size(); i++)
@@ -486,19 +545,7 @@ bool Application::computeNavigationSolution(ReceiverPvtSolution &solution)
                 transmitTimes[i] - orbit.clockBias + (std::sqrt((dx * dx) + (dy * dy) + (dz * dz)) / c);
         }
 
-        std::vector<double> sortedArrivals = impliedArrivals;
-        std::sort(sortedArrivals.begin(), sortedArrivals.end());
-        const double medianArrival = sortedArrivals[sortedArrivals.size() / 2];
-
-        for (size_t i = 0; i < transmitTimes.size(); i++)
-        {
-            const double offsetMs = (medianArrival - impliedArrivals[i]) * 1000.0;
-            const double wholeMs = std::round(offsetMs);
-            if (wholeMs != 0.0 && std::fabs(offsetMs - wholeMs) < 0.25)
-            {
-                transmitTimes[i] += wholeMs * 0.001;
-            }
-        }
+        snapTransmitTimesToMedianArrival(transmitTimes, impliedArrivals);
     }
     const double receiverTime = PVTSolver::computeReceiverTime(ephemerides, transmitTimes, referenceEcef);
 
@@ -572,22 +619,21 @@ bool Application::computeNavigationSolution(ReceiverPvtSolution &solution)
 
         if (m_sink)
         {
-            PvtSolverOutput pvtOut;
-            pvtOut.structVersion = STRUCT_VERSION_1;
-            pvtOut.ecefX = solution.ecefPosition.x;
-            pvtOut.ecefY = solution.ecefPosition.y;
-            pvtOut.ecefZ = solution.ecefPosition.z;
-            pvtOut.latitude = solution.geodeticPosition.latitude;
-            pvtOut.longitude = solution.geodeticPosition.longitude;
-            pvtOut.altitude = solution.geodeticPosition.altitude;
-            pvtOut.clockBiasMeters = solution.clockBiasMeters;
-            pvtOut.clockBiasSeconds = solution.clockBiasSeconds;
-            pvtOut.dopGDOP = solution.dopGDOP;
-            pvtOut.dopPDOP = solution.dopPDOP;
-            pvtOut.dopHDOP = solution.dopHDOP;
-            pvtOut.dopVDOP = solution.dopVDOP;
-            pvtOut.isValid = solution.isValid ? 1 : 0;
-            m_sink->publishPvtSolverOutput(pvtOut);
+            m_sink->publishPvtSolverOutput(PVTSolver::solutionToOutput(solution));
+
+            const AtmosphericInput ionoParams =
+                m_navDecoder.hasIonosphericParams() ? m_navDecoder.getIonosphericParams() : AtmosphericInput{};
+            for (size_t i = 0; i < ephemerides.size(); i++)
+            {
+                const SatelliteOrbit orbit = PVTSolver::computeSatelliteOrbit(ephemerides[i], transmitTimes[i]);
+                const AtmosphericOutput atmoOut = AtmosphericCorrections::computeCorrections(activePrns[i],
+                                                                                             solution.geodeticPosition,
+                                                                                             solution.ecefPosition,
+                                                                                             orbit.position,
+                                                                                             receiverTime,
+                                                                                             ionoParams);
+                m_sink->publishAtmosphericOutput(atmoOut);
+            }
 
             if (m_nmeaGenerator.isGgaEnabled())
             {
@@ -640,12 +686,13 @@ void Application::setSource(std::shared_ptr<Source> source)
 
 void Application::processBlock(const ComplexFloatVector &input, uint32_t blockIndex)
 {
-    m_profiler.startBlock(blockIndex, static_cast<double>(blockIndex) * 0.001);
+    m_currentBlockIndex = blockIndex;
+    m_profiler.startBlock(blockIndex, static_cast<double>(blockIndex) * GPS_CA_CODE_PERIOD_SEC);
 
     AcquisitionResult completedAcquisition;
     if (m_acquisitionResultQueue.tryPop(completedAcquisition))
     {
-        finalizeAcquisition(completedAcquisition.channelIndex);
+        finalizeAcquisition(completedAcquisition.channelIndex, completedAcquisition.correlateMs);
         m_profiler.recordStageTimeMs(Profiler::Stage::Acquisition, completedAcquisition.correlateMs);
         m_acqInputPool = std::move(completedAcquisition.recycledInput);
         m_acquisitionBusy.store(false, std::memory_order_release);
@@ -798,22 +845,24 @@ std::string Application::formatTelemetryJson(const TelemetrySnapshot &snapshot)
     const ReceiverPvtSolution &solution = snapshot.solution;
     std::ostringstream file;
 
+    const auto json = [](double value) { return std::isfinite(value) ? value : 0.0; };
+
     file << "{\n";
-    file << "  \"timestamp\": " << snapshot.utcTimeSec << ",\n";
+    file << "  \"timestamp\": " << json(snapshot.utcTimeSec) << ",\n";
     file << R"(  "software": ")" << SOFTWARE_NAME << " " << SOFTWARE_VERSION << "\",\n";
     file << "  \"total_acquired\": " << snapshot.activePrns.size() << ",\n";
 
     file << "  \"pvt\": {\n";
     file << "    \"valid\": " << (solution.isValid ? "true" : "false") << ",\n";
-    file << "    \"latitude\": " << solution.geodeticPosition.latitude << ",\n";
-    file << "    \"longitude\": " << solution.geodeticPosition.longitude << ",\n";
-    file << "    \"altitude\": " << solution.geodeticPosition.altitude << ",\n";
-    file << "    \"ecef_x\": " << solution.ecefPosition.x << ",\n";
-    file << "    \"ecef_y\": " << solution.ecefPosition.y << ",\n";
-    file << "    \"ecef_z\": " << solution.ecefPosition.z << ",\n";
-    file << "    \"hdop\": " << solution.dopHDOP << ",\n";
-    file << "    \"pdop\": " << solution.dopPDOP << ",\n";
-    file << "    \"vdop\": " << solution.dopVDOP << "\n";
+    file << "    \"latitude\": " << json(solution.geodeticPosition.latitude) << ",\n";
+    file << "    \"longitude\": " << json(solution.geodeticPosition.longitude) << ",\n";
+    file << "    \"altitude\": " << json(solution.geodeticPosition.altitude) << ",\n";
+    file << "    \"ecef_x\": " << json(solution.ecefPosition.x) << ",\n";
+    file << "    \"ecef_y\": " << json(solution.ecefPosition.y) << ",\n";
+    file << "    \"ecef_z\": " << json(solution.ecefPosition.z) << ",\n";
+    file << "    \"hdop\": " << json(solution.dopHDOP) << ",\n";
+    file << "    \"pdop\": " << json(solution.dopPDOP) << ",\n";
+    file << "    \"vdop\": " << json(solution.dopVDOP) << "\n";
     file << "  },\n";
 
     file << "  \"satellites\": [\n";
@@ -834,11 +883,11 @@ std::string Application::formatTelemetryJson(const TelemetrySnapshot &snapshot)
         file << "    {\n";
         file << "      \"prn\": " << sat.prn << ",\n";
         file << "      \"acquired\": " << (sat.acquired ? "true" : "false") << ",\n";
-        file << "      \"cn0\": " << sat.cn0 << ",\n";
-        file << "      \"doppler\": " << sat.doppler << ",\n";
+        file << "      \"cn0\": " << json(sat.cn0) << ",\n";
+        file << "      \"doppler\": " << json(sat.doppler) << ",\n";
         file << "      \"has_position\": " << (hasPosition ? "true" : "false") << ",\n";
-        file << "      \"azimuth\": " << az << ",\n";
-        file << "      \"elevation\": " << el << "\n";
+        file << "      \"azimuth\": " << json(az) << ",\n";
+        file << "      \"elevation\": " << json(el) << "\n";
         file << "    }" << (i + 1 < snapshot.satellites.size() ? "," : "") << "\n";
     }
     file << "  ],\n";

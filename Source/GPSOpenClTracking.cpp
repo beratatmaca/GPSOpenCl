@@ -229,7 +229,7 @@ void Tracking::doWork(const ComplexFloatVector &input, int prn, ComplexFloatVect
 TrackingOutput Tracking::getTrackingOutput(int prn) const
 {
     TrackingOutput out{};
-    out.structVersion = STRUCT_VERSION_1;
+    out.structVersion = STRUCT_VERSION_2;
     out.prn = prn;
     out.carrierFreqHz = static_cast<double>(m_carrFreq);
     out.codeFreqHz = static_cast<double>(m_codeFreq);
@@ -244,6 +244,7 @@ TrackingOutput Tracking::getTrackingOutput(int prn) const
     out.channelState = m_lastChannelState;
     out.carrierLockIndicator = static_cast<double>(m_carrierLockEma);
     out.codeLockRatio = static_cast<double>(m_codeLockEma);
+    out.correlatorTimeMs = static_cast<double>(m_accumulatorTimeMs);
     return out;
 }
 
@@ -334,10 +335,10 @@ void Tracking::correlator(const ComplexFloatVector &input, int prn)
     m_remCarrPhase = static_cast<float>(std::fmod(finalPhase, 2.0 * M_PI));
 }
 
-float Tracking::computeFllError() const
+float Tracking::computeFllError(double ipPrev, double qpPrev, double ip, double qp)
 {
-    const double cross = (static_cast<double>(m_ipPrev) * m_Qp) - (static_cast<double>(m_Ip) * m_qpPrev);
-    const double dot = (static_cast<double>(m_ipPrev) * m_Ip) + (static_cast<double>(m_qpPrev) * m_Qp);
+    const double cross = (ipPrev * qp) - (ip * qpPrev);
+    const double dot = (ipPrev * ip) + (qpPrev * qp);
 
     if (cross == 0.0 && dot == 0.0)
     {
@@ -349,7 +350,7 @@ float Tracking::computeFllError() const
 
 void Tracking::fllDiscriminator()
 {
-    const float fllError = (m_blocksSinceInit > 0) ? computeFllError() : 0.0f;
+    const float fllError = (m_blocksSinceInit > 0) ? computeFllError(m_ipPrev, m_qpPrev, m_Ip, m_Qp) : 0.0f;
     m_fllNco += fllError * m_fllGain;
 
     m_ipPrev = m_Ip;

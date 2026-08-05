@@ -85,7 +85,7 @@ PVTSolver::PVTSolver(const PvtSolverInput &input) : m_inputConfig(input)
 PvtSolverOutput PVTSolver::solutionToOutput(const ReceiverPvtSolution &sol)
 {
     PvtSolverOutput out{};
-    out.structVersion = STRUCT_VERSION_1;
+    out.structVersion = STRUCT_VERSION_2;
     out.ecefX = sol.ecefPosition.x;
     out.ecefY = sol.ecefPosition.y;
     out.ecefZ = sol.ecefPosition.z;
@@ -99,6 +99,8 @@ PvtSolverOutput PVTSolver::solutionToOutput(const ReceiverPvtSolution &sol)
     out.dopHDOP = sol.dopHDOP;
     out.dopVDOP = sol.dopVDOP;
     out.isValid = sol.isValid ? 1 : 0;
+    out.satellitesUsed = sol.satellitesUsed;
+    out.maxResidualMeters = sol.maxResidualMeters;
     return out;
 }
 
@@ -118,6 +120,8 @@ ReceiverPvtSolution PVTSolver::outputToSolution(const PvtSolverOutput &out)
     sol.dopHDOP = out.dopHDOP;
     sol.dopVDOP = out.dopVDOP;
     sol.isValid = (out.isValid != 0);
+    sol.satellitesUsed = out.satellitesUsed;
+    sol.maxResidualMeters = out.maxResidualMeters;
     return sol;
 }
 
@@ -497,6 +501,8 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
                 solution.clockBiasMeters = state[3];
                 solution.clockBiasSeconds = state[3] / c;
                 solution.geodeticPosition = ecefToWgs84(solution.ecefPosition);
+                solution.satellitesUsed = static_cast<uint32_t>(numSats);
+                solution.maxResidualMeters = maxAbsResidual;
 
                 double invHtH[4][4] = {{0}};
                 if (!invert4x4(HtHUnweighted, invHtH))

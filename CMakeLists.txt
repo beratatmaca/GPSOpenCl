@@ -85,6 +85,12 @@ enable_testing()
 
 add_subdirectory(Source)
 add_subdirectory(Tests)
-add_subdirectory(Tools/gps-sdr-sim)
+
+# The simulator is a vendored submodule; a clone without submodule init must still configure.
+if(EXISTS ${CMAKE_SOURCE_DIR}/Tools/gps-sdr-sim/CMakeLists.txt)
+    add_subdirectory(Tools/gps-sdr-sim)
+else()
+    message(STATUS "Tools/gps-sdr-sim not present (run: git submodule update --init); simulator will not be built")
+endif()
 
 include(cmake/DeveloperTools.cmake)

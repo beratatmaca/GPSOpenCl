@@ -88,6 +88,20 @@ class Tracking
      *  @return Tau2 value (s). */
     static float loopFilterTau2(double noiseBandwidthHz);
 
+    /** @brief Compute the cross/dot frequency discriminator from consecutive prompt correlator
+     *   samples. Deliberately the four-quadrant atan2(cross, dot) form: its +/-1/(2T) = +/-500 Hz
+     *   pull-in range covers a full-bin acquisition Doppler error on the 500 Hz search grid. The
+     *   data-bit-insensitive two-quadrant atan(cross/dot) alternative was tried and rejected: its
+     *   +/-250 Hz range wraps a one-bin-off acquisition to the wrong sign and the loop converges
+     *   500 Hz away (measured against simulator truth). Nav bit flips inject occasional half-cycle
+     *   spikes here, but at one flip per 20 blocks the FLL bandwidth averages them out.
+     *  @param ipPrev Previous block's in-phase prompt.
+     *  @param qpPrev Previous block's quadrature prompt.
+     *  @param ip     Current block's in-phase prompt.
+     *  @param qp     Current block's quadrature prompt.
+     *  @return Frequency error estimate (Hz). */
+    static float computeFllError(double ipPrev, double qpPrev, double ip, double qp);
+
   private:
     /** @brief Fused correlator pass: generates the Early/Prompt/Late code replica indices and the
      *   carrier NCO phasor incrementally, wipes the carrier off each input sample, and accumulates
@@ -95,10 +109,6 @@ class Tracking
      *  @param input Raw IQ samples.
      *  @param prn   Satellite PRN. */
     void correlator(const ComplexFloatVector &input, int prn);
-
-    /** @brief Compute the cross/dot frequency discriminator from consecutive prompt correlator samples.
-     *  @return Frequency error estimate (Hz). */
-    float computeFllError() const;
 
     /** @brief Compute the Costas (data-bit-sign-invariant) phase discriminator from the current
      *   Prompt correlator sum. Uses the double-angle atan2(2*Ip*Qp, Ip^2-Qp^2)/2 form so a genuine

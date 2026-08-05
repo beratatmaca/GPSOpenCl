@@ -51,6 +51,8 @@ struct ReceiverPvtSolution
     double dopHDOP;                       ///< Horizontal DOP.
     double dopVDOP;                       ///< Vertical DOP.
     bool isValid;                         ///< True if solution valid.
+    uint32_t satellitesUsed;              ///< Satellites in the accepted solution.
+    double maxResidualMeters;             ///< Largest converged pseudorange residual (m).
 };
 
 /** @brief Position-Velocity-Time solver. */

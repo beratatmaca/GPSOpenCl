@@ -260,17 +260,17 @@ void Channel::evaluateLockState()
         std::ostringstream msg;
         msg << "SV ID " << m_svId << " confirmation TIMED OUT (lock: carrier=" << m_tracking->getCarrierLockIndicator()
             << " code=" << m_tracking->getCodeLockRatio() << "), back to acquiring\n";
-        std::cout << msg.str();
+        m_pendingStateMessage += msg.str();
     }
     else if (previous == ChannelState::Tracking && m_state == ChannelState::Acquiring)
     {
         m_isAcquired = false;
         resetNavigationState();
-        std::cout << "SV ID " + std::to_string(m_svId) + " LOST LOCK, back to acquiring\n";
+        m_pendingStateMessage += "SV ID " + std::to_string(m_svId) + " LOST LOCK, back to acquiring\n";
     }
     else if (previous == ChannelState::Confirming && m_state == ChannelState::Tracking)
     {
-        std::cout << "SV ID " + std::to_string(m_svId) + " tracking CONFIRMED\n";
+        m_pendingStateMessage += "SV ID " + std::to_string(m_svId) + " tracking CONFIRMED\n";
     }
 }
 
@@ -350,52 +350,95 @@ bool Channel::updateNavigation(NavigationDecoder &decoder)
         return hasCompleteEphemeris();
     }
 
-    m_accumulatedEphemeris.svId = ephem.svId;
-    m_accumulatedEphemeris.tow = ephem.tow;
-    m_accumulatedEphemeris.subframeId = ephem.subframeId;
-
-    switch (ephem.subframeId)
-    {
-        case 1:
-            m_accumulatedEphemeris.weekNumber = ephem.weekNumber;
-            m_accumulatedEphemeris.toc = ephem.toc;
-            m_accumulatedEphemeris.af0 = ephem.af0;
-            m_accumulatedEphemeris.af1 = ephem.af1;
-            m_accumulatedEphemeris.af2 = ephem.af2;
-            m_accumulatedEphemeris.tgd = ephem.tgd;
-            m_seenSubframeMask |= 0x1;
-            break;
-        case 2:
-            m_accumulatedEphemeris.toe = ephem.toe;
-            m_accumulatedEphemeris.sqrtA = ephem.sqrtA;
-            m_accumulatedEphemeris.e = ephem.e;
-            m_accumulatedEphemeris.M0 = ephem.M0;
-            m_accumulatedEphemeris.deltaN = ephem.deltaN;
-            m_accumulatedEphemeris.Cuc = ephem.Cuc;
-            m_accumulatedEphemeris.Cus = ephem.Cus;
-            m_accumulatedEphemeris.Crs = ephem.Crs;
-            m_seenSubframeMask |= 0x2;
-            break;
-        case 3:
-            m_accumulatedEphemeris.i0 = ephem.i0;
-            m_accumulatedEphemeris.idot = ephem.idot;
-            m_accumulatedEphemeris.omega0 = ephem.omega0;
-            m_accumulatedEphemeris.omegaDot = ephem.omegaDot;
-            m_accumulatedEphemeris.omega = ephem.omega;
-            m_accumulatedEphemeris.Cic = ephem.Cic;
-            m_accumulatedEphemeris.Cis = ephem.Cis;
-            m_accumulatedEphemeris.Crc = ephem.Crc;
-            m_seenSubframeMask |= 0x4;
-            break;
-        default:
-            break;
-    }
+    mergeSubframe(ephem, m_accumulatedEphemeris, m_seenSubframeMask);
 
     m_lastSubframeTow = ephem.tow;
     m_lastSubframeStartSample = subframeStartSample;
     m_accumulatedEphemeris.isValid = hasCompleteEphemeris();
 
     return hasCompleteEphemeris();
+}
+
+void Channel::mergeSubframe(const GpsEphemeris &decoded, GpsEphemeris &accumulated, uint8_t &seenSubframeMask)
+{
+    accumulated.svId = decoded.svId;
+    accumulated.tow = decoded.tow;
+    accumulated.subframeId = decoded.subframeId;
+
+    switch (decoded.subframeId)
+    {
+        case 1:
+            accumulated.weekNumber = decoded.weekNumber;
+            accumulated.iodc = decoded.iodc;
+            accumulated.toc = decoded.toc;
+            accumulated.af0 = decoded.af0;
+            accumulated.af1 = decoded.af1;
+            accumulated.af2 = decoded.af2;
+            accumulated.tgd = decoded.tgd;
+            seenSubframeMask |= 0x1;
+            break;
+        case 2:
+            accumulated.iode2 = decoded.iode2;
+            accumulated.toe = decoded.toe;
+            accumulated.sqrtA = decoded.sqrtA;
+            accumulated.e = decoded.e;
+            accumulated.M0 = decoded.M0;
+            accumulated.deltaN = decoded.deltaN;
+            accumulated.Cuc = decoded.Cuc;
+            accumulated.Cus = decoded.Cus;
+            accumulated.Crs = decoded.Crs;
+            seenSubframeMask |= 0x2;
+            break;
+        case 3:
+            accumulated.iode3 = decoded.iode3;
+            accumulated.i0 = decoded.i0;
+            accumulated.idot = decoded.idot;
+            accumulated.omega0 = decoded.omega0;
+            accumulated.omegaDot = decoded.omegaDot;
+            accumulated.omega = decoded.omega;
+            accumulated.Cic = decoded.Cic;
+            accumulated.Cis = decoded.Cis;
+            accumulated.Crc = decoded.Crc;
+            seenSubframeMask |= 0x4;
+            break;
+        default:
+            return;
+    }
+
+    const int iodcLow8 = accumulated.iodc & 0xFF;
+    if (decoded.subframeId == 1)
+    {
+        if ((seenSubframeMask & 0x2) != 0 && accumulated.iode2 != iodcLow8)
+        {
+            seenSubframeMask &= static_cast<uint8_t>(~0x2);
+        }
+        if ((seenSubframeMask & 0x4) != 0 && accumulated.iode3 != iodcLow8)
+        {
+            seenSubframeMask &= static_cast<uint8_t>(~0x4);
+        }
+    }
+    else if (decoded.subframeId == 2)
+    {
+        if ((seenSubframeMask & 0x1) != 0 && accumulated.iode2 != iodcLow8)
+        {
+            seenSubframeMask &= static_cast<uint8_t>(~0x1);
+        }
+        if ((seenSubframeMask & 0x4) != 0 && accumulated.iode3 != accumulated.iode2)
+        {
+            seenSubframeMask &= static_cast<uint8_t>(~0x4);
+        }
+    }
+    else if (decoded.subframeId == 3)
+    {
+        if ((seenSubframeMask & 0x1) != 0 && accumulated.iode3 != iodcLow8)
+        {
+            seenSubframeMask &= static_cast<uint8_t>(~0x1);
+        }
+        if ((seenSubframeMask & 0x2) != 0 && accumulated.iode2 != accumulated.iode3)
+        {
+            seenSubframeMask &= static_cast<uint8_t>(~0x2);
+        }
+    }
 }
 
 bool Channel::hasCompleteEphemeris() const

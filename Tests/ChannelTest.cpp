@@ -147,4 +147,91 @@ TEST_F(ChannelTest, SustainedNonLockTimesOutBackToAcquiringWithoutFeedingPromptH
     EXPECT_EQ(m_channel.getState(), GPSOpenCl::ChannelState::Acquiring);
     EXPECT_FALSE(m_channel.isAcquired());
 }
+
+TEST(ChannelEphemerisMergeTest, ConsistentDataSetAccumulatesToComplete)
+{
+    GPSOpenCl::GpsEphemeris accumulated{};
+    uint8_t mask = 0;
+
+    GPSOpenCl::GpsEphemeris sf1{};
+    sf1.subframeId = 1;
+    sf1.iodc = 0x123;
+    sf1.af0 = 1.0e-4;
+    GPSOpenCl::Channel::mergeSubframe(sf1, accumulated, mask);
+
+    GPSOpenCl::GpsEphemeris sf2{};
+    sf2.subframeId = 2;
+    sf2.iode2 = 0x23;
+    sf2.sqrtA = 5153.0;
+    GPSOpenCl::Channel::mergeSubframe(sf2, accumulated, mask);
+
+    GPSOpenCl::GpsEphemeris sf3{};
+    sf3.subframeId = 3;
+    sf3.iode3 = 0x23;
+    sf3.i0 = 0.95;
+    GPSOpenCl::Channel::mergeSubframe(sf3, accumulated, mask);
+
+    EXPECT_EQ(mask, 0x7);
+    EXPECT_EQ(accumulated.af0, 1.0e-4);
+    EXPECT_EQ(accumulated.sqrtA, 5153.0);
+    EXPECT_EQ(accumulated.i0, 0.95);
+}
+
+TEST(ChannelEphemerisMergeTest, NewOrbitDataSetInvalidatesStaleClock)
+{
+    GPSOpenCl::GpsEphemeris accumulated{};
+    uint8_t mask = 0;
+
+    GPSOpenCl::GpsEphemeris sf1{};
+    sf1.subframeId = 1;
+    sf1.iodc = 0x123;
+    GPSOpenCl::Channel::mergeSubframe(sf1, accumulated, mask);
+    EXPECT_EQ(mask, 0x1);
+
+    GPSOpenCl::GpsEphemeris sf2{};
+    sf2.subframeId = 2;
+    sf2.iode2 = 0x24;
+    GPSOpenCl::Channel::mergeSubframe(sf2, accumulated, mask);
+
+    EXPECT_EQ(mask, 0x2);
+}
+
+TEST(ChannelEphemerisMergeTest, NewClockDataSetInvalidatesStaleOrbit)
+{
+    GPSOpenCl::GpsEphemeris accumulated{};
+    uint8_t mask = 0;
+
+    GPSOpenCl::GpsEphemeris sf2{};
+    sf2.subframeId = 2;
+    sf2.iode2 = 0x23;
+    GPSOpenCl::Channel::mergeSubframe(sf2, accumulated, mask);
+
+    GPSOpenCl::GpsEphemeris sf3{};
+    sf3.subframeId = 3;
+    sf3.iode3 = 0x23;
+    GPSOpenCl::Channel::mergeSubframe(sf3, accumulated, mask);
+    EXPECT_EQ(mask, 0x6);
+
+    GPSOpenCl::GpsEphemeris sf1{};
+    sf1.subframeId = 1;
+    sf1.iodc = 0x124;
+    GPSOpenCl::Channel::mergeSubframe(sf1, accumulated, mask);
+
+    EXPECT_EQ(mask, 0x1);
+}
+
+TEST(ChannelEphemerisMergeTest, SyncOnlySubframesRefreshHeaderWithoutTouchingMask)
+{
+    GPSOpenCl::GpsEphemeris accumulated{};
+    uint8_t mask = 0x7;
+
+    GPSOpenCl::GpsEphemeris sf5{};
+    sf5.subframeId = 5;
+    sf5.tow = 12345.0;
+    GPSOpenCl::Channel::mergeSubframe(sf5, accumulated, mask);
+
+    EXPECT_EQ(mask, 0x7);
+    EXPECT_EQ(accumulated.tow, 12345.0);
+    EXPECT_EQ(accumulated.subframeId, 5);
+}
 }

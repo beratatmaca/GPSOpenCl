@@ -90,23 +90,46 @@ bool FileSource::loadAllSamples(const std::string &filePath, size_t samplesPerBl
 
         std::string str;
         int lineCounter = 0;
+        size_t fileLine = 0;
+        size_t badLineCount = 0;
         float realVal = 0.0f;
         float imagVal = 0.0f;
         while (std::getline(file, str))
         {
-            if (!str.empty())
+            fileLine++;
+            if (str.empty())
             {
-                if (lineCounter % 2 == 0)
-                {
-                    realVal = std::stof(str);
-                }
-                else
-                {
-                    imagVal = std::stof(str);
-                    m_allSamples.emplace_back(realVal, imagVal);
-                }
-                lineCounter++;
+                continue;
             }
+            float parsed = 0.0f;
+            try
+            {
+                parsed = std::stof(str);
+            }
+            catch (const std::exception &)
+            {
+                if (badLineCount == 0)
+                {
+                    std::cerr << "FileSource: skipping unparseable sample at " << filePath << ":" << fileLine << " ('"
+                              << str << "')" << '\n';
+                }
+                badLineCount++;
+                continue;
+            }
+            if (lineCounter % 2 == 0)
+            {
+                realVal = parsed;
+            }
+            else
+            {
+                imagVal = parsed;
+                m_allSamples.emplace_back(realVal, imagVal);
+            }
+            lineCounter++;
+        }
+        if (badLineCount > 0)
+        {
+            std::cerr << "FileSource: skipped " << badLineCount << " unparseable line(s) in " << filePath << '\n';
         }
     }
 

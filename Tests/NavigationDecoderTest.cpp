@@ -11,6 +11,7 @@ static uint32_t packBits(uint32_t value, int startBitFromMSB, int numBits)
     int shift = 30 - (startBitFromMSB + numBits - 1);
     return (value & mask) << shift;
 }
+
 TEST(NavigationDecoderTest, PreambleSearchNormal)
 {
     std::vector<bool> bits;
@@ -63,7 +64,7 @@ TEST(NavigationDecoderTest, PreambleSearchInverted)
 
 TEST(NavigationDecoderTest, BitExtraction)
 {
-    uint32_t word = 0x22C00000;
+    uint32_t word = 0x22'C0'00'00;
     uint32_t preamble = GPSOpenCl::NavigationDecoder::extractUnsignedBits(word, 1, 8);
     EXPECT_EQ(preamble, 0x8Bu);
 }
@@ -95,16 +96,18 @@ TEST(NavigationDecoderTest, DecodesSubframe4Page18IonosphericParams)
 
     std::vector<uint32_t> words(10, 0);
     words[1] = 4u << 8;
-    words[2] = packBits(1, 1, 2) | packBits(56, 3, 6) |
-               packBits(static_cast<uint32_t>(alpha0Raw), 9, 8) | packBits(static_cast<uint32_t>(alpha1Raw), 17, 8);
+    words[2] = packBits(1, 1, 2) | packBits(56, 3, 6) | packBits(static_cast<uint32_t>(alpha0Raw), 9, 8) |
+        packBits(static_cast<uint32_t>(alpha1Raw), 17, 8);
     words[3] = packBits(static_cast<uint32_t>(alpha2Raw), 1, 8) | packBits(static_cast<uint32_t>(alpha3Raw), 9, 8) |
-               packBits(static_cast<uint32_t>(beta0Raw), 17, 8);
+        packBits(static_cast<uint32_t>(beta0Raw), 17, 8);
     words[4] = packBits(static_cast<uint32_t>(beta1Raw), 1, 8) | packBits(static_cast<uint32_t>(beta2Raw), 9, 8) |
-               packBits(static_cast<uint32_t>(beta3Raw), 17, 8);
+        packBits(static_cast<uint32_t>(beta3Raw), 17, 8);
 
     GPSOpenCl::NavigationDecoder decoder;
     GPSOpenCl::GpsEphemeris ephem{};
-    EXPECT_FALSE(decoder.decodeSubframe(words, ephem));
+    EXPECT_TRUE(decoder.decodeSubframe(words, ephem));
+    EXPECT_TRUE(ephem.isValid);
+    EXPECT_EQ(ephem.subframeId, 4);
     ASSERT_TRUE(decoder.hasIonosphericParams());
 
     const GPSOpenCl::AtmosphericInput &params = decoder.getIonosphericParams();
@@ -126,8 +129,27 @@ TEST(NavigationDecoderTest, IgnoresSubframe4PagesOtherThanPage18)
 
     GPSOpenCl::NavigationDecoder decoder;
     GPSOpenCl::GpsEphemeris ephem{};
-    EXPECT_FALSE(decoder.decodeSubframe(words, ephem));
+    EXPECT_TRUE(decoder.decodeSubframe(words, ephem));
     EXPECT_FALSE(decoder.hasIonosphericParams());
+}
+
+TEST(NavigationDecoderTest, Subframe5DecodesAsSyncOnlyWithTow)
+{
+    const uint32_t towCount = 12'345;
+
+    std::vector<uint32_t> words(10, 0);
+    words[1] = packBits(towCount, 1, 17) | packBits(5, 20, 3);
+
+    GPSOpenCl::NavigationDecoder decoder;
+    GPSOpenCl::GpsEphemeris ephem{};
+    EXPECT_TRUE(decoder.decodeSubframe(words, ephem));
+    EXPECT_TRUE(ephem.isValid);
+    EXPECT_EQ(ephem.subframeId, 5);
+    EXPECT_NEAR(ephem.tow, towCount * 6.0, 1e-9);
+    EXPECT_EQ(ephem.sqrtA, 0.0);
+    EXPECT_EQ(ephem.toe, 0.0);
+    EXPECT_EQ(ephem.af0, 0.0);
+    EXPECT_EQ(ephem.weekNumber, 0);
 }
 
 static uint32_t buildParityWord(uint32_t dataBits30, bool prevD29, bool prevD30)
@@ -138,15 +160,21 @@ static uint32_t buildParityWord(uint32_t dataBits30, bool prevD29, bool prevD30)
         d[i] = ((dataBits30 >> (30 - i)) & 1) != 0;
     }
 
-    bool D25 = prevD29 ^ d[1] ^ d[2] ^ d[3] ^ d[5] ^ d[6] ^ d[10] ^ d[11] ^ d[12] ^ d[13] ^ d[14] ^ d[17] ^ d[18] ^ d[20] ^ d[23];
-    bool D26 = prevD30 ^ d[2] ^ d[3] ^ d[4] ^ d[6] ^ d[7] ^ d[11] ^ d[12] ^ d[13] ^ d[14] ^ d[15] ^ d[18] ^ d[19] ^ d[21] ^ d[24];
-    bool D27 = prevD29 ^ d[1] ^ d[3] ^ d[4] ^ d[5] ^ d[7] ^ d[8] ^ d[12] ^ d[13] ^ d[14] ^ d[15] ^ d[16] ^ d[19] ^ d[20] ^ d[22];
-    bool D28 = prevD30 ^ d[2] ^ d[4] ^ d[5] ^ d[6] ^ d[8] ^ d[9] ^ d[13] ^ d[14] ^ d[15] ^ d[16] ^ d[17] ^ d[20] ^ d[21] ^ d[23];
-    bool D29 = prevD30 ^ d[1] ^ d[3] ^ d[5] ^ d[6] ^ d[7] ^ d[9] ^ d[10] ^ d[14] ^ d[15] ^ d[16] ^ d[17] ^ d[18] ^ d[21] ^ d[22] ^ d[24];
-    bool D30 = prevD29 ^ d[3] ^ d[5] ^ d[6] ^ d[8] ^ d[9] ^ d[10] ^ d[11] ^ d[13] ^ d[15] ^ d[19] ^ d[22] ^ d[23] ^ d[24];
+    bool D25 = prevD29 ^ d[1] ^ d[2] ^ d[3] ^ d[5] ^ d[6] ^ d[10] ^ d[11] ^ d[12] ^ d[13] ^ d[14] ^ d[17] ^ d[18] ^
+        d[20] ^ d[23];
+    bool D26 = prevD30 ^ d[2] ^ d[3] ^ d[4] ^ d[6] ^ d[7] ^ d[11] ^ d[12] ^ d[13] ^ d[14] ^ d[15] ^ d[18] ^ d[19] ^
+        d[21] ^ d[24];
+    bool D27 = prevD29 ^ d[1] ^ d[3] ^ d[4] ^ d[5] ^ d[7] ^ d[8] ^ d[12] ^ d[13] ^ d[14] ^ d[15] ^ d[16] ^ d[19] ^
+        d[20] ^ d[22];
+    bool D28 = prevD30 ^ d[2] ^ d[4] ^ d[5] ^ d[6] ^ d[8] ^ d[9] ^ d[13] ^ d[14] ^ d[15] ^ d[16] ^ d[17] ^ d[20] ^
+        d[21] ^ d[23];
+    bool D29 = prevD30 ^ d[1] ^ d[3] ^ d[5] ^ d[6] ^ d[7] ^ d[9] ^ d[10] ^ d[14] ^ d[15] ^ d[16] ^ d[17] ^ d[18] ^
+        d[21] ^ d[22] ^ d[24];
+    bool D30 =
+        prevD29 ^ d[3] ^ d[5] ^ d[6] ^ d[8] ^ d[9] ^ d[10] ^ d[11] ^ d[13] ^ d[15] ^ d[19] ^ d[22] ^ d[23] ^ d[24];
 
     uint32_t parity = (D25 ? 1u : 0u) << 5 | (D26 ? 1u : 0u) << 4 | (D27 ? 1u : 0u) << 3 | (D28 ? 1u : 0u) << 2 |
-                      (D29 ? 1u : 0u) << 1 | (D30 ? 1u : 0u);
+        (D29 ? 1u : 0u) << 1 | (D30 ? 1u : 0u);
     return dataBits30 | parity;
 }
 
@@ -158,7 +186,7 @@ static std::vector<uint32_t> buildValidSubframe(const std::vector<uint32_t> &sem
     for (int w = 0; w < 10; w++)
     {
         uint32_t withParity = buildParityWord(semanticWords30[static_cast<size_t>(w)], prevD29, prevD30);
-        raw[static_cast<size_t>(w)] = prevD30 ? (withParity ^ 0x3FFFFFC0u) : withParity;
+        raw[static_cast<size_t>(w)] = prevD30 ? (withParity ^ 0x3F'FF'FF'C0u) : withParity;
         prevD29 = ((raw[static_cast<size_t>(w)] >> 1) & 1u) != 0;
         prevD30 = (raw[static_cast<size_t>(w)] & 1u) != 0;
     }
@@ -198,12 +226,53 @@ static GPSOpenCl::ComplexFloatVector bitsToPromptSamples(const std::vector<bool>
     return samples;
 }
 
+TEST(NavigationDecoderTest, Subframe5RefreshesTimeAnchorThroughPromptSignalPath)
+{
+    const uint32_t towCount = 0x15555;
+    const uint32_t alternatingFill = 0x55'55'55u;
+
+    std::vector<uint32_t> semanticWords(10, 0);
+    semanticWords[0] = packBits(0x8B, 1, 8) | packBits(alternatingFill, 9, 16);
+    semanticWords[1] = packBits(towCount, 1, 17) | packBits(5, 20, 3) | packBits(1, 23, 2);
+    for (int w = 2; w < 10; w++)
+    {
+        semanticWords[static_cast<size_t>(w)] = packBits(alternatingFill, 1, 24);
+    }
+
+    std::vector<uint32_t> subframe = buildValidSubframe(semanticWords);
+    std::vector<bool> bits = wordsToBits(subframe);
+
+    const int truePhase = 10;
+    GPSOpenCl::ComplexFloatVector promptHistory = bitsToPromptSamples(bits, truePhase);
+
+    GPSOpenCl::NavigationDecoder decoder;
+    GPSOpenCl::GpsEphemeris ephem{};
+    int bitSyncPhase = -1;
+    std::vector<size_t> searchPositions;
+    size_t bitOffset = 0;
+    size_t subframeStartSample = 0;
+
+    bool decoded = false;
+    for (int attempt = 0; attempt < 20 && !decoded; attempt++)
+    {
+        decoded = decoder.processPromptSignal(
+            1, promptHistory, bitSyncPhase, searchPositions, bitOffset, ephem, subframeStartSample);
+    }
+
+    EXPECT_TRUE(decoded);
+    EXPECT_TRUE(ephem.isValid);
+    EXPECT_EQ(ephem.subframeId, 5);
+    EXPECT_NEAR(ephem.tow, towCount * 6.0, 1e-9);
+    EXPECT_LT(subframeStartSample, promptHistory.size());
+    EXPECT_GE(bitOffset, 300u);
+}
+
 TEST(NavigationDecoderTest, BitSyncFindsSubframeWhenNaiveZeroPhaseCannot)
 {
     // Fully alternating data bits: any two adjacent bits always disagree, so a fixed
     // sample-phase-0 assumption against a signal truly offset by 10 samples (an exact
     // half-window split) forces every demodulated bit to a tied, unrecoverable zero-sum.
-    const uint32_t alternatingFill = 0x555555u;
+    const uint32_t alternatingFill = 0x55'55'55u;
 
     std::vector<uint32_t> semanticWords(10, 0);
     semanticWords[0] = packBits(0x8B, 1, 8) | packBits(alternatingFill, 9, 16);
@@ -236,8 +305,8 @@ TEST(NavigationDecoderTest, BitSyncFindsSubframeWhenNaiveZeroPhaseCannot)
     bool decoded = false;
     for (int attempt = 0; attempt < 20 && !decoded; attempt++)
     {
-        decoded = decoder.processPromptSignal(1, promptHistory, bitSyncPhase, searchPositions, bitOffset, ephem,
-                                              subframeStartSample);
+        decoded = decoder.processPromptSignal(
+            1, promptHistory, bitSyncPhase, searchPositions, bitOffset, ephem, subframeStartSample);
     }
 
     EXPECT_TRUE(decoded);
@@ -266,8 +335,8 @@ TEST(NavigationDecoderTest, BitSyncNeverLocksWithFewerThanOneSubframeOfSamples)
     size_t bitOffset = 0;
     size_t subframeStartSample = 0;
 
-    bool decoded = decoder.processPromptSignal(1, promptHistory, bitSyncPhase, searchPositions, bitOffset, ephem,
-                                               subframeStartSample);
+    bool decoded = decoder.processPromptSignal(
+        1, promptHistory, bitSyncPhase, searchPositions, bitOffset, ephem, subframeStartSample);
 
     EXPECT_FALSE(decoded);
     EXPECT_EQ(bitSyncPhase, -1);

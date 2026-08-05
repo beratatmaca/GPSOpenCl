@@ -54,30 +54,6 @@ class Compute
      *  @return 0 on success. */
     int absolute(const ComplexFloatVector &input1, FloatVector *output);
 
-    /** @brief Complex-multiply then FFT, keeping the product on-device between the two kernel
-     *   stages instead of a host round-trip in between.
-     *  @param input1    First complex vector.
-     *  @param input2    Second complex vector.
-     *  @param direction Forward or inverse FFT.
-     *  @param output    FFT of the product.
-     *  @return 0 on success. */
-    int complexMultiplyThenFft(const ComplexFloatVector &input1,
-                               const ComplexFloatVector &input2,
-                               FFTDirectionType direction,
-                               ComplexFloatVector *output);
-
-    /** @brief Complex-multiply, FFT, then magnitude-squared, keeping both intermediates on-device
-     *   between kernel stages instead of a host round-trip after each one.
-     *  @param input1    First complex vector.
-     *  @param input2    Second complex vector.
-     *  @param direction Forward or inverse FFT.
-     *  @param output    Magnitude squared of the FFT of the product.
-     *  @return 0 on success. */
-    int complexMultiplyThenFftThenAbsolute(const ComplexFloatVector &input1,
-                                           const ComplexFloatVector &input2,
-                                           FFTDirectionType direction,
-                                           FloatVector *output);
-
     /** @brief Parallel reduction sum.
      *  @param input    Float vector.
      *  @param sumValue Output sum.

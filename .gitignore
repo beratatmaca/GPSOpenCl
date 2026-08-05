@@ -58,3 +58,4 @@ telemetry_stream.json
 __pycache__/
 *.pyc
 build_gpufork/
+build-*/

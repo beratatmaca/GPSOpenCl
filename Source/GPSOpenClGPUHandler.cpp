@@ -42,7 +42,7 @@ int GpuHandler::createDevice()
     cl_uint numOfPlatforms = 0;
     cl_uint numOfDevices = 0;
 
-    m_error = clGetPlatformIDs(1, nullptr, &numOfPlatforms);
+    m_error = clGetPlatformIDs(0, nullptr, &numOfPlatforms);
     if (m_error < 0 || numOfPlatforms == 0)
     {
         std::cout << "[INFO] No OpenCL platform driver detected. Using C++ CPU software compute mode." << '\n';
@@ -51,18 +51,34 @@ int GpuHandler::createDevice()
 
     std::vector<cl_platform_id> platforms(numOfPlatforms);
     clGetPlatformIDs(numOfPlatforms, platforms.data(), nullptr);
-    m_platform = platforms[0];
 
-    m_error = clGetDeviceIDs(m_platform, CL_DEVICE_TYPE_GPU, 1, &m_device, &numOfDevices);
-    if (m_error == CL_DEVICE_NOT_FOUND || m_error < 0 || numOfDevices == 0)
+    for (cl_platform_id platform : platforms)
     {
-
-        m_error = clGetDeviceIDs(m_platform, CL_DEVICE_TYPE_CPU, 1, &m_device, &numOfDevices);
+        m_error = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 1, &m_device, &numOfDevices);
+        if (m_error == CL_SUCCESS && numOfDevices > 0)
+        {
+            m_platform = platform;
+            break;
+        }
     }
 
-    if (m_error < 0 || numOfDevices == 0)
+    if (m_platform == nullptr)
     {
-        std::cout << "[INFO] No OpenCL GPU/CPU device detected. Using C++ CPU software compute mode." << '\n';
+        for (cl_platform_id platform : platforms)
+        {
+            m_error = clGetDeviceIDs(platform, CL_DEVICE_TYPE_CPU, 1, &m_device, &numOfDevices);
+            if (m_error == CL_SUCCESS && numOfDevices > 0)
+            {
+                m_platform = platform;
+                break;
+            }
+        }
+    }
+
+    if (m_platform == nullptr)
+    {
+        std::cout << "[INFO] No OpenCL GPU/CPU device detected on any platform. Using C++ CPU software compute mode."
+                  << '\n';
         return m_error < 0 ? m_error : -1;
     }
 

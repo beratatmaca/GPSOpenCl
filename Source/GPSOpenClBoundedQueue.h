@@ -6,19 +6,25 @@
  */
 
 #include <condition_variable>
+#include <cstddef>
 #include <mutex>
-#include <queue>
+#include <utility>
+#include <vector>
 
 namespace GPSOpenCl
 {
-/** @brief Thread-safe bounded blocking queue.
- *  @tparam T Element type. */
+/** @brief Thread-safe bounded blocking queue over a fixed ring buffer. Storage is allocated once
+ *   at construction, so steady-state push/pop performs no heap allocation per item.
+ *  @tparam T Element type; must be default-constructible and movable. */
 template<typename T> class BoundedQueue
 {
   public:
     /** @brief Construct with max capacity.
      *  @param maxCapacity Maximum queue size. */
-    explicit BoundedQueue(size_t maxCapacity = 16) : m_maxCapacity(maxCapacity), m_finished(false) {}
+    explicit BoundedQueue(size_t maxCapacity = 16)
+        : m_storage(maxCapacity == 0 ? 1 : maxCapacity), m_maxCapacity(maxCapacity == 0 ? 1 : maxCapacity)
+    {
+    }
 
     /** @brief Push an item, blocking if full.
      *  @param item Item to push.
@@ -27,12 +33,12 @@ template<typename T> class BoundedQueue
     {
         {
             std::unique_lock<std::mutex> lock(m_mutex);
-            m_cvPush.wait(lock, [this]() { return m_queue.size() < m_maxCapacity || m_finished; });
+            m_cvPush.wait(lock, [this]() { return m_count < m_maxCapacity || m_finished; });
             if (m_finished)
             {
                 return false;
             }
-            m_queue.push(std::move(item));
+            enqueueLocked(std::move(item));
         }
         m_cvPop.notify_one();
         return true;
@@ -47,11 +53,11 @@ template<typename T> class BoundedQueue
     {
         {
             const std::lock_guard<std::mutex> lock(m_mutex);
-            if (m_finished || m_queue.size() >= m_maxCapacity)
+            if (m_finished || m_count >= m_maxCapacity)
             {
                 return false;
             }
-            m_queue.push(std::move(item));
+            enqueueLocked(std::move(item));
         }
         m_cvPop.notify_one();
         return true;
@@ -64,13 +70,12 @@ template<typename T> class BoundedQueue
     {
         {
             std::unique_lock<std::mutex> lock(m_mutex);
-            m_cvPop.wait(lock, [this]() { return !m_queue.empty() || m_finished; });
-            if (m_queue.empty() && m_finished)
+            m_cvPop.wait(lock, [this]() { return m_count > 0 || m_finished; });
+            if (m_count == 0 && m_finished)
             {
                 return false;
             }
-            item = std::move(m_queue.front());
-            m_queue.pop();
+            dequeueLocked(item);
         }
         m_cvPush.notify_one();
         return true;
@@ -85,12 +90,11 @@ template<typename T> class BoundedQueue
     {
         {
             const std::lock_guard<std::mutex> lock(m_mutex);
-            if (m_queue.empty())
+            if (m_count == 0)
             {
                 return false;
             }
-            item = std::move(m_queue.front());
-            m_queue.pop();
+            dequeueLocked(item);
         }
         m_cvPush.notify_one();
         return true;
@@ -106,12 +110,31 @@ template<typename T> class BoundedQueue
     }
 
   private:
+    /** @brief Append an item at the ring tail; caller holds the mutex.
+     *  @param item Item to append. */
+    void enqueueLocked(T &&item)
+    {
+        m_storage[(m_head + m_count) % m_maxCapacity] = std::move(item);
+        m_count++;
+    }
+
+    /** @brief Remove the item at the ring head; caller holds the mutex.
+     *  @param item Output item. */
+    void dequeueLocked(T &item)
+    {
+        item = std::move(m_storage[m_head]);
+        m_head = (m_head + 1) % m_maxCapacity;
+        m_count--;
+    }
+
+    std::vector<T> m_storage;            ///< Fixed ring storage.
     size_t m_maxCapacity;                ///< Maximum queue size.
-    std::queue<T> m_queue;               ///< Internal queue.
+    size_t m_head{0};                    ///< Index of the oldest element.
+    size_t m_count{0};                   ///< Number of queued elements.
     std::mutex m_mutex;                  ///< Queue mutex.
     std::condition_variable m_cvPush;    ///< Push condition variable.
     std::condition_variable m_cvPop;     ///< Pop condition variable.
-    bool m_finished;                     ///< Finished flag.
+    bool m_finished{false};              ///< Finished flag.
 };
 }
 

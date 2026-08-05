@@ -15,12 +15,16 @@ namespace GPSOpenCl
 /** @brief Struct wire-format version tag. */
 constexpr uint32_t STRUCT_VERSION_1 = 1;
 
+/** @brief Wire-format version for structs extended with per-channel timing and PVT quality fields
+ *   (AcquisitionOutput, TrackingOutput, PvtSolverOutput). New fields are appended, so version-1
+ *   consumers can still parse the leading fields. */
+constexpr uint32_t STRUCT_VERSION_2 = 2;
+
 /** @brief Source module input parameters. */
 struct SourceInput
 {
     uint32_t structVersion{STRUCT_VERSION_1};    ///< Struct version tag.
     char fifoPath[256]{};                        ///< FIFO or file path.
-    uint32_t sampleFormat{0};                    ///< 0 = ComplexFloat, 1 = Int8.
     double samplingRate{4096000.0};              ///< Sampling rate (Hz).
 };
 
@@ -44,12 +48,13 @@ struct AcquisitionInput
     double samplingFrequency{4096000.0};           ///< Sampling rate (Hz).
     int32_t numberOfSamplesPerCode{4096};          ///< Samples per code period.
     int32_t reacquisitionIntervalBlocks{1000};     ///< Blocks between re-acquisition attempts.
+    double acquisitionCn0ThresholdDbHz{43.0};      ///< Min C/N0 (dB-Hz) to declare a satellite acquired.
 };
 
 /** @brief Acquisition module output results. */
 struct AcquisitionOutput
 {
-    uint32_t structVersion{STRUCT_VERSION_1};    ///< Struct version tag.
+    uint32_t structVersion{STRUCT_VERSION_2};    ///< Struct version tag.
     int32_t prn{0};                              ///< Satellite PRN number.
     int32_t peakIndex{0};                        ///< Code phase of peak (samples).
     double peakValue{0.0};                       ///< Correlation peak magnitude.
@@ -58,6 +63,7 @@ struct AcquisitionOutput
     double cno{0.0};                             ///< Carrier-to-noise ratio (dB-Hz).
     double peakRatio{0.0};                       ///< Peak-to-mean ratio.
     uint32_t isAcquired{0};                      ///< 1 if satellite acquired.
+    double correlateMs{0.0};                     ///< Wall-clock duration of this search's correlate() (ms).
 };
 
 /** @brief Tracking module input parameters. */
@@ -77,12 +83,13 @@ struct TrackingInput
     int32_t confirmDebounceBlocks{50};           ///< Good blocks needed to confirm tracking.
     int32_t confirmTimeoutBlocks{500};           ///< Blocks before abandoning an unconfirmed acquisition.
     int32_t lossDebounceBlocks{200};             ///< Bad blocks needed to declare lock lost.
+    int32_t telemetryIntervalBlocks{10};         ///< Blocks between TrackingOutput publishes per channel.
 };
 
 /** @brief Tracking module output results. */
 struct TrackingOutput
 {
-    uint32_t structVersion{STRUCT_VERSION_1};    ///< Struct version tag.
+    uint32_t structVersion{STRUCT_VERSION_2};    ///< Struct version tag.
     int32_t prn{0};                              ///< Satellite PRN number.
     double carrierFreqHz{0.0};                   ///< Current carrier frequency (Hz).
     double codeFreqHz{0.0};                      ///< Current code frequency (Hz).
@@ -97,6 +104,7 @@ struct TrackingOutput
     uint32_t channelState{0};                    ///< Channel state (0=Acquiring, 1=Confirming, 2=Tracking).
     double carrierLockIndicator{0.0};            ///< Smoothed carrier lock indicator.
     double codeLockRatio{0.0};                   ///< Smoothed code lock ratio.
+    double correlatorTimeMs{0.0};                ///< This block's fused correlator pass duration (ms).
 };
 
 /** @brief Navigation decoder input parameters. */
@@ -159,7 +167,7 @@ struct PvtSolverInput
 /** @brief PVT solver output with position and DOP. */
 struct PvtSolverOutput
 {
-    uint32_t structVersion{STRUCT_VERSION_1};    ///< Struct version tag.
+    uint32_t structVersion{STRUCT_VERSION_2};    ///< Struct version tag.
     double ecefX{0.0};                           ///< ECEF X position (m).
     double ecefY{0.0};                           ///< ECEF Y position (m).
     double ecefZ{0.0};                           ///< ECEF Z position (m).
@@ -173,6 +181,8 @@ struct PvtSolverOutput
     double dopHDOP{0.0};                         ///< Horizontal DOP.
     double dopVDOP{0.0};                         ///< Vertical DOP.
     uint32_t isValid{0};                         ///< 1 if solution valid.
+    uint32_t satellitesUsed{0};                  ///< Satellites in the accepted solution.
+    double maxResidualMeters{0.0};               ///< Largest converged pseudorange residual (m).
 };
 
 /** @brief Atmospheric corrections input (Klobuchar coefficients). */
@@ -215,6 +225,13 @@ struct NmeaGeneratorOutput
 {
     uint32_t structVersion{STRUCT_VERSION_1};    ///< Struct version tag.
     char sentence[256]{};                        ///< NMEA sentence string.
+};
+
+/** @brief Profiler input parameters. */
+struct ProfilerInput
+{
+    uint32_t structVersion{STRUCT_VERSION_1};    ///< Struct version tag.
+    uint32_t enabled{1};                         ///< 1 to take per-stage timing samples.
 };
 
 /** @brief Profiler output with per-stage timing. */

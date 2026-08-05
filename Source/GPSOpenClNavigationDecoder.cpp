@@ -301,30 +301,11 @@ bool NavigationDecoder::decodeSubframe(const std::vector<uint32_t> &words30bit, 
     else if (ephem.subframeId == 4)
     {
         decodeIonosphericParams(words30bit);
+        ephem.isValid = true;
     }
-
-    if (!ephem.isValid)
+    else if (ephem.subframeId == 5)
     {
-        return false;
-    }
-
-    if (ephem.subframeId == 2 && ephem.iodc != 0)
-    {
-        const int iodcLow8 = ephem.iodc & 0xFF;
-        if (ephem.iode2 != iodcLow8)
-        {
-            ephem.isValid = false;
-            return false;
-        }
-    }
-    if (ephem.subframeId == 3 && ephem.iodc != 0)
-    {
-        const int iodcLow8 = ephem.iodc & 0xFF;
-        if (ephem.iode3 != iodcLow8)
-        {
-            ephem.isValid = false;
-            return false;
-        }
+        ephem.isValid = true;
     }
 
     return ephem.isValid;

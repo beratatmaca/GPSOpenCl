@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 #include <iostream>
 
@@ -33,6 +34,21 @@ unsigned int Compute::clampLocalSizeForMinPointsPerItem(unsigned int localSize,
     return localSize;
 }
 
+namespace
+{
+bool deviceSupportsOpenCl2(cl_device_id device)
+{
+    char versionString[64] = {0};
+    const cl_int err = clGetDeviceInfo(device, CL_DEVICE_VERSION, sizeof(versionString) - 1, versionString, nullptr);
+    if (err != CL_SUCCESS)
+    {
+        return false;
+    }
+    int major = 0;
+    return (sscanf(versionString, "OpenCL %d", &major) == 1) && major >= 2;
+}
+}
+
 Compute::Compute() : m_queue(nullptr), m_error(-1)
 {
     if (m_gpu.createDevice() >= 0)
@@ -41,7 +57,21 @@ Compute::Compute() : m_queue(nullptr), m_error(-1)
         {
             m_gpu.initKernels();
         }
-        m_queue = clCreateCommandQueueWithProperties(m_gpu.m_context, m_gpu.m_device, nullptr, &m_error);
+        if (deviceSupportsOpenCl2(m_gpu.m_device))
+        {
+            m_queue = clCreateCommandQueueWithProperties(m_gpu.m_context, m_gpu.m_device, nullptr, &m_error);
+        }
+        else
+        {
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
+            m_queue = clCreateCommandQueue(m_gpu.m_context, m_gpu.m_device, 0, &m_error);
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
+#endif
+        }
         if (m_error < 0)
         {
             std::cout << "Couldn't create a command queue" << '\n';
@@ -52,6 +82,11 @@ Compute::Compute() : m_queue(nullptr), m_error(-1)
 
 Compute::~Compute()
 {
+    if (m_queue != nullptr)
+    {
+        clFinish(m_queue);
+    }
+
     auto releaseIfSet = [](cl_mem &mem)
     {
         if (mem != nullptr)
@@ -157,6 +192,10 @@ int Compute::fftDeviceInPlace(cl_mem buffer, unsigned int length, FFTDirectionTy
     {
         return -1;
     }
+    if (length == 0 || (length & (length - 1)) != 0)
+    {
+        return -1;
+    }
 
     cacheDeviceInfo();
 
@@ -220,6 +259,10 @@ int Compute::fftDeviceInPlace(cl_mem buffer, unsigned int length, FFTDirectionTy
 int Compute::fftDeviceInPlaceBatch(cl_mem buffer, unsigned int length, unsigned int count, FFTDirectionType direction)
 {
     if ((m_queue == nullptr) || m_gpu.m_acquisitionKernelList.size() <= GpuHandler::FFTScale)
+    {
+        return -1;
+    }
+    if (length == 0 || (length & (length - 1)) != 0)
     {
         return -1;
     }
@@ -314,6 +357,11 @@ int Compute::fft(const ComplexFloatVector &input, ComplexFloatVector *output, FF
                 }
             }
         }
+    }
+
+    if (m_queue != nullptr)
+    {
+        clFinish(m_queue);
     }
 
     output->clear();
@@ -445,10 +493,25 @@ cl_mem Compute::complexMultiplierDevice(const ComplexFloatVector &input1,
     m_cachedInput1Ptr = nullptr;
     m_cachedInput1Len = 0;
 
-    clEnqueueWriteBuffer(
+    m_error = clEnqueueWriteBuffer(
         m_queue, dA, CL_FALSE, 0, 2UL * length * sizeof(float), m_allocatedMemory.data(), 0, nullptr, nullptr);
-    clEnqueueWriteBuffer(
-        m_queue, dB, CL_FALSE, 0, 2UL * length * sizeof(float), &m_allocatedMemory[2UL * length], 0, nullptr, nullptr);
+    if (m_error == CL_SUCCESS)
+    {
+        m_error = clEnqueueWriteBuffer(m_queue,
+                                       dB,
+                                       CL_FALSE,
+                                       0,
+                                       2UL * length * sizeof(float),
+                                       &m_allocatedMemory[2UL * length],
+                                       0,
+                                       nullptr,
+                                       nullptr);
+    }
+    if (m_error != CL_SUCCESS)
+    {
+        clFinish(m_queue);
+        return nullptr;
+    }
 
     return enqueueComplexMultiplier(dA, dB, length, 0, 0);
 }
@@ -500,7 +563,7 @@ cl_mem Compute::complexMultiplierResidentDevice(const ComplexFloatVector &input1
 cl_mem Compute::ensureSlotPool(int slot, size_t floatsPerSlot)
 {
     const size_t minimumSlots = 32;
-    const size_t neededSlots = std::max(static_cast<size_t>(slot) + 1, minimumSlots);
+    const size_t neededSlots = ((static_cast<size_t>(slot) / minimumSlots) + 1) * minimumSlots;
 
     if (m_slotPoolStrideFloats != floatsPerSlot)
     {
@@ -632,69 +695,6 @@ int Compute::absolute(const ComplexFloatVector &input1, FloatVector *output)
     return 0;
 }
 
-int Compute::complexMultiplyThenFft(const ComplexFloatVector &input1,
-                                    const ComplexFloatVector &input2,
-                                    FFTDirectionType direction,
-                                    ComplexFloatVector *output)
-{
-    auto length = static_cast<unsigned int>(input1.size());
-    if ((m_queue != nullptr) && m_gpu.m_acquisitionKernelList.size() > GpuHandler::FFTScale &&
-        m_gpu.m_acquisitionKernelList.size() > GpuHandler::ComplexMultiplier)
-    {
-        cl_mem product = complexMultiplierDevice(input1, input2, length);
-        if ((product != nullptr) && m_error == CL_SUCCESS && fftDeviceInPlace(product, length, direction) == 0)
-        {
-            m_error = clEnqueueReadBuffer(m_queue,
-                                          product,
-                                          CL_TRUE,
-                                          0,
-                                          2UL * length * sizeof(float),
-                                          m_allocatedMemory.data(),
-                                          0,
-                                          nullptr,
-                                          nullptr);
-            if (m_error == CL_SUCCESS)
-            {
-                output->resize(length);
-                std::memcpy(output->data(), m_allocatedMemory.data(), 2UL * length * sizeof(float));
-                return 0;
-            }
-        }
-    }
-
-    ComplexFloatVector product;
-    complexMultiplier(input1, input2, &product);
-    return fft(product, output, direction);
-}
-
-int Compute::complexMultiplyThenFftThenAbsolute(const ComplexFloatVector &input1,
-                                                const ComplexFloatVector &input2,
-                                                FFTDirectionType direction,
-                                                FloatVector *output)
-{
-    auto length = static_cast<unsigned int>(input1.size());
-    if ((m_queue != nullptr) && m_gpu.m_acquisitionKernelList.size() > GpuHandler::FFTScale &&
-        m_gpu.m_acquisitionKernelList.size() > GpuHandler::ComplexMultiplier &&
-        m_gpu.m_acquisitionKernelList.size() > GpuHandler::Absolute)
-    {
-        cl_mem product = complexMultiplierDevice(input1, input2, length);
-        if ((product != nullptr) && m_error == CL_SUCCESS && fftDeviceInPlace(product, length, direction) == 0 &&
-            absoluteDeviceToHost(product, length, output) == 0)
-        {
-            return 0;
-        }
-    }
-
-    ComplexFloatVector product;
-    complexMultiplier(input1, input2, &product);
-    ComplexFloatVector fftResult;
-    if (fft(product, &fftResult, direction) != 0)
-    {
-        return -1;
-    }
-    return absolute(fftResult, output);
-}
-
 int Compute::sum(const FloatVector &input, float *sumValue)
 {
     if ((m_queue != nullptr) && m_gpu.m_acquisitionKernelList.size() > GpuHandler::Sum && !input.empty())
@@ -815,33 +815,44 @@ int Compute::complexMultiplyThenFftToSlot(const ComplexFloatVector &input1,
     if ((m_queue != nullptr) && m_gpu.m_acquisitionKernelList.size() > GpuHandler::FFTScale &&
         m_gpu.m_acquisitionKernelList.size() > GpuHandler::ComplexMultiplier)
     {
-        cl_mem product = complexMultiplierDevice(input1, input2, length);
-        if ((product != nullptr) && m_error == CL_SUCCESS && fftDeviceInPlace(product, length, direction) == 0)
+        cacheDeviceInfo();
+
+        cl_mem dA = ensureResidentInput1(input1, length);
+        cl_mem dB = (dA != nullptr) ? ensureBuffer(m_cmBufferB, m_cmBufferCapacityB, 2UL * length) : nullptr;
+        if ((dA != nullptr) && (dB != nullptr) && m_error == CL_SUCCESS)
         {
-            cl_mem slotPool = ensureSlotPool(slot, 2UL * length);
-            if (slotPool != nullptr && m_error == CL_SUCCESS)
+            packToStaging(input2, length, 0);
+            m_error = clEnqueueWriteBuffer(
+                m_queue, dB, CL_TRUE, 0, 2UL * length * sizeof(float), m_allocatedMemory.data(), 0, nullptr, nullptr);
+
+            cl_mem product = (m_error == CL_SUCCESS) ? enqueueComplexMultiplier(dA, dB, length, 0, 0) : nullptr;
+            if ((product != nullptr) && m_error == CL_SUCCESS && fftDeviceInPlace(product, length, direction) == 0)
             {
-                const size_t destinationOffset = slotIndex * m_slotPoolStrideFloats * sizeof(float);
-                m_error = clEnqueueCopyBuffer(m_queue,
-                                              product,
-                                              slotPool,
-                                              0,
-                                              destinationOffset,
-                                              2UL * length * sizeof(float),
-                                              0,
-                                              nullptr,
-                                              nullptr);
-                if (m_error == CL_SUCCESS)
+                cl_mem slotPool = ensureSlotPool(slot, 2UL * length);
+                if (slotPool != nullptr && m_error == CL_SUCCESS)
                 {
-                    m_error = clFinish(m_queue);
-                }
-                if (m_error == CL_SUCCESS)
-                {
-                    m_slotStates[slotIndex] = SlotDevice;
-                    m_slotLengths[slotIndex] = length;
-                    return 0;
+                    const size_t destinationOffset = slotIndex * m_slotPoolStrideFloats * sizeof(float);
+                    m_error = clEnqueueCopyBuffer(m_queue,
+                                                  product,
+                                                  slotPool,
+                                                  0,
+                                                  destinationOffset,
+                                                  2UL * length * sizeof(float),
+                                                  0,
+                                                  nullptr,
+                                                  nullptr);
+                    if (m_error == CL_SUCCESS)
+                    {
+                        m_slotStates[slotIndex] = SlotDevice;
+                        m_slotLengths[slotIndex] = length;
+                        return 0;
+                    }
                 }
             }
+        }
+        if (m_queue != nullptr)
+        {
+            clFinish(m_queue);
         }
     }
 
