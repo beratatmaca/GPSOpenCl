@@ -15,9 +15,9 @@ TEST(PVTSolverTest, EcefToWgs84Equator)
 
     GPSOpenCl::GeodeticPosition geo = GPSOpenCl::PVTSolver::ecefToWgs84(ecef);
 
-    EXPECT_NEAR(geo.latitude, 0.0, 1e-4);
-    EXPECT_NEAR(geo.longitude, 0.0, 1e-4);
-    EXPECT_NEAR(geo.altitude, 0.0, 1e-3);
+    EXPECT_NEAR(geo.latitudeDeg, 0.0, 1e-4);
+    EXPECT_NEAR(geo.longitudeDeg, 0.0, 1e-4);
+    EXPECT_NEAR(geo.altitudeMeters, 0.0, 1e-3);
 }
 
 TEST(PVTSolverTest, OrbitCalculation)
@@ -56,13 +56,13 @@ TEST(PVTSolverTest, StructOverloadResetsOutputOnFailure)
     GPSOpenCl::PVTSolver solver;
     GPSOpenCl::PvtSolverOutput outputSolution{};
     outputSolution.isValid = 1;
-    outputSolution.latitude = 12.34;
+    outputSolution.latitudeDeg = 12.34;
 
     bool success = solver.solvePosition(outputs, measuredRanges, transmitTimes, outputSolution);
 
     EXPECT_FALSE(success);
     EXPECT_EQ(outputSolution.isValid, 0u);
-    EXPECT_EQ(outputSolution.latitude, 0.0);
+    EXPECT_EQ(outputSolution.latitudeDeg, 0.0);
 }
 
 TEST(PVTSolverTest, MinSatellitesGateRejectsBelowThreshold)

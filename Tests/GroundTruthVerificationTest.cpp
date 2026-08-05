@@ -169,7 +169,7 @@ TEST(GroundTruthVerificationTest, AcquisitionAndTrackingMatchSimulatorTruth)
     auto sink = std::make_shared<CapturingSink>();
     app.setSink(sink);
 
-    int codeLength = settings.configuration.rawDataSettings.numberOfSamplesPerCode;
+    int codeLength = settings.configuration.acquisitionInput.numberOfSamplesPerCode;
     ASSERT_GT(codeLength, 0);
 
     int blocksAvailable = static_cast<int>(inputSignal.size() / static_cast<size_t>(codeLength));
@@ -211,8 +211,8 @@ TEST(GroundTruthVerificationTest, AcquisitionAndTrackingMatchSimulatorTruth)
         auto it = firstTruthByPrn.find(acq.prn);
         ASSERT_NE(it, firstTruthByPrn.end()) << "Acquired PRN " << acq.prn << " has no ground truth record";
 
-        double dopplerDiff = std::fabs(acq.peakFrequency - it->second.trueDopplerHz);
-        EXPECT_LT(dopplerDiff, 400.0) << "PRN " << acq.prn << " acquired Doppler " << acq.peakFrequency
+        double dopplerDiff = std::fabs(acq.peakFrequencyHz - it->second.trueDopplerHz);
+        EXPECT_LT(dopplerDiff, 400.0) << "PRN " << acq.prn << " acquired Doppler " << acq.peakFrequencyHz
                                       << " Hz too far from true Doppler " << it->second.trueDopplerHz << " Hz";
         acquiredCount++;
     }
@@ -310,7 +310,7 @@ TEST(GroundTruthVerificationTest, FullEphemerisAndPvtMatchSimulatorTruth)
     auto sink = std::make_shared<CapturingSink>();
     app.setSink(sink);
 
-    int codeLength = settings.configuration.rawDataSettings.numberOfSamplesPerCode;
+    int codeLength = settings.configuration.acquisitionInput.numberOfSamplesPerCode;
     ASSERT_GT(codeLength, 0);
 
     int blocksAvailable = static_cast<int>(inputSignal.size() / static_cast<size_t>(codeLength));
@@ -491,9 +491,9 @@ TEST(GroundTruthVerificationTest, FullEphemerisAndPvtMatchSimulatorTruth)
             continue;
         }
 
-        double dx = pvt.ecefX - trueEcefX;
-        double dy = pvt.ecefY - trueEcefY;
-        double dz = pvt.ecefZ - trueEcefZ;
+        double dx = pvt.ecefXMeters - trueEcefX;
+        double dy = pvt.ecefYMeters - trueEcefY;
+        double dz = pvt.ecefZMeters - trueEcefZ;
         double distance = std::sqrt(dx * dx + dy * dy + dz * dz);
         std::cerr << "DEBUG pvtfix distance=" << distance << '\n';
 
@@ -564,7 +564,7 @@ TEST(GroundTruthVerificationTest, SubframeStartCodePhaseMatchesSimulatorTruth)
     auto sink = std::make_shared<CapturingSink>();
     app.setSink(sink);
 
-    int codeLength = settings.configuration.rawDataSettings.numberOfSamplesPerCode;
+    int codeLength = settings.configuration.acquisitionInput.numberOfSamplesPerCode;
     ASSERT_GT(codeLength, 0);
 
     int blocksAvailable = static_cast<int>(inputSignal.size() / static_cast<size_t>(codeLength));

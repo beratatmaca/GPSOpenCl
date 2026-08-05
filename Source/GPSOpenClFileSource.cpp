@@ -5,9 +5,7 @@
 
 namespace GPSOpenCl
 {
-FileSource::FileSource() : m_currentBlockIndex(0), m_samplesPerBlock(4096)
-{
-}
+FileSource::FileSource() = default;
 
 FileSource::~FileSource() = default;
 
@@ -21,10 +19,10 @@ bool FileSource::initialize(const SourceInput &input)
         return false;
     }
     size_t samplesPerBlock = 4096;
-    if (input.samplingRate > 0.0)
+    if (input.samplingRateHz > 0.0)
     {
         samplesPerBlock =
-            static_cast<size_t>(std::round(input.samplingRate / (GPS_CA_CODE_FREQUENCY_HZ / GPS_CA_CODE_LENGTH)));
+            static_cast<size_t>(std::round(input.samplingRateHz / (GPS_CA_CODE_FREQUENCY_HZ / GPS_CA_CODE_LENGTH)));
     }
 
     if (filePath.find(".bin") != std::string::npos)
@@ -71,7 +69,7 @@ bool FileSource::loadAllSamples(const std::string &filePath, size_t samplesPerBl
         const size_t numSamples = fileSize / 2;
         m_allSamples.resize(numSamples);
         std::vector<int8_t> buffer(numSamples * 2);
-        file.read(reinterpret_cast<char *>(buffer.data()), numSamples * 2);
+        file.read(reinterpret_cast<char *>(buffer.data()), static_cast<std::streamsize>(numSamples * 2));
 
         for (size_t i = 0; i < numSamples; i++)
         {
@@ -178,12 +176,14 @@ bool FileSource::readBlock(ComplexFloatVector &outputSamples, SourceOutput &tele
             return false;
         }
 
-        outputSamples.assign(m_allSamples.begin() + startIdx, m_allSamples.begin() + startIdx + m_samplesPerBlock);
+        const auto blockBegin = static_cast<std::ptrdiff_t>(startIdx);
+        const auto blockEnd = static_cast<std::ptrdiff_t>(startIdx + m_samplesPerBlock);
+        outputSamples.assign(m_allSamples.begin() + blockBegin, m_allSamples.begin() + blockEnd);
     }
 
     telemetry.structVersion = STRUCT_VERSION_1;
     telemetry.blockIndex = static_cast<uint32_t>(m_currentBlockIndex);
-    telemetry.timestamp = static_cast<double>(m_currentBlockIndex) * 0.001;
+    telemetry.timestampSec = static_cast<double>(m_currentBlockIndex) * GPS_CA_CODE_PERIOD_SEC;
     telemetry.fifoUnderrunCount = 0;
     telemetry.fifoOverrunCount = 0;
 

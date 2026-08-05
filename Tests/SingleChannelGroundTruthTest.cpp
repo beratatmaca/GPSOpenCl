@@ -115,12 +115,12 @@ TEST(SingleChannelGroundTruthTest, AcquisitionAndTrackingConvergeForOneChannel)
 
     GPSOpenCl::Acquisition acquisition(settings.configuration);
     GPSOpenCl::Channel channel;
-    channel.m_svId = prn;
+    channel.svId = prn;
 
     auto sink = std::make_shared<CapturingSink>();
     channel.setSink(sink);
 
-    int codeLength = settings.configuration.rawDataSettings.numberOfSamplesPerCode;
+    int codeLength = settings.configuration.acquisitionInput.numberOfSamplesPerCode;
     ASSERT_GT(codeLength, 0);
     ASSERT_GE(inputSignal.size(), static_cast<size_t>(codeLength));
 
@@ -217,9 +217,9 @@ TEST(SingleChannelGroundTruthTest, FullEphemerisMatchesRinexForOneChannel)
 
     GPSOpenCl::Acquisition acquisition(settings.configuration);
     GPSOpenCl::Channel channel;
-    channel.m_svId = prn;
+    channel.svId = prn;
 
-    int codeLength = settings.configuration.rawDataSettings.numberOfSamplesPerCode;
+    int codeLength = settings.configuration.acquisitionInput.numberOfSamplesPerCode;
     ASSERT_GT(codeLength, 0);
     ASSERT_GE(inputSignal.size(), static_cast<size_t>(codeLength));
 

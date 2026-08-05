@@ -27,18 +27,18 @@ Tracking::Tracking(const Settings::Configuration &conf)
       m_inputConfig{STRUCT_VERSION_1,
                     conf.trackingInput.pllBandwidthHz,
                     conf.trackingInput.dllBandwidthHz,
-                    conf.rawDataSettings.samplingFrequency,
-                    conf.rawDataSettings.numberOfSamplesPerCode},
-      m_totalSamples(conf.rawDataSettings.numberOfSamplesPerCode),
+                    conf.acquisitionInput.samplingFrequencyHz,
+                    conf.acquisitionInput.numberOfSamplesPerCode},
+      m_totalSamples(conf.acquisitionInput.numberOfSamplesPerCode),
       m_pllTau1(loopFilterTau1(conf.trackingInput.pllBandwidthHz)),
       m_pllTau2(loopFilterTau2(conf.trackingInput.pllBandwidthHz)),
-      m_carrFreqBasis(0.0f),
-      m_carrFreq(0.0f),
+      m_carrFreqBasisHz(0.0f),
+      m_carrFreqHz(0.0f),
       m_remCarrPhase(0.0f),
       m_carrNco(0.0f),
       m_carrNcoPrev(0.0f),
-      m_carrError(0.0f),
-      m_carrErrorPrev(0.0f),
+      m_carrErrorCycles(0.0f),
+      m_carrErrorPrevCycles(0.0f),
       m_fllGain(4.0f * static_cast<float>(conf.trackingInput.fllBandwidthHz) *
                 static_cast<float>(GPS_CA_CODE_PERIOD_SEC)),
       m_rateAidGain(4.0f * static_cast<float>(conf.trackingInput.rateAidBandwidthHz) *
@@ -51,14 +51,14 @@ Tracking::Tracking(const Settings::Configuration &conf)
       m_fllPullInBlocks(conf.trackingInput.fllPullInBlocks),
       m_dllTau1(loopFilterTau1(conf.trackingInput.dllBandwidthHz)),
       m_dllTau2(loopFilterTau2(conf.trackingInput.dllBandwidthHz)),
-      m_codeFreqBasis(GPS_CA_CODE_FREQUENCY_HZ),
-      m_codeFreq(GPS_CA_CODE_FREQUENCY_HZ),
+      m_codeFreqBasisHz(GPS_CA_CODE_FREQUENCY_HZ),
+      m_codeFreqHz(GPS_CA_CODE_FREQUENCY_HZ),
       m_codePhaseStep(0.0f),
       m_remCodePhase(0.0f),
       m_codeNco(0.0f),
       m_codeNcoPrev(0.0f),
-      m_codeError(0.0f),
-      m_codeErrorPrev(0.0f),
+      m_codeErrorChips(0.0f),
+      m_codeErrorPrevChips(0.0f),
       m_Ie(0.0f),
       m_Ip(0.0f),
       m_Il(0.0f),
@@ -71,9 +71,9 @@ Tracking::Tracking(const Settings::Configuration &conf)
 {
     m_code.setConfiguration(m_configuration);
 
-    if (m_configuration.rawDataSettings.samplingFrequency > 0.0f)
+    if (m_configuration.acquisitionInput.samplingFrequencyHz > 0.0f)
     {
-        m_codePhaseStep = m_codeFreq / m_configuration.rawDataSettings.samplingFrequency;
+        m_codePhaseStep = m_codeFreqHz / m_configuration.acquisitionInput.samplingFrequencyHz;
     }
 }
 
@@ -82,13 +82,13 @@ Tracking::Tracking(const TrackingInput &input)
       m_totalSamples(input.numberOfSamplesPerCode),
       m_pllTau1(loopFilterTau1(input.pllBandwidthHz)),
       m_pllTau2(loopFilterTau2(input.pllBandwidthHz)),
-      m_carrFreqBasis(0.0f),
-      m_carrFreq(0.0f),
+      m_carrFreqBasisHz(0.0f),
+      m_carrFreqHz(0.0f),
       m_remCarrPhase(0.0f),
       m_carrNco(0.0f),
       m_carrNcoPrev(0.0f),
-      m_carrError(0.0f),
-      m_carrErrorPrev(0.0f),
+      m_carrErrorCycles(0.0f),
+      m_carrErrorPrevCycles(0.0f),
       m_fllGain(4.0f * static_cast<float>(input.fllBandwidthHz) * static_cast<float>(GPS_CA_CODE_PERIOD_SEC)),
       m_rateAidGain(4.0f * static_cast<float>(input.rateAidBandwidthHz) * static_cast<float>(GPS_CA_CODE_PERIOD_SEC)),
       m_fllNco(0.0f),
@@ -99,14 +99,14 @@ Tracking::Tracking(const TrackingInput &input)
       m_fllPullInBlocks(input.fllPullInBlocks),
       m_dllTau1(loopFilterTau1(input.dllBandwidthHz)),
       m_dllTau2(loopFilterTau2(input.dllBandwidthHz)),
-      m_codeFreqBasis(GPS_CA_CODE_FREQUENCY_HZ),
-      m_codeFreq(GPS_CA_CODE_FREQUENCY_HZ),
+      m_codeFreqBasisHz(GPS_CA_CODE_FREQUENCY_HZ),
+      m_codeFreqHz(GPS_CA_CODE_FREQUENCY_HZ),
       m_codePhaseStep(0.0f),
       m_remCodePhase(0.0f),
       m_codeNco(0.0f),
       m_codeNcoPrev(0.0f),
-      m_codeError(0.0f),
-      m_codeErrorPrev(0.0f),
+      m_codeErrorChips(0.0f),
+      m_codeErrorPrevChips(0.0f),
       m_Ie(0.0f),
       m_Ip(0.0f),
       m_Il(0.0f),
@@ -118,14 +118,14 @@ Tracking::Tracking(const TrackingInput &input)
       m_lastChannelState(0)
 {
     m_configuration.trackingInput = input;
-    m_configuration.rawDataSettings.samplingFrequency = static_cast<float>(input.samplingFrequency);
-    m_configuration.rawDataSettings.numberOfSamplesPerCode = input.numberOfSamplesPerCode;
+    m_configuration.acquisitionInput.samplingFrequencyHz = static_cast<float>(input.samplingFrequencyHz);
+    m_configuration.acquisitionInput.numberOfSamplesPerCode = input.numberOfSamplesPerCode;
 
     m_code.setConfiguration(m_configuration);
 
-    if (m_configuration.rawDataSettings.samplingFrequency > 0.0f)
+    if (m_configuration.acquisitionInput.samplingFrequencyHz > 0.0f)
     {
-        m_codePhaseStep = m_codeFreq / m_configuration.rawDataSettings.samplingFrequency;
+        m_codePhaseStep = m_codeFreqHz / m_configuration.acquisitionInput.samplingFrequencyHz;
     }
 }
 
@@ -133,13 +133,13 @@ Tracking::~Tracking() = default;
 
 void Tracking::initTrackingState(float initDopplerHz, float initCodePhaseChips)
 {
-    m_carrFreqBasis = initDopplerHz;
-    m_carrFreq = initDopplerHz;
+    m_carrFreqBasisHz = initDopplerHz;
+    m_carrFreqHz = initDopplerHz;
     m_remCarrPhase = 0.0f;
     m_carrNco = 0.0f;
     m_carrNcoPrev = 0.0f;
-    m_carrError = 0.0f;
-    m_carrErrorPrev = 0.0f;
+    m_carrErrorCycles = 0.0f;
+    m_carrErrorPrevCycles = 0.0f;
 
     m_fllNco = 0.0f;
     m_ipPrev = 0.0f;
@@ -148,16 +148,16 @@ void Tracking::initTrackingState(float initDopplerHz, float initCodePhaseChips)
     m_blocksSinceInit = 0;
 
     m_remCodePhase = initCodePhaseChips;
-    m_codeFreqBasis = GPS_CA_CODE_FREQUENCY_HZ;
-    m_codeFreq = GPS_CA_CODE_FREQUENCY_HZ;
-    if (m_configuration.rawDataSettings.samplingFrequency > 0.0f)
+    m_codeFreqBasisHz = GPS_CA_CODE_FREQUENCY_HZ;
+    m_codeFreqHz = GPS_CA_CODE_FREQUENCY_HZ;
+    if (m_configuration.acquisitionInput.samplingFrequencyHz > 0.0f)
     {
-        m_codePhaseStep = m_codeFreq / m_configuration.rawDataSettings.samplingFrequency;
+        m_codePhaseStep = m_codeFreqHz / m_configuration.acquisitionInput.samplingFrequencyHz;
     }
     m_codeNco = 0.0f;
     m_codeNcoPrev = 0.0f;
-    m_codeError = 0.0f;
-    m_codeErrorPrev = 0.0f;
+    m_codeErrorChips = 0.0f;
+    m_codeErrorPrevChips = 0.0f;
 
     m_carrierLockEma = 0.0f;
     m_codeLockEma = 0.0f;
@@ -192,7 +192,7 @@ void Tracking::doWork(const ComplexFloatVector &input, int prn, ComplexFloatVect
         }
         else
         {
-            m_carrFreq = m_carrFreqBasis + m_fllNco;
+            m_carrFreqHz = m_carrFreqBasisHz + m_fllNco;
         }
     }
     else
@@ -201,7 +201,7 @@ void Tracking::doWork(const ComplexFloatVector &input, int prn, ComplexFloatVect
         {
             m_carrNco = m_fllNco;
             m_carrNcoPrev = m_fllNco;
-            m_carrErrorPrev = computeCostasPhaseError();
+            m_carrErrorPrevCycles = computeCostasPhaseError();
         }
 
         if (isPromptSignalReliable())
@@ -211,7 +211,7 @@ void Tracking::doWork(const ComplexFloatVector &input, int prn, ComplexFloatVect
         }
         else
         {
-            m_carrFreq = m_carrFreqBasis + m_carrNco;
+            m_carrFreqHz = m_carrFreqBasisHz + m_carrNco;
         }
     }
     codeDiscriminator();
@@ -231,10 +231,10 @@ TrackingOutput Tracking::getTrackingOutput(int prn) const
     TrackingOutput out{};
     out.structVersion = STRUCT_VERSION_2;
     out.prn = prn;
-    out.carrierFreqHz = static_cast<double>(m_carrFreq);
-    out.codeFreqHz = static_cast<double>(m_codeFreq);
-    out.carrierError = static_cast<double>(m_carrError);
-    out.codeError = static_cast<double>(m_codeError);
+    out.carrierFreqHz = static_cast<double>(m_carrFreqHz);
+    out.codeFreqHz = static_cast<double>(m_codeFreqHz);
+    out.carrierErrorCycles = static_cast<double>(m_carrErrorCycles);
+    out.codeErrorChips = static_cast<double>(m_codeErrorChips);
     out.Ie = static_cast<double>(m_Ie);
     out.Ip = static_cast<double>(m_Ip);
     out.Il = static_cast<double>(m_Il);
@@ -257,16 +257,16 @@ void Tracking::getSubStageTimings(float *earlyLatePromptGenMs, float *numericOsc
 
 void Tracking::correlator(const ComplexFloatVector &input, int prn)
 {
-    const float samplingFreq = m_configuration.rawDataSettings.samplingFrequency;
+    const float samplingFreq = m_configuration.acquisitionInput.samplingFrequencyHz;
     if (samplingFreq <= 0.0f)
     {
         return;
     }
 
     const int svIndex = std::clamp(prn - 1, 0, GPS_CA_SV_COUNT - 1);
-    const char *caCode = m_code.m_caCode[svIndex];
+    const char *caCode = m_code.caCode[svIndex];
 
-    const double phaseStepRad = 2.0 * M_PI * static_cast<double>(m_carrFreq) / samplingFreq;
+    const double phaseStepRad = 2.0 * M_PI * static_cast<double>(m_carrFreqHz) / samplingFreq;
     const std::complex<float> step = std::exp(IMAGINARY_UNIT * static_cast<float>(phaseStepRad));
     std::complex<float> phasor = std::exp(IMAGINARY_UNIT * m_remCarrPhase);
 
@@ -356,7 +356,7 @@ void Tracking::fllDiscriminator()
     m_ipPrev = m_Ip;
     m_qpPrev = m_Qp;
 
-    m_carrFreq = m_carrFreqBasis + m_fllNco;
+    m_carrFreqHz = m_carrFreqBasisHz + m_fllNco;
 }
 
 bool Tracking::isPromptSignalReliable()
@@ -375,8 +375,8 @@ bool Tracking::isPromptSignalReliable()
 void Tracking::rateAidDiscriminator()
 {
     const float bleed = m_rateAidGain * m_carrNco;
-    m_carrFreqBasis += bleed;
-    m_carrFreqBasis = std::clamp(m_carrFreqBasis, -15000.0f, 15000.0f);
+    m_carrFreqBasisHz += bleed;
+    m_carrFreqBasisHz = std::clamp(m_carrFreqBasisHz, -15000.0f, 15000.0f);
     m_carrNco -= bleed;
     m_carrNcoPrev = m_carrNco;
 }
@@ -393,21 +393,21 @@ float Tracking::computeCostasPhaseError() const
 
 void Tracking::freqDiscriminator()
 {
-    m_carrError = computeCostasPhaseError();
+    m_carrErrorCycles = computeCostasPhaseError();
 
     if (m_pllTau1 != 0.0f)
     {
-        m_carrNco = m_carrNcoPrev + (m_pllTau2 / m_pllTau1) * (m_carrError - m_carrErrorPrev) +
-            m_carrError * (GPS_CA_CODE_PERIOD_SEC / m_pllTau1);
+        m_carrNco = m_carrNcoPrev + (m_pllTau2 / m_pllTau1) * (m_carrErrorCycles - m_carrErrorPrevCycles) +
+            m_carrErrorCycles * static_cast<float>(GPS_CA_CODE_PERIOD_SEC / m_pllTau1);
     }
 
     m_carrNcoPrev = m_carrNco;
-    m_carrErrorPrev = m_carrError;
+    m_carrErrorPrevCycles = m_carrErrorCycles;
 
     m_ipPrev = m_Ip;
     m_qpPrev = m_Qp;
 
-    m_carrFreq = m_carrFreqBasis + m_carrNco;
+    m_carrFreqHz = m_carrFreqBasisHz + m_carrNco;
 }
 
 void Tracking::codeDiscriminator()
@@ -418,26 +418,26 @@ void Tracking::codeDiscriminator()
 
     if (denom != 0.0)
     {
-        m_codeError = static_cast<float>(0.5 * (earlyCoff - lateCoff) / denom);
+        m_codeErrorChips = static_cast<float>(0.5 * (earlyCoff - lateCoff) / denom);
     }
     else
     {
-        m_codeError = 0.0f;
+        m_codeErrorChips = 0.0f;
     }
 
     if (m_dllTau1 != 0.0f)
     {
-        m_codeNco = m_codeNcoPrev + ((m_dllTau2 / m_dllTau1) * (m_codeError - m_codeErrorPrev)) +
-            (m_codeError * (GPS_CA_CODE_PERIOD_SEC / m_dllTau1));
+        m_codeNco = m_codeNcoPrev + ((m_dllTau2 / m_dllTau1) * (m_codeErrorChips - m_codeErrorPrevChips)) +
+            (m_codeErrorChips * static_cast<float>(GPS_CA_CODE_PERIOD_SEC / m_dllTau1));
     }
 
     m_codeNcoPrev = m_codeNco;
-    m_codeErrorPrev = m_codeError;
+    m_codeErrorPrevChips = m_codeErrorChips;
 
-    m_codeFreq = m_codeFreqBasis + (m_carrFreq / GPS_L1_CARRIER_TO_CODE_RATIO) - m_codeNco;
-    if (m_configuration.rawDataSettings.samplingFrequency > 0.0f)
+    m_codeFreqHz = m_codeFreqBasisHz + (m_carrFreqHz / GPS_L1_CARRIER_TO_CODE_RATIO) - m_codeNco;
+    if (m_configuration.acquisitionInput.samplingFrequencyHz > 0.0f)
     {
-        m_codePhaseStep = m_codeFreq / m_configuration.rawDataSettings.samplingFrequency;
+        m_codePhaseStep = m_codeFreqHz / m_configuration.acquisitionInput.samplingFrequencyHz;
     }
 }
 

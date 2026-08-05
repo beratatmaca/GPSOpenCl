@@ -7,6 +7,19 @@
 
 #include <cstdint>
 
+/*
+ * Wire protocol. Every output struct below is one telemetry message.
+ * ZMQ transport sends two frames per message. Frame one is the struct
+ * name as ASCII text. Frame two is the raw struct bytes. FileSink logs
+ * the same messages as length-prefixed records. Record layout is
+ * nameLen (u32), name bytes, dataLen (u32), struct bytes. All fields
+ * are little-endian and packed with no padding. structVersion is always
+ * the first field. New fields append at the end and bump the version,
+ * so old readers can still parse the leading fields. The golden sizeof
+ * assertions in Tests/StructsSourceSinkTest.cpp and the parser table in
+ * Tools/dashboard.py must both match any struct change here.
+ */
+
 namespace GPSOpenCl
 {
 
@@ -15,9 +28,9 @@ namespace GPSOpenCl
 /** @brief Struct wire-format version tag. */
 constexpr uint32_t STRUCT_VERSION_1 = 1;
 
-/** @brief Wire-format version for structs extended with per-channel timing and PVT quality fields
- *   (AcquisitionOutput, TrackingOutput, PvtSolverOutput). New fields are appended, so version-1
- *   consumers can still parse the leading fields. */
+/** @brief Wire format version 2. Adds timing and PVT quality fields. Applies to AcquisitionOutput,
+ *   TrackingOutput, PvtSolverOutput. New fields are appended only. Version 1 consumers still parse
+ *   the leading fields. */
 constexpr uint32_t STRUCT_VERSION_2 = 2;
 
 /** @brief Source module input parameters. */
@@ -25,7 +38,7 @@ struct SourceInput
 {
     uint32_t structVersion{STRUCT_VERSION_1};    ///< Struct version tag.
     char fifoPath[256]{};                        ///< FIFO or file path.
-    double samplingRate{4096000.0};              ///< Sampling rate (Hz).
+    double samplingRateHz{4096000.0};            ///< Sampling rate (Hz).
 };
 
 /** @brief Source module output telemetry. */
@@ -33,7 +46,7 @@ struct SourceOutput
 {
     uint32_t structVersion{STRUCT_VERSION_1};    ///< Struct version tag.
     uint32_t blockIndex{0};                      ///< Current block index.
-    double timestamp{0.0};                       ///< Block timestamp (s).
+    double timestampSec{0.0};                    ///< Block timestamp in seconds.
     uint32_t fifoUnderrunCount{0};               ///< FIFO underrun count.
     uint32_t fifoOverrunCount{0};                ///< FIFO overrun count.
 };
@@ -45,7 +58,7 @@ struct AcquisitionInput
     int32_t acquisitionDopplerMinimum{-4000};      ///< Min Doppler search (Hz).
     int32_t acquisitionDopplerMaximum{4000};       ///< Max Doppler search (Hz).
     int32_t acquisitionDopplerSearchRange{500};    ///< Doppler bin step (Hz).
-    double samplingFrequency{4096000.0};           ///< Sampling rate (Hz).
+    double samplingFrequencyHz{4096000.0};         ///< Sampling rate (Hz).
     int32_t numberOfSamplesPerCode{4096};          ///< Samples per code period.
     int32_t reacquisitionIntervalBlocks{1000};     ///< Blocks between re-acquisition attempts.
     double acquisitionCn0ThresholdDbHz{43.0};      ///< Min C/N0 (dB-Hz) to declare a satellite acquired.
@@ -58,12 +71,12 @@ struct AcquisitionOutput
     int32_t prn{0};                              ///< Satellite PRN number.
     int32_t peakIndex{0};                        ///< Code phase of peak (samples).
     double peakValue{0.0};                       ///< Correlation peak magnitude.
-    double peakFrequency{0.0};                   ///< Doppler at peak (Hz).
+    double peakFrequencyHz{0.0};                 ///< Doppler at peak (Hz).
     double meanValue{0.0};                       ///< Mean correlation level.
-    double cno{0.0};                             ///< Carrier-to-noise ratio (dB-Hz).
+    double cnoDbHz{0.0};                         ///< Carrier-to-noise ratio (dB-Hz).
     double peakRatio{0.0};                       ///< Peak-to-mean ratio.
     uint32_t isAcquired{0};                      ///< 1 if satellite acquired.
-    double correlateMs{0.0};                     ///< Wall-clock duration of this search's correlate() (ms).
+    double correlateMs{0.0};                     ///< Wall-clock duration of the correlate() call (ms).
 };
 
 /** @brief Tracking module input parameters. */
@@ -75,7 +88,7 @@ struct TrackingInput
     double fllBandwidthHz{10.0};                 ///< FLL pull-in noise bandwidth (Hz).
     int32_t fllPullInBlocks{75};                 ///< Blocks of FLL-assisted pull-in before PLL takes over.
     double rateAidBandwidthHz{1.0};              ///< Continuous slow Doppler-rate-aiding bandwidth (Hz).
-    double samplingFrequency{4096000.0};         ///< Sampling rate (Hz).
+    double samplingFrequencyHz{4096000.0};       ///< Sampling rate (Hz).
     int32_t numberOfSamplesPerCode{4096};        ///< Samples per code period.
     double carrierLockThreshold{0.3};            ///< Min carrier lock indicator to count as locked.
     double codeLockRatioTolerance{0.3};          ///< Max |codeLockRatio - 1.0| to count as locked.
@@ -93,8 +106,8 @@ struct TrackingOutput
     int32_t prn{0};                              ///< Satellite PRN number.
     double carrierFreqHz{0.0};                   ///< Current carrier frequency (Hz).
     double codeFreqHz{0.0};                      ///< Current code frequency (Hz).
-    double carrierError{0.0};                    ///< PLL phase error (rad).
-    double codeError{0.0};                       ///< DLL code error (chips).
+    double carrierErrorCycles{0.0};              ///< PLL phase error (rad).
+    double codeErrorChips{0.0};                  ///< DLL code error (chips).
     double Ie{0.0};                              ///< In-phase Early correlator.
     double Ip{0.0};                              ///< In-phase Prompt correlator.
     double Il{0.0};                              ///< In-phase Late correlator.
@@ -104,7 +117,7 @@ struct TrackingOutput
     uint32_t channelState{0};                    ///< Channel state (0=Acquiring, 1=Confirming, 2=Tracking).
     double carrierLockIndicator{0.0};            ///< Smoothed carrier lock indicator.
     double codeLockRatio{0.0};                   ///< Smoothed code lock ratio.
-    double correlatorTimeMs{0.0};                ///< This block's fused correlator pass duration (ms).
+    double correlatorTimeMs{0.0};                ///< Fused correlator pass duration this block (ms).
 };
 
 /** @brief Navigation decoder input parameters. */
@@ -114,7 +127,9 @@ struct NavDecoderInput
     uint32_t subframeSearchMask{0x1F};           ///< Bitmask of subframes to search.
 };
 
-/** @brief Navigation decoder output with ephemeris and clock data. */
+/** @brief Navigation decoder output with ephemeris and clock data.
+ *   Packed wire twin of the internal GpsEphemeris struct. Field order
+ *   and scaling follow IS-GPS-200. */
 struct NavDecoderOutput
 {
     uint32_t structVersion{STRUCT_VERSION_1};    ///< Struct version tag.
@@ -140,12 +155,12 @@ struct NavDecoderOutput
     double deltaN{0.0};                          ///< Mean motion correction (rad/s).
     double omegaDot{0.0};                        ///< Rate of right ascension (rad/s).
     double idot{0.0};                            ///< Rate of inclination (rad/s).
-    double Cuc{0.0};                             ///< Harmonic correction: cos arg of lat (rad).
-    double Cus{0.0};                             ///< Harmonic correction: sin arg of lat (rad).
-    double Crc{0.0};                             ///< Harmonic correction: cos orbit radius (m).
-    double Crs{0.0};                             ///< Harmonic correction: sin orbit radius (m).
-    double Cic{0.0};                             ///< Harmonic correction: cos inclination (rad).
-    double Cis{0.0};                             ///< Harmonic correction: sin inclination (rad).
+    double Cuc{0.0};                             ///< Harmonic correction, cos arg of lat (rad).
+    double Cus{0.0};                             ///< Harmonic correction, sin arg of lat (rad).
+    double Crc{0.0};                             ///< Harmonic correction, cos orbit radius (m).
+    double Crs{0.0};                             ///< Harmonic correction, sin orbit radius (m).
+    double Cic{0.0};                             ///< Harmonic correction, cos inclination (rad).
+    double Cis{0.0};                             ///< Harmonic correction, sin inclination (rad).
 };
 
 /** @brief PVT solver input parameters. */
@@ -153,27 +168,22 @@ struct PvtSolverInput
 {
     uint32_t structVersion{STRUCT_VERSION_1};    ///< Struct version tag.
     uint32_t minSatellites{4};                   ///< Min satellites for solution.
-    double maxPseudorangeErrMeters{30.0};        ///< Max converged residual (m) before the fix is
-                                                 ///< rejected or, with two spare satellites, the
-                                                 ///< worst-residual satellite is excluded.
-    int32_t fixOutputIntervalBlocks{
-        100};                        ///< Blocks between PVT solve + telemetry output (100 = 10 Hz at 1ms/block).
-    int32_t tropoEnabled{1};         ///< Apply Saastamoinen tropospheric correction (0 for simulated
-                                     ///< signals: gps-sdr-sim models ionosphere but no troposphere).
-    double elevationMaskDeg{0.0};    ///< Exclude satellites below this elevation once a fix exists
-                                     ///< (0 disables; enable ~5-10 deg for real-sky operation).
+    double maxPseudorangeErrMeters{30.0};        ///< Max converged residual (m) before rejection or exclusion.
+    int32_t fixOutputIntervalBlocks{100};        ///< Blocks between PVT solve and telemetry output.
+    int32_t tropoEnabled{1};                     ///< Apply Saastamoinen correction, 0 for simulated signals.
+    double elevationMaskDeg{0.0};                ///< Elevation mask (deg) once a fix exists, 0 disables.
 };
 
 /** @brief PVT solver output with position and DOP. */
 struct PvtSolverOutput
 {
     uint32_t structVersion{STRUCT_VERSION_2};    ///< Struct version tag.
-    double ecefX{0.0};                           ///< ECEF X position (m).
-    double ecefY{0.0};                           ///< ECEF Y position (m).
-    double ecefZ{0.0};                           ///< ECEF Z position (m).
-    double latitude{0.0};                        ///< Geodetic latitude (deg).
-    double longitude{0.0};                       ///< Geodetic longitude (deg).
-    double altitude{0.0};                        ///< Altitude above WGS-84 (m).
+    double ecefXMeters{0.0};                     ///< ECEF X position (m).
+    double ecefYMeters{0.0};                     ///< ECEF Y position (m).
+    double ecefZMeters{0.0};                     ///< ECEF Z position (m).
+    double latitudeDeg{0.0};                     ///< Geodetic latitude in degrees.
+    double longitudeDeg{0.0};                    ///< Geodetic longitude in degrees.
+    double altitudeMeters{0.0};                  ///< Altitude above WGS-84 in meters.
     double clockBiasMeters{0.0};                 ///< Receiver clock bias (m).
     double clockBiasSeconds{0.0};                ///< Receiver clock bias (s).
     double dopGDOP{0.0};                         ///< Geometric DOP.
@@ -239,7 +249,7 @@ struct ProfilerOutput
 {
     uint32_t structVersion{STRUCT_VERSION_1};    ///< Struct version tag.
     uint32_t blockIndex{0};                      ///< Processing block index.
-    double timestamp{0.0};                       ///< Block timestamp (s).
+    double timestampSec{0.0};                    ///< Block timestamp in seconds.
     double acquisitionTimeMs{0.0};               ///< Acquisition stage time (ms).
     double trackingTimeMs{0.0};                  ///< Tracking stage time (ms).
     double navDecodeTimeMs{0.0};                 ///< Nav decode stage time (ms).
@@ -248,8 +258,7 @@ struct ProfilerOutput
     double earlyLatePromptGenTimeMs{0.0};        ///< Aggregate earlyLatePromptGen time across active channels (ms).
     double numericOscillatorTimeMs{0.0};         ///< Aggregate numericOscillator time across active channels (ms).
     double accumulatorTimeMs{0.0};          ///< Aggregate correlator-accumulation time across active channels (ms).
-    double trackingMaxWorkerTimeMs{0.0};    ///< Slowest tracking worker's own wall-clock time this block (ms);
-                                            ///< compare against trackingTimeMs for barrier/imbalance overhead.
+    double trackingMaxWorkerTimeMs{0.0};    ///< Slowest tracking worker wall-clock time this block (ms).
 };
 
 #pragma pack(pop)

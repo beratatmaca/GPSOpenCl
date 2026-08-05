@@ -4,6 +4,7 @@ Checks: >
   bugprone-*,
   -bugprone-easily-swappable-parameters,
   clang-analyzer-*,
+  -clang-analyzer-optin.performance.Padding,
   concurrency-*,
   cppcoreguidelines-*,
   -cppcoreguidelines-avoid-c-arrays,
@@ -64,6 +65,18 @@ CheckOptions:
     value: m_
   - key: readability-identifier-naming.PublicMemberCase
     value: camelBack
+  # IS-GPS-200 ephemeris terms and correlator arms keep their spec names (M0, Cuc..Cis, Ie..Ql).
+  - key: readability-identifier-naming.PublicMemberIgnoredRegexp
+    value: "^(M0|C(uc|us|rc|rs|ic|is)|I[epl]|Q[epl])$"
+  - key: readability-identifier-naming.PrivateMemberIgnoredRegexp
+    value: "^m_(I[epl]|Q[epl])$"
+  - key: readability-identifier-naming.ParameterIgnoredRegexp
+    value: "^(M0|C(uc|us|rc|rs|ic|is)|I[epl]|Q[epl])$"
+  # Single-letter symbols mirror the reference formulas (WLS matrices, Kepler solver, Klobuchar).
+  - key: readability-identifier-naming.VariableIgnoredRegexp
+    value: "^(N|F|A|H|T|T0|R1|R2|D2[5-9]|D30|HtY|HtH.*)$"
+  - key: readability-identifier-naming.LocalConstantIgnoredRegexp
+    value: "^(N|F|A|H|T|T0|R1|R2|D2[5-9]|D30|HtY|HtH.*)$"
   - key: readability-identifier-naming.GlobalConstantCase
     value: UPPER_CASE
   - key: readability-identifier-naming.StaticConstantCase

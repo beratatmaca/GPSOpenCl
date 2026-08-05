@@ -35,9 +35,8 @@ class FileSource : public Source
      *  @return True if block read. */
     bool readBlock(ComplexFloatVector &outputSamples, SourceOutput &telemetry) override;
 
-    /** @brief Load all samples from a text file at once. Binary .bin captures are streamed one
-     *   block at a time by readBlock() instead, so resident memory stays one block regardless of
-     *   capture size.
+    /** @brief Load all samples from a text file at once. Binary captures stream block by block in
+     *   readBlock(). Resident memory then stays one block.
      *  @param filePath        File path.
      *  @param samplesPerBlock Samples per block.
      *  @return True if loaded. */
@@ -46,8 +45,8 @@ class FileSource : public Source
   private:
     SourceInput m_inputConfig;           ///< Source configuration.
     ComplexFloatVector m_allSamples;     ///< All loaded samples (text-file path only).
-    size_t m_currentBlockIndex;          ///< Current block index.
-    size_t m_samplesPerBlock;            ///< Samples per block.
+    size_t m_currentBlockIndex{0};       ///< Current block index.
+    size_t m_samplesPerBlock{4096};      ///< Samples per block.
     std::ifstream m_binFile;             ///< Open stream for a binary capture.
     bool m_streaming{false};             ///< True when reading a .bin capture block by block.
     size_t m_totalSamples{0};            ///< Total samples in the streamed capture.

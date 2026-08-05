@@ -22,9 +22,9 @@ TEST_F(SettingsTest, ReadIniFile)
 {
     m_settings.captureSettings();
 
-    EXPECT_EQ(m_settings.configuration.rawDataSettings.dataSource, std::string("capture.dat"));
-    EXPECT_EQ(m_settings.configuration.rawDataSettings.samplingFrequency, 4'096'000);
-    EXPECT_EQ(m_settings.configuration.rawDataSettings.numberOfSamplesPerCode, 4096);
+    EXPECT_EQ(std::string(m_settings.configuration.sourceInput.fifoPath), std::string("capture.dat"));
+    EXPECT_EQ(m_settings.configuration.acquisitionInput.samplingFrequencyHz, 4'096'000);
+    EXPECT_EQ(m_settings.configuration.acquisitionInput.numberOfSamplesPerCode, 4096);
     EXPECT_EQ(m_settings.configuration.acquisitionInput.acquisitionDopplerMinimum, -4000);
     EXPECT_EQ(m_settings.configuration.acquisitionInput.acquisitionDopplerMaximum, 4000);
     EXPECT_EQ(m_settings.configuration.acquisitionInput.acquisitionDopplerSearchRange, 500);
@@ -71,8 +71,8 @@ TEST_F(SettingsValidationTest, RejectsNonFiniteSamplingFrequency)
     GPSOpenCl::Settings settings;
     settings.captureSettings();
 
-    EXPECT_EQ(settings.configuration.rawDataSettings.samplingFrequency, 4'096'000);
-    EXPECT_EQ(settings.configuration.rawDataSettings.numberOfSamplesPerCode, 4096);
+    EXPECT_EQ(settings.configuration.acquisitionInput.samplingFrequencyHz, 4'096'000);
+    EXPECT_EQ(settings.configuration.acquisitionInput.numberOfSamplesPerCode, 4096);
     EXPECT_EQ(settings.configuration.acquisitionInput.numberOfSamplesPerCode, 4096);
 }
 
@@ -83,8 +83,22 @@ TEST_F(SettingsValidationTest, RejectsNegativeSamplingFrequency)
     GPSOpenCl::Settings settings;
     settings.captureSettings();
 
-    EXPECT_EQ(settings.configuration.rawDataSettings.samplingFrequency, 4'096'000);
-    EXPECT_EQ(settings.configuration.rawDataSettings.numberOfSamplesPerCode, 4096);
+    EXPECT_EQ(settings.configuration.acquisitionInput.samplingFrequencyHz, 4'096'000);
+    EXPECT_EQ(settings.configuration.acquisitionInput.numberOfSamplesPerCode, 4096);
     EXPECT_GT(settings.configuration.trackingInput.numberOfSamplesPerCode, 0);
+}
+
+TEST_F(SettingsValidationTest, CommentAndSectionLinesAreIgnored)
+{
+    writeConf("# AcquisitionDopplerSearchRange = 9\n"
+              "; SamplingFrequency = 1\n"
+              "[Acquisition]\n"
+              "AcquisitionDopplerSearchRange = 250\n");
+
+    GPSOpenCl::Settings settings;
+    settings.captureSettings();
+
+    EXPECT_EQ(settings.configuration.acquisitionInput.acquisitionDopplerSearchRange, 250);
+    EXPECT_EQ(settings.configuration.acquisitionInput.numberOfSamplesPerCode, 4096);
 }
 }

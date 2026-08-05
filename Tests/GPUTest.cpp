@@ -2,7 +2,7 @@
 
 #include "TestUtils.h"
 
-#define FFT_TOLERANCE 0.3f
+#define FFT_TOLERANCE            0.3f
 #define MULTIPLICATION_TOLERANCE 0.01f
 
 namespace GPSOpenClTest
@@ -13,13 +13,9 @@ class GPUTest : public testing::Test
     GPSOpenCl::Compute m_gpuCompute;
 
   protected:
-    void SetUp() override
-    {
-    }
+    void SetUp() override {}
 
-    void TearDown() override
-    {
-    }
+    void TearDown() override {}
 };
 
 TEST_F(GPUTest, FFTTest1)
@@ -165,6 +161,7 @@ TEST_F(GPUTest, IFFTTest4)
 
     TestUtils::compareComplexResults(testOutputVec, expectedOutputVec, FFT_TOLERANCE);
 }
+
 TEST_F(GPUTest, ComplexMultiplicationTest1)
 {
     GPSOpenCl::ComplexFloatVector testInputVec1;
@@ -185,6 +182,7 @@ TEST_F(GPUTest, ComplexMultiplicationTest1)
 
     TestUtils::compareComplexResults(testOutputVec, expectedOutputVec, MULTIPLICATION_TOLERANCE);
 }
+
 TEST_F(GPUTest, ComplexMultiplicationTest2)
 {
     GPSOpenCl::ComplexFloatVector testInputVec1;

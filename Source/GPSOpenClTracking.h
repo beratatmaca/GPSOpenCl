@@ -41,7 +41,7 @@ class Tracking
      *  @param input        IQ samples.
      *  @param prn          Satellite PRN.
      *  @param output       Carrier-wiped output.
-     *  @param channelState Owning channel's state, for telemetry. */
+     *  @param channelState Owning channel state, for telemetry. */
     void doWork(const ComplexFloatVector &input, int prn, ComplexFloatVector *output, uint32_t channelState = 0);
 
     /** @brief Get current tracking results for a PRN.
@@ -49,17 +49,16 @@ class Tracking
      *  @return Tracking output struct. */
     TrackingOutput getTrackingOutput(int prn) const;
 
-    /** @brief Get this instance's most recent doWork() sub-stage timings (ms), for aggregation into
-     *   ProfilerOutput. Values reflect only the last call, not accumulated across blocks. Replica
-     *   generation, carrier NCO, and accumulation run as one fused correlator pass, so its whole
-     *   duration is reported through accumulatorMs and the first two outputs are always zero.
-     *  @param earlyLatePromptGenMs Output: always zero (stage fused into the correlator pass).
-     *  @param numericOscillatorMs  Output: always zero (stage fused into the correlator pass).
-     *  @param accumulatorMs        Output: fused correlator pass duration (ms). */
+    /** @brief Get the latest doWork() sub-stage timings (ms). Values reflect only the last call.
+     *   The correlator pass is fully fused. Its whole duration reports through accumulatorMs. The
+     *   first two outputs are always zero.
+     *  @param earlyLatePromptGenMs Output, always zero, stage is fused.
+     *  @param numericOscillatorMs  Output, always zero, stage is fused.
+     *  @param accumulatorMs        Output, fused correlator pass duration (ms). */
     void getSubStageTimings(float *earlyLatePromptGenMs, float *numericOscillatorMs, float *accumulatorMs) const;
 
-    /** @brief Enable or disable the correlator timing clock samples in doWork(), so a disabled
-     *   profiler adds no per-block clock overhead to the tracking workers.
+    /** @brief Enable or disable timing samples in doWork(). A disabled profiler adds no clock
+     *   overhead.
      *  @param enabled True to take timing samples. */
     void setTimingEnabled(bool enabled) { m_timingEnabled = enabled; }
 
@@ -71,10 +70,9 @@ class Tracking
      *  @return Value near 1.0 when code phase is correctly aligned. */
     float getCodeLockRatio() const { return m_codeLockEma; }
 
-    /** @brief Get the residual DLL code phase left over after this block's whole-chip early/prompt/late
-     *   generation. Consecutive readings, differenced and unwrapped mod 1023 chips, give the code-phase
-     *   drift accumulated between them - the sub-millisecond correction the coarse block-count-based
-     *   transmit-time estimate is missing.
+    /** @brief Get the residual DLL code phase after this block. Difference consecutive readings mod
+     *   1023 chips. That gives the accumulated code drift. It is the missing sub-millisecond
+     *   transmit time correction.
      *  @return Code phase (chips, 0-1023). */
     float getCodePhaseChips() const { return m_remCodePhase; }
 
@@ -88,65 +86,56 @@ class Tracking
      *  @return Tau2 value (s). */
     static float loopFilterTau2(double noiseBandwidthHz);
 
-    /** @brief Compute the cross/dot frequency discriminator from consecutive prompt correlator
-     *   samples. Deliberately the four-quadrant atan2(cross, dot) form: its +/-1/(2T) = +/-500 Hz
-     *   pull-in range covers a full-bin acquisition Doppler error on the 500 Hz search grid. The
-     *   data-bit-insensitive two-quadrant atan(cross/dot) alternative was tried and rejected: its
-     *   +/-250 Hz range wraps a one-bin-off acquisition to the wrong sign and the loop converges
-     *   500 Hz away (measured against simulator truth). Nav bit flips inject occasional half-cycle
-     *   spikes here, but at one flip per 20 blocks the FLL bandwidth averages them out.
-     *  @param ipPrev Previous block's in-phase prompt.
-     *  @param qpPrev Previous block's quadrature prompt.
-     *  @param ip     Current block's in-phase prompt.
-     *  @param qp     Current block's quadrature prompt.
+    /** @brief Compute the cross and dot frequency discriminator. Uses consecutive prompt samples.
+     *   Deliberately the four quadrant atan2(cross, dot) form. Its +-500 Hz pull-in range covers a
+     *   full bin acquisition error. The two quadrant atan(cross/dot) form was tried and rejected.
+     *   Its +-250 Hz range wraps a one bin error. The loop then converges 500 Hz away, measured.
+     *   Nav bit flips inject occasional spikes. The FLL bandwidth averages them out.
+     *  @param ipPrev Previous block in-phase prompt.
+     *  @param qpPrev Previous block quadrature prompt.
+     *  @param ip     Current block in-phase prompt.
+     *  @param qp     Current block quadrature prompt.
      *  @return Frequency error estimate (Hz). */
     static float computeFllError(double ipPrev, double qpPrev, double ip, double qp);
 
   private:
-    /** @brief Fused correlator pass: generates the Early/Prompt/Late code replica indices and the
-     *   carrier NCO phasor incrementally, wipes the carrier off each input sample, and accumulates
-     *   all six correlator sums in a single loop over the block, with no intermediate buffers.
+    /** @brief Fused correlator pass in one loop. Generates replica indices and the NCO phasor
+     *   incrementally. Wipes the carrier off each sample. Accumulates all six correlator sums. No
+     *   intermediate buffers.
      *  @param input Raw IQ samples.
      *  @param prn   Satellite PRN. */
     void correlator(const ComplexFloatVector &input, int prn);
 
-    /** @brief Compute the Costas (data-bit-sign-invariant) phase discriminator from the current
-     *   Prompt correlator sum. Uses the double-angle atan2(2*Ip*Qp, Ip^2-Qp^2)/2 form so a genuine
-     *   50 bps nav data-bit transition (which flips Ip/Qp's sign but not the true carrier phase)
-     *   cannot be misread as a phase error, unlike a plain atan2(Qp,Ip) discriminator.
+    /** @brief Compute the Costas phase discriminator from Prompt sums. It is insensitive to data
+     *   bit sign. Uses the double angle atan2(2*Ip*Qp, Ip^2-Qp^2)/2 form. A nav bit flip changes
+     *   only the Ip and Qp signs. A plain atan2(Qp,Ip) form would misread it.
      *  @return Phase error estimate (cycles, range (-0.25, 0.25]). */
     float computeCostasPhaseError() const;
 
-    /** @brief Check whether this block's prompt correlator sum is strong enough to trust for carrier
-     *   discrimination, guarding against nav-bit-transition blocks whose correlation partially cancels.
-     *   Updates the running magnitude average as a side effect when the block is judged reliable.
-     *  @return True if this block's carrier discriminators should be applied. */
+    /** @brief Check if the prompt sum is trustworthy. Guards against nav bit transition blocks.
+     *   Their correlation partially cancels. Reliable blocks update the running magnitude average.
+     *  @return True if carrier discriminators should be applied. */
     bool isPromptSignalReliable();
 
-    /** @brief Compute FLL-assisted pull-in frequency discriminator. Only invoked on blocks judged
-     *   reliable by isPromptSignalReliable(); an unreliable block holds the carrier frequency steady
-     *   instead of feeding a nav-bit-transition-corrupted correlator sum into the FLL integrator. */
+    /** @brief Compute the FLL pull-in frequency discriminator. Runs only on reliable blocks.
+     *   Unreliable blocks hold the carrier frequency steady. Corrupted sums never reach the FLL
+     *   integrator. */
     void fllDiscriminator();
 
-    /** @brief Transfer a fraction of the settled PLL NCO into the carrier frequency basis,
-     *   re-centering the NCO without creating a second independent integrator.
-     *   m_rateAidGain controls the bleed fraction per block; m_carrFreqBasis is clamped
-     *   to ±15 kHz to bound long-term drift. */
+    /** @brief Bleed settled PLL NCO into the carrier basis. This re-centers the NCO. No second
+     *   independent integrator is created. m_rateAidGain sets the bleed fraction per block.
+     *   m_carrFreqBasisHz is clamped to +-15 kHz. */
     void rateAidDiscriminator();
 
-    /** @brief Compute PLL phase discriminator via computeCostasPhaseError() and advance the 2nd-order loop filter. */
+    /** @brief Compute the PLL phase discriminator. Uses computeCostasPhaseError(). Advances the
+     *   2nd order loop filter. */
     void freqDiscriminator();
 
-    /** @brief Compute DLL code discriminator. Carrier-aided: the current carrier Doppler estimate
-     *   (m_carrFreq) is scaled by GPS_L1_CARRIER_TO_CODE_RATIO and added directly to the code
-     *   frequency, so the DLL's own loop filter only has to correct the residual code-phase error
-     *   the carrier loop's Doppler estimate does not already account for.
-     *   Normalized early-minus-late-over-sum, at +-0.5 chip spacing, has ACF slope 2 (not 1) at
-     *   zero error: for a triangular ACF, E(e)-L(e) = -2e and E(e)+L(e) = 2-d with d = 1 chip
-     *   separation, so raw (E-L)/(E+L) = -2e. The result is scaled by 0.5 so m_codeError reports
-     *   the code-phase error itself (chips), matching the unity-gain assumption the loopFilterTau1/2
-     *   noise-bandwidth formulas are derived under; without it dllBandwidthHz would configure roughly
-     *   double the intended noise bandwidth. */
+    /** @brief Compute the DLL code discriminator. The DLL is carrier aided. Scaled carrier Doppler
+     *   feeds the code frequency directly. The DLL corrects only the residual error. Normalized
+     *   early minus late over sum has slope 2, not 1. So the result is scaled by 0.5. m_codeErrorChips
+     *   then reports true chips of error. The loop filter formulas assume unity gain. Without the
+     *   scale the noise bandwidth doubles. */
     void codeDiscriminator();
 
     /** @brief Reset correlator accumulators to zero. */
@@ -163,33 +152,33 @@ class Tracking
 
     float m_pllTau1;                            ///< PLL loop filter tau1 (s).
     float m_pllTau2;                            ///< PLL loop filter tau2 (s).
-    float m_carrFreqBasis;                      ///< Nominal carrier frequency (Hz).
-    float m_carrFreq;                           ///< Current carrier frequency (Hz).
+    float m_carrFreqBasisHz;                    ///< Nominal carrier frequency (Hz).
+    float m_carrFreqHz;                         ///< Current carrier frequency (Hz).
     float m_remCarrPhase;                       ///< Residual carrier phase (rad).
     float m_carrNco;                            ///< Carrier NCO output (Hz).
     float m_carrNcoPrev;                        ///< Previous carrier NCO output (Hz).
-    float m_carrError;                          ///< PLL phase error (rad).
-    float m_carrErrorPrev;                      ///< Previous PLL phase error (rad).
+    float m_carrErrorCycles;                    ///< PLL phase error (rad).
+    float m_carrErrorPrevCycles;                ///< Previous PLL phase error (rad).
 
     float m_fllGain;                            ///< FLL 1st-order loop filter gain (per block).
     float m_rateAidGain;                        ///< Continuous Doppler-rate-aiding gain (per block).
     float m_fllNco;                             ///< FLL NCO output (Hz).
-    float m_ipPrev;                             ///< Previous block's In-phase Prompt sum.
-    float m_qpPrev;                             ///< Previous block's Quadrature Prompt sum.
+    float m_ipPrev;                             ///< Previous block In-phase Prompt sum.
+    float m_qpPrev;                             ///< Previous block Quadrature Prompt sum.
     float m_promptMagnitudeEma;     ///< Running average prompt correlator magnitude, for bit-transition gating.
     int m_blocksSinceInit;          ///< Blocks processed since last initTrackingState().
     int m_fllPullInBlocks;          ///< Blocks of FLL pull-in before PLL takes over.
 
     float m_dllTau1;                ///< DLL loop filter tau1 (s).
     float m_dllTau2;                ///< DLL loop filter tau2 (s).
-    float m_codeFreqBasis;          ///< Nominal code frequency (Hz).
-    float m_codeFreq;               ///< Current code frequency (Hz).
+    float m_codeFreqBasisHz;        ///< Nominal code frequency (Hz).
+    float m_codeFreqHz;             ///< Current code frequency (Hz).
     float m_codePhaseStep;          ///< Code phase step per sample.
     float m_remCodePhase;           ///< Residual code phase (chips).
     float m_codeNco;                ///< Code NCO output (Hz).
     float m_codeNcoPrev;            ///< Previous code NCO output (Hz).
-    float m_codeError;              ///< DLL code error (chips).
-    float m_codeErrorPrev;          ///< Previous DLL code error (chips).
+    float m_codeErrorChips;         ///< DLL code error (chips).
+    float m_codeErrorPrevChips;     ///< Previous DLL code error (chips).
 
     float m_Ie;                     ///< In-phase Early accumulation.
     float m_Ip;                     ///< In-phase Prompt accumulation.
@@ -200,12 +189,12 @@ class Tracking
 
     float m_carrierLockEma;         ///< Smoothed carrier lock indicator.
     float m_codeLockEma;            ///< Smoothed code lock ratio.
-    uint32_t m_lastChannelState;    ///< Owning channel's state, for telemetry.
+    uint32_t m_lastChannelState;    ///< Owning channel state, for telemetry.
 
     bool m_timingEnabled{true};     ///< True to take correlator timing samples in doWork().
-    float m_earlyLatePromptGenTimeMs{0.0f};    ///< Last doWork() call's earlyLatePromptGen duration (ms).
-    float m_numericOscillatorTimeMs{0.0f};     ///< Last doWork() call's numericOscillator duration (ms).
-    float m_accumulatorTimeMs{0.0f};           ///< Last doWork() call's accumulator duration (ms).
+    float m_earlyLatePromptGenTimeMs{0.0f};    ///< Last doWork() earlyLatePromptGen duration (ms).
+    float m_numericOscillatorTimeMs{0.0f};     ///< Last doWork() numericOscillator duration (ms).
+    float m_accumulatorTimeMs{0.0f};           ///< Last doWork() accumulator duration (ms).
 };
 }
 #endif

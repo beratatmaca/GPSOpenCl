@@ -2,7 +2,7 @@
 #define INCLUDED_GPSOPENCL_NAVIGATIONDECODER_H
 
 /** @file GPSOpenClNavigationDecoder.h
- *  @brief Navigation message decoder: preamble search, parity check, ephemeris parsing.
+ *  @brief Navigation message decoder. Preamble search, parity check, ephemeris parsing.
  */
 
 #include "GPSOpenClCommon.h"
@@ -17,7 +17,9 @@
 
 namespace GPSOpenCl
 {
-/** @brief Decoded GPS ephemeris and clock parameters. */
+/** @brief Decoded GPS ephemeris and clock parameters. Internal working struct.
+ *   NavDecoderOutput is its packed wire twin. This one adds isValid,
+ *   iodc, iode2 and iode3 which do not go on the wire. */
 struct GpsEphemeris
 {
     int svId;                               ///< Satellite vehicle ID.
@@ -102,11 +104,10 @@ class NavigationDecoder
      *  @return Ephemeris struct. */
     static GpsEphemeris outputToEphemeris(const NavDecoderOutput &out);
 
-    /** @brief Decode one navigation subframe into ephemeris. Subframes 1-3 fill their ephemeris
-     *   fields; subframes 4 and 5 carry no ephemeris payload (subframe 4 page 18 updates the
-     *   decoder's ionospheric parameters) but still decode successfully with svId, tow, and
-     *   subframeId set, so callers can refresh their subframe time anchor every 6 seconds
-     *   instead of only when an ephemeris subframe arrives.
+    /** @brief Decode one navigation subframe into ephemeris. Subframes 1-3 fill ephemeris fields.
+     *   Subframes 4-5 carry no ephemeris payload. They still decode with header fields set. So
+     *   callers can refresh their time anchor every 6 s. Subframe 4 page 18 updates ionospheric
+     *   parameters.
      *  @param words30bit Vector of 10 parity-checked 30-bit words.
      *  @param ephem      Output ephemeris.
      *  @return True if subframe decoded (any subframe ID with valid preamble, parity, and mask). */
@@ -127,16 +128,15 @@ class NavigationDecoder
      *  @param svId                Satellite vehicle ID.
      *  @param promptHistory       Accumulated Prompt I samples.
      *  @param bitSyncPhase        Locked sample-level bit-edge phase, 0-19 (in/out, -1 = not yet synced).
-     *  @param searchPositions     Per-candidate-phase search cursor (bit position), size 20, used only
-     *                             while bitSyncPhase is unresolved; each candidate phase is checked at
-     *                             exactly one new bit position per call so total search cost stays
-     *                             linear in the number of blocks processed (in/out).
+     *  @param searchPositions     Per candidate phase search cursor, size 20 (in/out). Used only
+     *                             while bitSyncPhase is unresolved. One new bit position is checked
+     *                             per call, so search cost stays linear.
      *  @param bitOffset           Current bit offset within the phase-aligned bit stream (in/out).
      *  @param ephem               Output ephemeris.
      *  @param subframeStartSample Subframe start sample index (output).
-     *  @param codePhaseHistory    Optional per-sample DLL code phase aligned 1:1 with promptHistory,
-     *                             used to model the sub-block bit-edge position when refining the
-     *                             subframe start block (null: a neutral mid-block edge is assumed).
+     *  @param codePhaseHistory    Optional DLL code phase, one per prompt sample. Models the
+     *                             sub-block bit edge during refinement. Null assumes a mid-block
+     *                             edge.
      *  @return True if subframe decoded. */
     bool processPromptSignal(int svId,
                              const ComplexFloatVector &promptHistory,
@@ -151,12 +151,13 @@ class NavigationDecoder
      *  @param svId                Satellite vehicle ID.
      *  @param promptHistory       Accumulated Prompt I samples.
      *  @param bitSyncPhase        Locked sample-level bit-edge phase, 0-19 (in/out, -1 = not yet synced).
-     *  @param searchPositions     Per-candidate-phase search cursor, size 20 (in/out). See other overload.
+     *  @param searchPositions     Per candidate phase search cursor, size 20 (in/out). See other
+     *                             overload.
      *  @param bitOffset           Current bit offset within the phase-aligned bit stream (in/out).
      *  @param output              Output struct.
      *  @param subframeStartSample Subframe start sample index (output).
-     *  @param codePhaseHistory    Optional per-sample DLL code phase aligned 1:1 with promptHistory.
-     *                             See other overload.
+     *  @param codePhaseHistory    Optional DLL code phase, one per prompt sample. See other
+     *                             overload.
      *  @return True if subframe decoded. */
     bool processPromptSignal(int svId,
                              const ComplexFloatVector &promptHistory,
@@ -186,10 +187,9 @@ class NavigationDecoder
 
     std::vector<uint32_t> m_wordsScratch;    ///< Reused word buffer for per-attempt subframe decode.
 
-    /** @brief Check exactly one candidate bit position (the current bitOffset) for a parity-valid
-     *   subframe at a fixed sample-level bit-edge phase, via tryDecodeAtBitPosition. Advances bitOffset
-     *   by 300 on success or by 1 on a failed check (no preamble at this position, or a parity miss),
-     *   so cost stays O(1) per call instead of rescanning the whole growing buffer every call.
+    /** @brief Check one candidate bit position for a subframe. Uses tryDecodeAtBitPosition at a
+     *   fixed phase. Advances bitOffset by 300 on success. Advances by 1 on a failed check. Cost
+     *   stays O(1) per call. The growing buffer is never rescanned.
      *  @param svId                Satellite vehicle ID.
      *  @param promptHistory       Accumulated Prompt I samples.
      *  @param phase               Sample-level bit-edge phase to demodulate at, 0-19.
@@ -205,17 +205,17 @@ class NavigationDecoder
                              size_t &subframeStartSample,
                              const FloatVector *codePhaseHistory);
 
-    /** @brief Check exactly one candidate (phase, bitPosition) for a parity-valid subframe, doing
-     *   only the fixed 300-bit demodulation and check needed for that single position (no scanning
-     *   ahead). Used during bit-sync search so total cost across many calls stays linear instead of
-     *   rescanning the whole growing buffer on every block.
+    /** @brief Check one candidate phase and bit position. Does only the fixed 300 bit check there.
+     *   Total bit sync search cost stays linear. On success a matched filter refines the start
+     *   block. The first parity passing phase can be one block off. That shifts every derived
+     *   transmit time. The filter models each bit first block as mixed. The split position comes
+     *   from the DLL code phase.
      *  @param svId                Satellite vehicle ID.
      *  @param promptHistory       Accumulated Prompt I samples.
      *  @param phase               Candidate sample-level bit-edge phase, 0-19.
      *  @param bitPosition         Candidate subframe start, in bits, within the phase-aligned stream.
-     *  @param hadEnoughData       Output: true if promptHistory already held enough samples to check
-     *                             this position at all. Callers must not advance bitPosition when this
-     *                             is false, or the search cursor (bits) outpaces the buffer (samples).
+     *  @param hadEnoughData       Output, true if promptHistory held enough samples. Do not advance
+     *                             bitPosition when false. Otherwise the cursor outpaces the buffer.
      *  @param ephem               Output ephemeris.
      *  @param subframeStartSample Subframe start sample index (output).
      *  @return True if a parity-valid subframe starts at exactly this position. */

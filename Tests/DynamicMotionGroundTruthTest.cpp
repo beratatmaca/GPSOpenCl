@@ -56,7 +56,7 @@ TEST(DynamicMotionGroundTruthTest, AcquisitionAndTrackingMatchSimulatorTruthUnde
     auto sink = std::make_shared<CapturingSink>();
     app.setSink(sink);
 
-    int codeLength = settings.configuration.rawDataSettings.numberOfSamplesPerCode;
+    int codeLength = settings.configuration.acquisitionInput.numberOfSamplesPerCode;
     ASSERT_GT(codeLength, 0);
 
     int blocksAvailable = static_cast<int>(inputSignal.size() / static_cast<size_t>(codeLength));
@@ -98,8 +98,8 @@ TEST(DynamicMotionGroundTruthTest, AcquisitionAndTrackingMatchSimulatorTruthUnde
         auto it = firstTruthByPrn.find(acq.prn);
         ASSERT_NE(it, firstTruthByPrn.end()) << "Acquired PRN " << acq.prn << " has no ground truth record";
 
-        double dopplerDiff = std::fabs(acq.peakFrequency - it->second.trueDopplerHz);
-        EXPECT_LT(dopplerDiff, 400.0) << "PRN " << acq.prn << " acquired Doppler " << acq.peakFrequency
+        double dopplerDiff = std::fabs(acq.peakFrequencyHz - it->second.trueDopplerHz);
+        EXPECT_LT(dopplerDiff, 400.0) << "PRN " << acq.prn << " acquired Doppler " << acq.peakFrequencyHz
                                       << " Hz too far from true Doppler " << it->second.trueDopplerHz << " Hz";
         acquiredCount++;
     }

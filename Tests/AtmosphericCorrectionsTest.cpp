@@ -33,9 +33,9 @@ TEST(AtmosphericCorrectionsTest, SaastamoinenSeaLevelZenith)
 TEST(AtmosphericCorrectionsTest, KlobucharDelayRange)
 {
     GPSOpenCl::GeodeticPosition rxPos;
-    rxPos.latitude = 40.0;
-    rxPos.longitude = 30.0;
-    rxPos.altitude = 100.0;
+    rxPos.latitudeDeg = 40.0;
+    rxPos.longitudeDeg = 30.0;
+    rxPos.altitudeMeters = 100.0;
 
     GPSOpenCl::KlobucharParams params;
     params.alpha[0] = 0.1118e-07;
@@ -48,8 +48,8 @@ TEST(AtmosphericCorrectionsTest, KlobucharDelayRange)
     params.beta[2] = -0.1311e+06;
     params.beta[3] = 0.1049e+07;
 
-    double delayMeters = GPSOpenCl::AtmosphericCorrections::klobucharIonosphericDelay(
-        rxPos, 45.0, 120.0, 45000.0, params);
+    double delayMeters =
+        GPSOpenCl::AtmosphericCorrections::klobucharIonosphericDelay(rxPos, 45.0, 120.0, 45000.0, params);
 
     EXPECT_GT(delayMeters, 1.0);
     EXPECT_LT(delayMeters, 30.0);

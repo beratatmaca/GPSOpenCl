@@ -18,12 +18,12 @@ Code::~Code() = default;
 
 void Code::calculateCACode()
 {
-    char G1[GPS_CA_CODE_LENGTH];
-    char G2[GPS_CA_CODE_LENGTH];
+    char g1[GPS_CA_CODE_LENGTH];
+    char g2[GPS_CA_CODE_LENGTH];
     char R1[10];
     char R2[10];
-    char C1 = 0;
-    char C2 = 0;
+    char c1 = 0;
+    char c2 = 0;
     int i = 0;
     int j = 0;
 
@@ -50,30 +50,30 @@ void Code::calculateCACode()
 
         for (i = 0; i < 1023; i++)
         {
-            G1[i] = R1[9];
-            G2[i] = R2[9];
-            C1 = static_cast<char>(R1[2] * R1[9]);
-            C2 = static_cast<char>(R2[1] * R2[2] * R2[5] * R2[7] * R2[8] * R2[9]);
+            g1[i] = R1[9];
+            g2[i] = R2[9];
+            c1 = static_cast<char>(R1[2] * R1[9]);
+            c2 = static_cast<char>(R2[1] * R2[2] * R2[5] * R2[7] * R2[8] * R2[9]);
             for (j = 9; j > 0; j--)
             {
                 R1[j] = R1[j - 1];
                 R2[j] = R2[j - 1];
             }
-            R1[0] = C1;
-            R2[0] = C2;
+            R1[0] = c1;
+            R2[0] = c2;
         }
 
         for (i = 0, j = 1023 - DELAY_CHIPS[prn - 1]; i < 1023; i++, j++)
         {
-            m_caCode[prn - 1][i] = static_cast<char>(-G1[i] * G2[j % 1023]);
+            caCode[prn - 1][i] = static_cast<char>(-g1[i] * g2[j % 1023]);
         }
     }
 }
 
 void Code::createLookupTable(Compute *gpu)
 {
-    m_upsampledCaCode.clear();
-    m_upsampledFreqDomainCaCode.clear();
+    upsampledCaCode.clear();
+    upsampledFreqDomainCaCode.clear();
 
     if (m_sampleLength <= 0)
     {
@@ -96,40 +96,40 @@ void Code::createLookupTable(Compute *gpu)
     {
         tmpInput.clear();
 
-        m_upsampledCaCode.emplace_back();
-        m_upsampledFreqDomainCaCode.emplace_back();
+        upsampledCaCode.emplace_back();
+        upsampledFreqDomainCaCode.emplace_back();
 
         for (int j = 0; j < m_sampleLength; j++)
         {
             const int codeIdx = std::clamp(codeIndexes[j] - 1, 0, GPS_CA_CODE_LENGTH - 1);
-            codeValue = static_cast<float>(m_caCode[i - 1][codeIdx]);
-            m_upsampledCaCode[i - 1].push_back(codeValue);
+            codeValue = static_cast<float>(caCode[i - 1][codeIdx]);
+            upsampledCaCode[i - 1].push_back(codeValue);
 
             tmpInput.emplace_back(codeValue, 0.0);
         }
-        if (gpu->fft(tmpInput, &m_upsampledFreqDomainCaCode[i - 1], Compute::FFTForward) != 0)
+        if (gpu->fft(tmpInput, &upsampledFreqDomainCaCode[i - 1], Compute::FFTForward) != 0)
         {
             std::cerr << "Code::createLookupTable: FFT failed for PRN " << i << " (samplesPerCode=" << m_sampleLength
                       << " is not a power of two); aborting lookup table construction." << '\n';
-            m_upsampledCaCode.clear();
-            m_upsampledFreqDomainCaCode.clear();
+            upsampledCaCode.clear();
+            upsampledFreqDomainCaCode.clear();
             return;
         }
 
         for (int j = 0; j < m_sampleLength; j++)
         {
-            const std::complex<float> oldFreqDom = m_upsampledFreqDomainCaCode[i - 1].at(j);
+            const std::complex<float> oldFreqDom = upsampledFreqDomainCaCode[i - 1].at(j);
             const std::complex<float> conjComplexVal =
                 std::complex<float>(std::real(oldFreqDom), std::imag(oldFreqDom) * -1.0f);
-            m_upsampledFreqDomainCaCode[i - 1].at(j) = conjComplexVal;
+            upsampledFreqDomainCaCode[i - 1].at(j) = conjComplexVal;
         }
     }
 }
 
 void Code::setConfiguration(const Settings::Configuration &conf)
 {
-    m_sampleLength = conf.rawDataSettings.numberOfSamplesPerCode;
-    m_samplingFrequencyHz = conf.rawDataSettings.samplingFrequency;
+    m_sampleLength = conf.acquisitionInput.numberOfSamplesPerCode;
+    m_samplingFrequencyHz = conf.acquisitionInput.samplingFrequencyHz;
     initialize();
 }
 

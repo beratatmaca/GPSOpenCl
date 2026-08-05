@@ -34,12 +34,13 @@ def parse_args():
     parser.add_argument("--output-json", type=str, default="e2e_benchmark_report.json", help="Path to write LLM-parsable JSON report")
     parser.add_argument("--output-md", type=str, default="e2e_benchmark_report.md", help="Path to write Markdown report")
     parser.add_argument("--allow-debug-build", action="store_true", help="Skip the Release-build check (numbers will not reflect real-time performance)")
+    parser.add_argument("--build-dir", type=str, default="build", help="CMake build directory holding the receiver binary")
     return parser.parse_args()
 
 # Detects a Debug/_GLIBCXX_DEBUG binary, which is 5-50x slower than Release and would
 # silently produce misleading real-time-speedup numbers.
-def check_release_build(project_root, receiver_binary):
-    cache_path = os.path.join(project_root, "build", "CMakeCache.txt")
+def check_release_build(project_root, receiver_binary, build_dir):
+    cache_path = os.path.join(project_root, build_dir, "CMakeCache.txt")
     build_type = None
     if os.path.exists(cache_path):
         with open(cache_path) as f:
@@ -73,9 +74,9 @@ def main():
     if not os.path.exists(sim_binary):
         sim_binary = os.path.join(project_root, "Tools", "gps-sdr-sim", "gps-sdr-sim")
 
-    receiver_binary = os.path.join(project_root, "build", "Source", "GPSOpenCl")
+    receiver_binary = os.path.join(project_root, args.build_dir, "Source", "GPSOpenCl")
     nav_file = os.path.abspath(os.path.join(project_root, args.nav_file))
-    sim_output_bin = os.path.join(project_root, "build", "simulated_benchmark.bin")
+    sim_output_bin = os.path.join(project_root, args.build_dir, "simulated_benchmark.bin")
 
     if not os.path.exists(sim_binary):
         print(f"Error: gps-sdr-sim binary not found at {sim_binary}", file=sys.stderr)
@@ -86,7 +87,7 @@ def main():
         sys.exit(1)
 
     if not args.allow_debug_build:
-        check_release_build(project_root, receiver_binary)
+        check_release_build(project_root, receiver_binary, args.build_dir)
 
     print("=========================================================")
     print("   GPSOpenCl End-to-End Simulation & Profiling Suite     ")

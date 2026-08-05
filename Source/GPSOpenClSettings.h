@@ -27,18 +27,9 @@ class Settings
     /** @brief Parse the INI configuration file. */
     void captureSettings();
 
-    /** @brief Raw data source settings. */
-    struct RawDataSettings
-    {
-        std::string dataSource;          ///< Data source file path.
-        float samplingFrequency{};       ///< Sampling rate (Hz).
-        int numberOfSamplesPerCode{};    ///< Samples per code period.
-    };
-
     /** @brief Full application configuration. */
     struct Configuration
     {
-        RawDataSettings rawDataSettings;          ///< Raw data settings.
         SourceInput sourceInput;                  ///< Source module input.
         AcquisitionInput acquisitionInput;        ///< Acquisition module input.
         TrackingInput trackingInput;              ///< Tracking module input.

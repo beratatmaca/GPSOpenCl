@@ -12,20 +12,16 @@ class CaCodeTest : public testing::Test
     GPSOpenCl::Compute m_gpuCompute;
 
   protected:
-    void SetUp() override
-    {
-    }
+    void SetUp() override {}
 
-    void TearDown() override
-    {
-    }
+    void TearDown() override {}
 };
 
 TEST_F(CaCodeTest, Test1)
 {
     GPSOpenCl::Settings m_settings;
-    m_settings.configuration.rawDataSettings.samplingFrequency = 2048000.0;
-    m_settings.configuration.rawDataSettings.numberOfSamplesPerCode = 2048;
+    m_settings.configuration.acquisitionInput.samplingFrequencyHz = 2048000.0;
+    m_settings.configuration.acquisitionInput.numberOfSamplesPerCode = 2048;
 
     GPSOpenCl::Code m_code = GPSOpenCl::Code(m_settings.configuration);
     m_code.createLookupTable(&m_gpuCompute);
@@ -38,20 +34,20 @@ TEST_F(CaCodeTest, Test1)
     for (int i = 1; i <= GPSOpenCl::GPS_CA_SV_COUNT; i++)
     {
         auto start = testInputVec.begin() + offset;
-        auto end = testInputVec.begin() + offset + m_settings.configuration.rawDataSettings.numberOfSamplesPerCode;
+        auto end = testInputVec.begin() + offset + m_settings.configuration.acquisitionInput.numberOfSamplesPerCode;
         GPSOpenCl::FloatVector vector(start, end);
 
-        TestUtils::compareRealResults(m_code.m_upsampledCaCode[i - 1], vector, 0.0000001);
+        TestUtils::compareRealResults(m_code.upsampledCaCode[i - 1], vector, 0.0000001);
 
-        offset += m_settings.configuration.rawDataSettings.numberOfSamplesPerCode;
+        offset += m_settings.configuration.acquisitionInput.numberOfSamplesPerCode;
     }
 }
 
 TEST_F(CaCodeTest, Test2)
 {
     GPSOpenCl::Settings m_settings;
-    m_settings.configuration.rawDataSettings.samplingFrequency = 4096000.0;
-    m_settings.configuration.rawDataSettings.numberOfSamplesPerCode = 4096;
+    m_settings.configuration.acquisitionInput.samplingFrequencyHz = 4096000.0;
+    m_settings.configuration.acquisitionInput.numberOfSamplesPerCode = 4096;
 
     GPSOpenCl::Code m_code = GPSOpenCl::Code(m_settings.configuration);
     m_code.createLookupTable(&m_gpuCompute);
@@ -64,20 +60,20 @@ TEST_F(CaCodeTest, Test2)
     for (int i = 1; i <= GPSOpenCl::GPS_CA_SV_COUNT; i++)
     {
         auto start = testInputVec.begin() + offset;
-        auto end = testInputVec.begin() + offset + m_settings.configuration.rawDataSettings.numberOfSamplesPerCode;
+        auto end = testInputVec.begin() + offset + m_settings.configuration.acquisitionInput.numberOfSamplesPerCode;
         GPSOpenCl::FloatVector vector(start, end);
 
-        TestUtils::compareRealResults(m_code.m_upsampledCaCode[i - 1], vector, 0.0000001);
+        TestUtils::compareRealResults(m_code.upsampledCaCode[i - 1], vector, 0.0000001);
 
-        offset += m_settings.configuration.rawDataSettings.numberOfSamplesPerCode;
+        offset += m_settings.configuration.acquisitionInput.numberOfSamplesPerCode;
     }
 }
 
 TEST_F(CaCodeTest, Test3)
 {
     GPSOpenCl::Settings m_settings;
-    m_settings.configuration.rawDataSettings.samplingFrequency = 8192000.0;
-    m_settings.configuration.rawDataSettings.numberOfSamplesPerCode = 8192;
+    m_settings.configuration.acquisitionInput.samplingFrequencyHz = 8192000.0;
+    m_settings.configuration.acquisitionInput.numberOfSamplesPerCode = 8192;
 
     GPSOpenCl::Code m_code = GPSOpenCl::Code(m_settings.configuration);
     m_code.createLookupTable(&m_gpuCompute);
@@ -90,20 +86,20 @@ TEST_F(CaCodeTest, Test3)
     for (int i = 1; i <= GPSOpenCl::GPS_CA_SV_COUNT; i++)
     {
         auto start = testInputVec.begin() + offset;
-        auto end = testInputVec.begin() + offset + m_settings.configuration.rawDataSettings.numberOfSamplesPerCode;
+        auto end = testInputVec.begin() + offset + m_settings.configuration.acquisitionInput.numberOfSamplesPerCode;
         GPSOpenCl::FloatVector vector(start, end);
 
-        TestUtils::compareRealResults(m_code.m_upsampledCaCode[i - 1], vector, 0.0000001);
+        TestUtils::compareRealResults(m_code.upsampledCaCode[i - 1], vector, 0.0000001);
 
-        offset += m_settings.configuration.rawDataSettings.numberOfSamplesPerCode;
+        offset += m_settings.configuration.acquisitionInput.numberOfSamplesPerCode;
     }
 }
 
 TEST_F(CaCodeTest, Test4)
 {
     GPSOpenCl::Settings m_settings;
-    m_settings.configuration.rawDataSettings.samplingFrequency = 16384000.0;
-    m_settings.configuration.rawDataSettings.numberOfSamplesPerCode = 16384;
+    m_settings.configuration.acquisitionInput.samplingFrequencyHz = 16384000.0;
+    m_settings.configuration.acquisitionInput.numberOfSamplesPerCode = 16'384;
 
     GPSOpenCl::Code m_code = GPSOpenCl::Code(m_settings.configuration);
     m_code.createLookupTable(&m_gpuCompute);
@@ -116,12 +112,12 @@ TEST_F(CaCodeTest, Test4)
     for (int i = 1; i <= GPSOpenCl::GPS_CA_SV_COUNT; i++)
     {
         auto start = testInputVec.begin() + offset;
-        auto end = testInputVec.begin() + offset + m_settings.configuration.rawDataSettings.numberOfSamplesPerCode;
+        auto end = testInputVec.begin() + offset + m_settings.configuration.acquisitionInput.numberOfSamplesPerCode;
         GPSOpenCl::FloatVector vector(start, end);
 
-        TestUtils::compareRealResults(m_code.m_upsampledCaCode[i - 1], vector, 0.0000001);
+        TestUtils::compareRealResults(m_code.upsampledCaCode[i - 1], vector, 0.0000001);
 
-        offset += m_settings.configuration.rawDataSettings.numberOfSamplesPerCode;
+        offset += m_settings.configuration.acquisitionInput.numberOfSamplesPerCode;
     }
 }
 }

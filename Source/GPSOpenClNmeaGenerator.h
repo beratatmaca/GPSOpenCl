@@ -78,8 +78,8 @@ class NmeaGenerator
      *  @param channels        Satellite channel array.
      *  @param rxEcef          Receiver ECEF position, used to compute real az/el per satellite.
      *  @param rxPositionValid True if rxEcef holds a valid solution.
-     *  @return Vector of GSV sentences. Elevation/azimuth fields are left empty for satellites with
-     *          no receiver fix or no complete decoded ephemeris yet, rather than fabricated. */
+     *  @return Vector of GSV sentences. Missing fix or ephemeris leaves azimuth and elevation
+     *          empty. Values are never fabricated. */
     static std::vector<std::string> generateGpgsvSentences(const Channel channels[GPS_CA_SV_COUNT],
                                                            const EcefPosition &rxEcef,
                                                            bool rxPositionValid);

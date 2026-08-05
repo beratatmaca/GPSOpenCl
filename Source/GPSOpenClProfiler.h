@@ -18,8 +18,8 @@ namespace GPSOpenCl
 class Profiler
 {
   public:
-    /** @brief Pipeline stage identifier, used instead of string keys so recording a stage timing
-     *   costs no allocation or string comparison. */
+    /** @brief Pipeline stage identifier. String keys would allocate and compare. Enum recording
+     *   costs neither. */
     enum class Stage : std::uint8_t
     {
         Acquisition,    ///< Acquisition correlate stage.
@@ -45,8 +45,8 @@ class Profiler
 
     /** @brief Start timing a new block.
      *  @param blockIndex Block index.
-     *  @param timestamp  Block timestamp (s). */
-    void startBlock(uint32_t blockIndex, double timestamp);
+     *  @param timestampSec Block timestamp in seconds. */
+    void startBlock(uint32_t blockIndex, double timestampSec);
 
     /** @brief Record a stage timing.
      *  @param stage  Stage identifier.
@@ -57,7 +57,7 @@ class Profiler
      *  @param earlyLatePromptGenMs Aggregate earlyLatePromptGen time across active channels (ms).
      *  @param numericOscillatorMs  Aggregate numericOscillator time across active channels (ms).
      *  @param accumulatorMs        Aggregate correlator-accumulation time across active channels (ms).
-     *  @param maxWorkerMs          Slowest tracking worker's own wall-clock time this block (ms). */
+     *  @param maxWorkerMs          Slowest tracking worker wall-clock time this block (ms). */
     void recordTrackingSubStageTimings(double earlyLatePromptGenMs,
                                        double numericOscillatorMs,
                                        double accumulatorMs,
@@ -71,8 +71,8 @@ class Profiler
      *  @param sink Sink implementation. */
     void setSink(std::shared_ptr<Sink> sink) { m_sink = std::move(sink); }
 
-    /** @brief RAII timer that records stage duration on destruction. Takes no clock sample at all
-     *   when the profiler is disabled, so a disabled profiler adds no overhead to the timed region. */
+    /** @brief RAII timer recording stage duration on destruction. Takes no clock sample when
+     *   disabled. A disabled profiler adds no overhead. */
     class ScopedTimer
     {
       public:

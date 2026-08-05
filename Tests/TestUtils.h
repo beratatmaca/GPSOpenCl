@@ -17,9 +17,9 @@ namespace GPSOpenClTest
 class TestUtils
 {
   public:
-    TestUtils(){};
+    TestUtils() {}
 
-    ~TestUtils(){};
+    ~TestUtils() {}
 
     static void readFromFileComplex(const char *fileName, GPSOpenCl::ComplexFloatVector *inputVec)
     {
@@ -28,13 +28,11 @@ class TestUtils
         {
             const char *baseName = strrchr(fileName, '/');
             std::string name = baseName ? (baseName + 1) : fileName;
-            std::vector<std::string> candidates = {
-                std::string("Tests/Scripts/") + name,
-                std::string("../Tests/Scripts/") + name,
-                std::string("../../Tests/Scripts/") + name,
-                std::string("Scripts/") + name,
-                std::string("../Scripts/") + name
-            };
+            std::vector<std::string> candidates = {std::string("Tests/Scripts/") + name,
+                                                   std::string("../Tests/Scripts/") + name,
+                                                   std::string("../../Tests/Scripts/") + name,
+                                                   std::string("Scripts/") + name,
+                                                   std::string("../Scripts/") + name};
             for (const auto &cand : candidates)
             {
                 file.close();
@@ -69,7 +67,8 @@ class TestUtils
         }
     }
 
-    static void readFromFileBinaryIQ8(const char *fileName, GPSOpenCl::ComplexFloatVector *inputVec, size_t maxSamples = 0)
+    static void
+        readFromFileBinaryIQ8(const char *fileName, GPSOpenCl::ComplexFloatVector *inputVec, size_t maxSamples = 0)
     {
         std::ifstream file(fileName, std::ios::binary);
         if (!file.is_open()) return;
@@ -96,7 +95,8 @@ class TestUtils
         }
     }
 
-    static void readFromFileBinaryIQ16(const char *fileName, GPSOpenCl::ComplexFloatVector *inputVec, size_t maxSamples = 0)
+    static void
+        readFromFileBinaryIQ16(const char *fileName, GPSOpenCl::ComplexFloatVector *inputVec, size_t maxSamples = 0)
     {
         std::ifstream file(fileName, std::ios::binary);
         if (!file.is_open()) return;
@@ -130,16 +130,14 @@ class TestUtils
         {
             const char *baseName = strrchr(fileName, '/');
             std::string name = baseName ? (baseName + 1) : fileName;
-            std::vector<std::string> candidates = {
-                std::string("Tests/Scripts/Acquisition/") + name,
-                std::string("../Tests/Scripts/Acquisition/") + name,
-                std::string("../../Tests/Scripts/Acquisition/") + name,
-                std::string("Tests/Scripts/CACode/") + name,
-                std::string("../Tests/Scripts/CACode/") + name,
-                std::string("../../Tests/Scripts/CACode/") + name,
-                std::string("Scripts/Acquisition/") + name,
-                std::string("Scripts/CACode/") + name
-            };
+            std::vector<std::string> candidates = {std::string("Tests/Scripts/Acquisition/") + name,
+                                                   std::string("../Tests/Scripts/Acquisition/") + name,
+                                                   std::string("../../Tests/Scripts/Acquisition/") + name,
+                                                   std::string("Tests/Scripts/CACode/") + name,
+                                                   std::string("../Tests/Scripts/CACode/") + name,
+                                                   std::string("../../Tests/Scripts/CACode/") + name,
+                                                   std::string("Scripts/Acquisition/") + name,
+                                                   std::string("Scripts/CACode/") + name};
             for (const auto &cand : candidates)
             {
                 file.close();
@@ -175,7 +173,8 @@ class TestUtils
     }
 
     static void compareComplexResults(const GPSOpenCl::ComplexFloatVector &testOutputVec,
-                                      const GPSOpenCl::ComplexFloatVector &expectedOutputVec, double tolerance)
+                                      const GPSOpenCl::ComplexFloatVector &expectedOutputVec,
+                                      double tolerance)
     {
         auto sizeOfOutput = testOutputVec.size();
         auto sizeOfExpectedOutput = expectedOutputVec.size();
@@ -194,7 +193,8 @@ class TestUtils
         }
     }
 
-    static void compareRealResults(const GPSOpenCl::FloatVector &testOutputVec, const GPSOpenCl::FloatVector &expectedOutputVec,
+    static void compareRealResults(const GPSOpenCl::FloatVector &testOutputVec,
+                                   const GPSOpenCl::FloatVector &expectedOutputVec,
                                    double tolerance)
     {
         auto sizeOfOutput = testOutputVec.size();
@@ -219,6 +219,6 @@ class TestUtils
         EXPECT_LE(error, tolerance);
     }
 };
-} // namespace GPSOpenClTest
+}    // namespace GPSOpenClTest
 
-#endif //! INCLUDED_TESTUTILS_H
+#endif    //! INCLUDED_TESTUTILS_H

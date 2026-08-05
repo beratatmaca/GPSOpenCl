@@ -2,6 +2,7 @@
 
 #include <cstdio>
 #include <fstream>
+#include <thread>
 
 #include "GPSOpenClFileSink.h"
 #include "GPSOpenClFileSource.h"
@@ -74,7 +75,7 @@ TEST(FileSourceTest, SkipsMalformedTextLinesInsteadOfAborting)
     FileSource source;
     SourceInput input{};
     snprintf(input.fifoPath, sizeof(input.fifoPath), "%s", path);
-    input.samplingRate = 4096000.0;
+    input.samplingRateHz = 4096000.0;
 
     EXPECT_TRUE(source.initialize(input));
     std::remove(path);
@@ -91,7 +92,7 @@ TEST(FileSourceTest, FailsCleanlyWhenNothingParses)
     FileSource source;
     SourceInput input{};
     snprintf(input.fifoPath, sizeof(input.fifoPath), "%s", path);
-    input.samplingRate = 4096000.0;
+    input.samplingRateHz = 4096000.0;
 
     EXPECT_FALSE(source.initialize(input));
     std::remove(path);
@@ -189,6 +190,45 @@ TEST(ProfilerTest, MeasureStageTime)
     EXPECT_GE(profOut.totalTimeMs, 0.0);
     EXPECT_EQ(testSink->publishedCount, 1);
     EXPECT_EQ(testSink->lastIdentifier, "ProfilerOutput");
+}
+
+TEST(SourceTest, GpsSdrSimSourceReadsFullBlockFromFifo)
+{
+    const char *fifoPath = "/tmp/gpsopencl/test_block.fifo";
+    std::remove(fifoPath);
+
+    GpsSdrSimSource source;
+    SourceInput input{};
+    snprintf(input.fifoPath, sizeof(input.fifoPath), "%s", fifoPath);
+    input.samplingRateHz = 1023000.0;
+    ASSERT_TRUE(source.initialize(input));
+
+    const size_t samplesPerBlock = 1023;
+    std::thread writer(
+        [&]()
+        {
+            std::ofstream fifo(fifoPath, std::ios::binary);
+            std::vector<int8_t> bytes(samplesPerBlock * 2);
+            for (size_t i = 0; i < samplesPerBlock; i++)
+            {
+                bytes[2 * i] = static_cast<int8_t>(i % 100);
+                bytes[(2 * i) + 1] = static_cast<int8_t>(-(static_cast<int>(i) % 100));
+            }
+            fifo.write(reinterpret_cast<const char *>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+        });
+
+    ComplexFloatVector samples;
+    SourceOutput telemetry{};
+    const bool ok = source.readBlock(samples, telemetry);
+    writer.join();
+
+    ASSERT_TRUE(ok);
+    ASSERT_EQ(samples.size(), samplesPerBlock);
+    EXPECT_EQ(samples[5].real(), 5.0f);
+    EXPECT_EQ(samples[5].imag(), -5.0f);
+    EXPECT_EQ(telemetry.blockIndex, 0u);
+    EXPECT_EQ(telemetry.fifoUnderrunCount, 0u);
+    std::remove(fifoPath);
 }
 
 TEST(SourceTest, GpsSdrSimSourceFifo)

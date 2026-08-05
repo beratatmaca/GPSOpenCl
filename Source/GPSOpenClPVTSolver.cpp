@@ -86,12 +86,12 @@ PvtSolverOutput PVTSolver::solutionToOutput(const ReceiverPvtSolution &sol)
 {
     PvtSolverOutput out{};
     out.structVersion = STRUCT_VERSION_2;
-    out.ecefX = sol.ecefPosition.x;
-    out.ecefY = sol.ecefPosition.y;
-    out.ecefZ = sol.ecefPosition.z;
-    out.latitude = sol.geodeticPosition.latitude;
-    out.longitude = sol.geodeticPosition.longitude;
-    out.altitude = sol.geodeticPosition.altitude;
+    out.ecefXMeters = sol.ecefPosition.x;
+    out.ecefYMeters = sol.ecefPosition.y;
+    out.ecefZMeters = sol.ecefPosition.z;
+    out.latitudeDeg = sol.geodeticPosition.latitudeDeg;
+    out.longitudeDeg = sol.geodeticPosition.longitudeDeg;
+    out.altitudeMeters = sol.geodeticPosition.altitudeMeters;
     out.clockBiasMeters = sol.clockBiasMeters;
     out.clockBiasSeconds = sol.clockBiasSeconds;
     out.dopGDOP = sol.dopGDOP;
@@ -107,12 +107,12 @@ PvtSolverOutput PVTSolver::solutionToOutput(const ReceiverPvtSolution &sol)
 ReceiverPvtSolution PVTSolver::outputToSolution(const PvtSolverOutput &out)
 {
     ReceiverPvtSolution sol{};
-    sol.ecefPosition.x = out.ecefX;
-    sol.ecefPosition.y = out.ecefY;
-    sol.ecefPosition.z = out.ecefZ;
-    sol.geodeticPosition.latitude = out.latitude;
-    sol.geodeticPosition.longitude = out.longitude;
-    sol.geodeticPosition.altitude = out.altitude;
+    sol.ecefPosition.x = out.ecefXMeters;
+    sol.ecefPosition.y = out.ecefYMeters;
+    sol.ecefPosition.z = out.ecefZMeters;
+    sol.geodeticPosition.latitudeDeg = out.latitudeDeg;
+    sol.geodeticPosition.longitudeDeg = out.longitudeDeg;
+    sol.geodeticPosition.altitudeMeters = out.altitudeMeters;
     sol.clockBiasMeters = out.clockBiasMeters;
     sol.clockBiasSeconds = out.clockBiasSeconds;
     sol.dopGDOP = out.dopGDOP;
@@ -136,12 +136,11 @@ SatelliteOrbit PVTSolver::computeSatelliteOrbit(const GpsEphemeris &ephem, doubl
     SatelliteOrbit orbit{};
     orbit.svId = ephem.svId;
 
-    const double mu = 3.986005e14;
-    const double omegaE = 7.2921151467e-5;
+    const double omegaE = WGS84_EARTH_ROTATION_RATE_RAD_S;
     const double F = -4.442807633e-10;
 
     const double A = ephem.sqrtA * ephem.sqrtA;
-    const double n0 = std::sqrt(mu / (A * A * A));
+    const double n0 = std::sqrt(WGS84_GRAVITATIONAL_PARAMETER / (A * A * A));
 
     double dtT = t - ephem.toc;
     if (dtT > 302400.0)
@@ -167,20 +166,20 @@ SatelliteOrbit PVTSolver::computeSatelliteOrbit(const GpsEphemeris &ephem, doubl
     const double n = n0 + ephem.deltaN;
     const double Mk = ephem.M0 + (n * tk);
 
-    double Ek = Mk;
+    double ek = Mk;
     for (int iter = 0; iter < 10; iter++)
     {
-        const double diff = Ek - (ephem.e * std::sin(Ek)) - Mk;
-        const double derivative = 1.0 - (ephem.e * std::cos(Ek));
-        Ek -= diff / derivative;
+        const double diff = ek - (ephem.e * std::sin(ek)) - Mk;
+        const double derivative = 1.0 - (ephem.e * std::cos(ek));
+        ek -= diff / derivative;
     }
 
-    orbit.relCorr = F * ephem.e * ephem.sqrtA * std::sin(Ek);
+    orbit.relCorr = F * ephem.e * ephem.sqrtA * std::sin(ek);
 
     orbit.clockBias = polyClockBias + orbit.relCorr - ephem.tgd;
 
-    const double sinEk = std::sin(Ek);
-    const double cosEk = std::cos(Ek);
+    const double sinEk = std::sin(ek);
+    const double cosEk = std::cos(ek);
     const double sinVk = (std::sqrt(1.0 - (ephem.e * ephem.e)) * sinEk) / (1.0 - ephem.e * cosEk);
     const double cosVk = (cosEk - ephem.e) / (1.0 - ephem.e * cosEk);
     const double vk = std::atan2(sinVk, cosVk);
@@ -213,7 +212,7 @@ SatelliteOrbit PVTSolver::computeSatelliteOrbit(const GpsEphemeris &ephem, doubl
 GeodeticPosition PVTSolver::ecefToWgs84(const EcefPosition &ecef)
 {
     GeodeticPosition geo{};
-    const double a = 6378137.0;
+    const double a = WGS84_SEMI_MAJOR_AXIS_M;
     const double f = 1.0 / 298.257223563;
     const double b = a * (1.0 - f);
     const double e2 = (a * a - b * b) / (a * a);
@@ -232,9 +231,9 @@ GeodeticPosition PVTSolver::ecefToWgs84(const EcefPosition &ecef)
     const double sinLat = std::sin(latRad);
     const double N = a / std::sqrt(1.0 - (e2 * sinLat * sinLat));
 
-    geo.latitude = latRad * 180.0 / M_PI;
-    geo.longitude = lonRad * 180.0 / M_PI;
-    geo.altitude = (p / std::cos(latRad)) - N;
+    geo.latitudeDeg = latRad * 180.0 / M_PI;
+    geo.longitudeDeg = lonRad * 180.0 / M_PI;
+    geo.altitudeMeters = (p / std::cos(latRad)) - N;
 
     return geo;
 }
@@ -248,7 +247,6 @@ double PVTSolver::computeReceiverTime(const std::vector<GpsEphemeris> &ephemerid
         return 0.0;
     }
 
-    const double c = 299792458.0;
     double averageTransmitTime = 0.0;
     double averageTransitTimeSec = 0.0;
     for (size_t i = 0; i < transmitTimesSeconds.size(); i++)
@@ -259,7 +257,7 @@ double PVTSolver::computeReceiverTime(const std::vector<GpsEphemeris> &ephemerid
         const double dz = orbit.position.z - referenceEcef.z;
 
         averageTransmitTime += transmitTimesSeconds[i];
-        averageTransitTimeSec += std::sqrt(dx * dx + dy * dy + dz * dz) / c;
+        averageTransitTimeSec += std::sqrt(dx * dx + dy * dy + dz * dz) / SPEED_OF_LIGHT_M_S;
     }
     averageTransmitTime /= static_cast<double>(transmitTimesSeconds.size());
     averageTransitTimeSec /= static_cast<double>(transmitTimesSeconds.size());
@@ -280,8 +278,7 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
         return false;
     }
 
-    const double c = 299792458.0;
-    const double omegaE = 7.2921151467e-5;
+    const double omegaE = WGS84_EARTH_ROTATION_RATE_RAD_S;
 
     std::vector<SatelliteOrbit> orbits(numSats);
     std::vector<double> correctedRanges(numSats);
@@ -290,14 +287,12 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
     {
         orbits[i] = computeSatelliteOrbit(ephemerides[i], transmitTimesSeconds[i]);
 
-        correctedRanges[i] = measuredPseudoranges[i] + c * orbits[i].clockBias;
+        correctedRanges[i] = measuredPseudoranges[i] + SPEED_OF_LIGHT_M_S * orbits[i].clockBias;
     }
 
     std::vector<double> usedTransmitTimes(transmitTimesSeconds.begin(),
                                           transmitTimesSeconds.begin() + static_cast<std::ptrdiff_t>(numSats));
 
-    // The elevation mask needs a trustworthy position to judge elevations from, so it engages only
-    // once a previous solve has succeeded; a cold start uses every satellite.
     if (m_hasValidFix && m_inputConfig.elevationMaskDeg > 0.0)
     {
         size_t keptSats = 0;
@@ -326,9 +321,6 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
         usedTransmitTimes.resize(numSats);
     }
 
-    // Receiver-autonomous outlier rejection: when the converged solution's worst residual exceeds
-    // the gate and spare satellites remain, drop the worst-residual satellite and re-solve, so one
-    // faulted measurement (weak-signal drift, decode fault) cannot poison the whole fix.
     while (true)
     {
         double state[4] = {m_referenceEcef.x, m_referenceEcef.y, m_referenceEcef.z, 0.0};
@@ -351,7 +343,7 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
                 double dz = orbits[i].position.z - state[2];
                 double range = std::sqrt((dx * dx) + (dy * dy) + (dz * dz));
 
-                const double travelTime = range / c;
+                const double travelTime = range / SPEED_OF_LIGHT_M_S;
                 const double sagnacX = orbits[i].position.x + (omegaE * travelTime * orbits[i].position.y);
                 const double sagnacY = orbits[i].position.y - (omegaE * travelTime * orbits[i].position.x);
 
@@ -499,7 +491,7 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
                 solution.ecefPosition.y = state[1];
                 solution.ecefPosition.z = state[2];
                 solution.clockBiasMeters = state[3];
-                solution.clockBiasSeconds = state[3] / c;
+                solution.clockBiasSeconds = state[3] / SPEED_OF_LIGHT_M_S;
                 solution.geodeticPosition = ecefToWgs84(solution.ecefPosition);
                 solution.satellitesUsed = static_cast<uint32_t>(numSats);
                 solution.maxResidualMeters = maxAbsResidual;
@@ -520,8 +512,8 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
                 solution.dopGDOP = std::sqrt(invHtH[0][0] + invHtH[1][1] + invHtH[2][2] + invHtH[3][3]);
                 solution.dopPDOP = std::sqrt(invHtH[0][0] + invHtH[1][1] + invHtH[2][2]);
 
-                const double latRad = solution.geodeticPosition.latitude * M_PI / 180.0;
-                const double lonRad = solution.geodeticPosition.longitude * M_PI / 180.0;
+                const double latRad = solution.geodeticPosition.latitudeDeg * M_PI / 180.0;
+                const double lonRad = solution.geodeticPosition.longitudeDeg * M_PI / 180.0;
                 double sinLat = std::sin(latRad);
                 double cosLat = std::cos(latRad);
                 const double sinLon = std::sin(lonRad);

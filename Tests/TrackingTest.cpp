@@ -34,8 +34,8 @@ TEST(TrackingCarrierAidingTest, CodeFreqTracksDopplerScaledRateWithinFewBlocks)
 
     const int prn = 1;
     const int svIndex = prn - 1;
-    const int codeLength = settings.configuration.rawDataSettings.numberOfSamplesPerCode;
-    const float samplingFreq = settings.configuration.rawDataSettings.samplingFrequency;
+    const int codeLength = settings.configuration.acquisitionInput.numberOfSamplesPerCode;
+    const float samplingFreq = settings.configuration.acquisitionInput.samplingFrequencyHz;
     ASSERT_GT(codeLength, 0);
     ASSERT_GT(samplingFreq, 0.0f);
 
@@ -63,7 +63,7 @@ TEST(TrackingCarrierAidingTest, CodeFreqTracksDopplerScaledRateWithinFewBlocks)
             {
                 chipIdx += GPSOpenCl::GPS_CA_CODE_LENGTH;
             }
-            float chip = static_cast<float>(code.m_caCode[svIndex][chipIdx]);
+            float chip = static_cast<float>(code.caCode[svIndex][chipIdx]);
             std::complex<float> carrier(static_cast<float>(std::cos(carrierPhase)),
                                         static_cast<float>(std::sin(carrierPhase)));
             input[static_cast<size_t>(i)] = chip * carrier;

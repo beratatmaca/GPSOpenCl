@@ -14,7 +14,20 @@
 
 namespace GPSOpenCl
 {
-/** @brief GPU/CPU compute engine for FFT and signal math. */
+/** @brief GPU/CPU compute engine for FFT and signal math.
+ *
+ *   Slot pool lifecycle. Acquisition keeps one reference spectrum per
+ *   Doppler residue in a numbered slot. complexMultiplyThenFftToSlot
+ *   fills a slot. On GPU the result stays device resident, state
+ *   SlotDevice. On CPU fallback it lands in a host vector, state
+ *   SlotHost. complexMultiplyResidentThenFftThenAbsolute then reuses a
+ *   filled slot once per Doppler bin. A circular index shift replaces
+ *   any host side copy or re upload. The batch variant submits all
+ *   bins in one kernel launch with a single readback. Any error marks
+ *   the slot SlotInvalid and the caller retries or falls back.
+ *
+ *   Every GPU entry point has a CPU path with identical math. A
+ *   machine without OpenCL produces the same results. */
 class Compute
 {
   public:
@@ -39,6 +52,13 @@ class Compute
      *  @return 0 on success. */
     int fft(const ComplexFloatVector &input, ComplexFloatVector *output, FFTDirectionType direction);
 
+    /** @brief Radix 2 FFT on the CPU. Fallback path when no device exists.
+     *  @param input     Input samples. Length must be a power of two.
+     *  @param output    Transformed samples.
+     *  @param direction Forward or inverse.
+     *  @return 0 on success, -1 on invalid length. */
+    static int fftCpu(const ComplexFloatVector &input, ComplexFloatVector *output, FFTDirectionType direction);
+
     /** @brief Element-wise complex multiplication.
      *  @param input1 First complex vector.
      *  @param input2 Second complex vector.
@@ -54,16 +74,16 @@ class Compute
      *  @return 0 on success. */
     int absolute(const ComplexFloatVector &input1, FloatVector *output);
 
-    /** @brief Parallel reduction sum.
+    /** @brief Parallel reduction sum. The GPU path runs one dispatch. Each work group writes one
+     *   partial sum. No chunked host round-trip loop.
      *  @param input    Float vector.
      *  @param sumValue Output sum.
      *  @return 0 on success. */
     int sum(const FloatVector &input, float *sumValue);
 
-    /** @brief Complex-multiply then FFT, leaving the result resident in a numbered slot (device
-     *   buffer on the GPU path, host vector on the CPU fallback) instead of returning it. Pair with
-     *   complexMultiplyResidentThenFftThenAbsolute() to reuse the result across many calls with no
-     *   host round-trip.
+    /** @brief Complex multiply then FFT into a numbered slot. The result stays resident. GPU path
+     *   uses a device buffer. CPU fallback uses a host vector. Pair with
+     *   complexMultiplyResidentThenFftThenAbsolute() for reuse without host round trips.
      *  @param input1    First complex vector.
      *  @param input2    Second complex vector.
      *  @param direction Forward or inverse FFT.
@@ -74,12 +94,11 @@ class Compute
                                      FFTDirectionType direction,
                                      int slot);
 
-    /** @brief Complex-multiply input1 with a circularly shifted slot-resident vector, FFT, then
-     *   magnitude-squared: output = |FFT(input1[i] * slot[(i + length - shiftBins) mod length])|^2.
-     *   The shift is applied through indexing during the multiply, so no shifted copy is created.
-     *   input1 is cached on-device between calls and re-uploaded only when a different vector (by
-     *   address, size, or slot generation) is supplied, so repeated calls with the same spectrum are
-     *   upload-free. The caller must keep input1's storage unchanged between calls.
+    /** @brief Multiply input1 with a shifted slot vector. Then FFT, then magnitude squared.
+     *   Computes output = |FFT(input1[i] * slot[(i + length - shiftBins) mod length])|^2. The shift
+     *   is applied through indexing. No shifted copy is created. input1 stays cached on the device.
+     *   A different input1 triggers a re-upload. Callers must not change input1 storage between
+     *   calls.
      *  @param input1    First complex vector (e.g. a precomputed constant code spectrum).
      *  @param slot      Slot index previously filled by complexMultiplyThenFftToSlot().
      *  @param shiftBins Circular shift applied to the slot vector, in [0, length).
@@ -92,12 +111,10 @@ class Compute
                                                    FFTDirectionType direction,
                                                    FloatVector *output);
 
-    /** @brief Batched form of complexMultiplyResidentThenFftThenAbsolute(): performs the multiply,
-     *   FFT, and magnitude-squared for every requested (slot, shift) bin in one GPU submission with
-     *   a single readback at the end, instead of one blocking round-trip per bin. Bin k's result
-     *   occupies output[k * length, (k + 1) * length). Requires every requested slot to be resident
-     *   with the same length as input1; returns nonzero without touching output when the batch
-     *   cannot run (caller should fall back to per-bin calls).
+    /** @brief Batched form of complexMultiplyResidentThenFftThenAbsolute(). All bins run in one
+     *   GPU submission. One readback at the end. Bin k occupies output[k * length, (k + 1) *
+     *   length). Every slot must be resident with input1 length. Returns nonzero when the batch
+     *   cannot run. Output is untouched then. Callers fall back to per-bin calls.
      *  @param input1       First complex vector (e.g. a precomputed constant code spectrum).
      *  @param slotAndShift Per-bin (slot index, circular shift) pairs.
      *  @param direction    Forward or inverse FFT.
@@ -132,16 +149,16 @@ class Compute
     /** @brief Query and cache per-kernel work-group size and device local memory size, once. */
     void cacheDeviceInfo();
 
-    /** @brief Return a persistent device buffer sized for at least neededFloats floats, growing
-     *   (release + recreate) only when the current capacity is insufficient.
+    /** @brief Return a persistent device buffer. Holds at least neededFloats floats. Grows only
+     *   when capacity is insufficient.
      *  @param buffer         Persistent buffer handle (in/out).
      *  @param capacityFloats Current buffer capacity in floats (in/out).
      *  @param neededFloats   Required capacity in floats.
      *  @return Buffer handle, or nullptr on allocation failure. */
     cl_mem ensureBuffer(cl_mem &buffer, size_t &capacityFloats, size_t neededFloats);
 
-    /** @brief GPU complexMultiplier stage, leaving the product on-device instead of reading it
-     *   back to host. Used both by complexMultiplier() and by the on-device chained calls.
+    /** @brief GPU complexMultiplier stage. The product stays on the device. Used by
+     *   complexMultiplier() and chained calls.
      *  @param input1 First complex vector.
      *  @param input2 Second complex vector.
      *  @param length Element count (equal for both inputs).
@@ -150,9 +167,8 @@ class Compute
                                    const ComplexFloatVector &input2,
                                    unsigned int length);
 
-    /** @brief GPU complexMultiplier stage against an already-device-resident second operand, read
-     *   with a circular offset. input1 is uploaded only when it differs from the previous call's
-     *   cached vector (by address or size).
+    /** @brief GPU complexMultiplier stage with a resident second operand. Reads it with a circular
+     *   offset. input1 uploads only when it changed.
      *  @param input1 First complex vector (cached on-device between calls).
      *  @param input2 Device buffer holding length interleaved complex floats.
      *  @param length Element count (equal for both inputs).
@@ -176,16 +192,15 @@ class Compute
                                     unsigned int offset,
                                     unsigned int inputBBase);
 
-    /** @brief Upload input1 into the persistent multiply input buffer unless the same vector (by
-     *   address and size) is already resident from a previous call.
+    /** @brief Upload input1 into the persistent input buffer. Skips the upload when input1 is
+     *   already resident.
      *  @param input1 Complex vector to make device-resident.
      *  @param length Element count.
      *  @return The input device buffer (m_cmBufferA), or nullptr on failure. */
     cl_mem ensureResidentInput1(const ComplexFloatVector &input1, unsigned int length);
 
-    /** @brief GPU FFT stage over a pool of independent equal-length FFTs stored back to back in one
-     *   device buffer, one work-group per FFT in a single launch. Only valid when a whole FFT fits
-     *   in one work-group's local memory.
+    /** @brief GPU FFT stage over pooled equal-length FFTs. FFTs sit back to back in one buffer.
+     *   One work group per FFT, one launch. A whole FFT must fit in local memory.
      *  @param buffer    Device buffer holding count * length interleaved complex floats (in/out).
      *  @param length    Element count of one FFT.
      *  @param count     Number of independent FFTs.
@@ -199,26 +214,24 @@ class Compute
      *  @param floatOffset Destination offset into m_allocatedMemory (floats). */
     void packToStaging(const ComplexFloatVector &input, unsigned int length, size_t floatOffset);
 
-    /** @brief Ensure the pooled slot device buffer can hold the given slot at the given per-slot
-     *   float stride. Slots live back to back in one buffer so batched kernels can address them by
-     *   element offset. Growing the pool discards previous contents, so every slot state is
-     *   invalidated when that happens.
+    /** @brief Ensure the slot pool fits the given slot. Slots sit back to back in one buffer.
+     *   Batched kernels address them by element offset. Growing the pool discards previous
+     *   contents. Every slot state is invalidated then.
      *  @param slot          Slot index.
      *  @param floatsPerSlot Per-slot capacity in floats.
      *  @return Pool device buffer, or nullptr on allocation failure. */
     cl_mem ensureSlotPool(int slot, size_t floatsPerSlot);
 
-    /** @brief GPU FFT stage, operating in place on a caller-supplied device buffer instead of
-     *   uploading from or reading back to host. Used both by fft() and by the on-device chained
-     *   calls.
+    /** @brief GPU FFT stage in place on a device buffer. No host upload or readback. Used by fft()
+     *   and chained calls.
      *  @param buffer    Device buffer holding length interleaved complex floats (in/out).
      *  @param length    Element count.
      *  @param direction Forward or inverse FFT.
      *  @return 0 on success. */
     int fftDeviceInPlace(cl_mem buffer, unsigned int length, FFTDirectionType direction);
 
-    /** @brief GPU absolute stage, reading its input directly from a caller-supplied device buffer
-     *   instead of uploading from host. Used both by absolute() and by the on-device chained calls.
+    /** @brief GPU absolute stage reading a device buffer. No host upload. Used by absolute() and
+     *   chained calls.
      *  @param inputBuffer Device buffer holding length interleaved complex floats.
      *  @param length      Element count.
      *  @param output      Magnitude squared output (host).
@@ -226,8 +239,8 @@ class Compute
     int absoluteDeviceToHost(cl_mem inputBuffer, unsigned int length, FloatVector *output);
 
     GpuHandler m_gpu;                          ///< OpenCL handler.
-    cl_command_queue m_queue;                  ///< OpenCL command queue.
-    cl_int m_error;                            ///< Last OpenCL error.
+    cl_command_queue m_queue{nullptr};         ///< OpenCL command queue.
+    cl_int m_error{-1};                        ///< Last OpenCL error.
     std::vector<float> m_allocatedMemory;      ///< Scratch memory buffer.
     std::vector<float> m_partialSums;          ///< Scratch buffer for sum() partial-sum readback.
 
@@ -262,8 +275,8 @@ class Compute
     using SlotStateType = enum SlotState : std::int8_t
     {
         SlotInvalid = 0,    ///< Slot holds no valid result.
-        SlotDevice = 1,     ///< Slot result lives in the slot's device buffer.
-        SlotHost = 2        ///< Slot result lives in the slot's host vector (CPU fallback).
+        SlotDevice = 1,     ///< Slot result lives in the slot device buffer.
+        SlotHost = 2        ///< Slot result lives in the slot host vector.
     };
 
     cl_mem m_slotPoolBuffer{nullptr};              ///< Pooled slot device buffer, slots back to back.

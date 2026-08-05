@@ -95,15 +95,15 @@ bool NavigationDecoder::decodeSubframe(const std::vector<uint32_t> &words30bit, 
 bool NavigationDecoder::findPreamble(const std::vector<bool> &bits, size_t &preambleIndex, bool &inverted)
 {
 
-    const uint8_t PREAMBLE_NORM = 0x8B;
-    const uint8_t PREAMBLE_INV = 0x74;
+    const uint8_t preambleNormal = 0x8B;
+    const uint8_t preambleInverted = 0x74;
 
-    if (bits.size() < 300)
+    if (bits.size() < GPS_NAV_BITS_PER_SUBFRAME)
     {
         return false;
     }
 
-    for (size_t i = 0; i <= bits.size() - 300; i++)
+    for (size_t i = 0; i <= bits.size() - GPS_NAV_BITS_PER_SUBFRAME; i++)
     {
         uint8_t byteVal = 0;
         for (int b = 0; b < 8; b++)
@@ -111,13 +111,13 @@ bool NavigationDecoder::findPreamble(const std::vector<bool> &bits, size_t &prea
             byteVal = (byteVal << 1) | (bits[i + b] ? 1 : 0);
         }
 
-        if (byteVal == PREAMBLE_NORM)
+        if (byteVal == preambleNormal)
         {
             preambleIndex = i;
             inverted = false;
             return true;
         }
-        if (byteVal == PREAMBLE_INV)
+        if (byteVal == preambleInverted)
         {
             preambleIndex = i;
             inverted = true;
@@ -201,12 +201,12 @@ bool NavigationDecoder::checkParity(uint32_t word30bit, bool prevD29, bool prevD
 std::vector<bool> NavigationDecoder::promptToBits(const ComplexFloatVector &promptHistory)
 {
     std::vector<bool> bits;
-    bits.reserve(promptHistory.size() / 20);
+    bits.reserve(promptHistory.size() / GPS_NAV_CODE_PERIODS_PER_BIT);
 
-    for (size_t i = 0; i + 20 <= promptHistory.size(); i += 20)
+    for (size_t i = 0; i + GPS_NAV_CODE_PERIODS_PER_BIT <= promptHistory.size(); i += GPS_NAV_CODE_PERIODS_PER_BIT)
     {
         float sumRe = 0.0f;
-        for (size_t k = 0; k < 20; k++)
+        for (size_t k = 0; k < GPS_NAV_CODE_PERIODS_PER_BIT; k++)
         {
             sumRe += promptHistory[i + k].real();
         }
@@ -225,7 +225,7 @@ bool NavigationDecoder::decodeSubframe(const std::vector<uint32_t> &words30bit, 
     const uint32_t howWord = words30bit[1];
     const uint32_t towCount = extractUnsignedBits(howWord, 1, 17);
     ephem.subframeId = static_cast<int>(extractUnsignedBits(howWord, 20, 3));
-    ephem.tow = towCount * 6.0;
+    ephem.tow = towCount * GPS_NAV_SUBFRAME_DURATION_SEC;
 
     if (ephem.subframeId < 1 || ephem.subframeId > 5 ||
         (((m_inputConfig.subframeSearchMask >> (ephem.subframeId - 1)) & 0x1u) == 0u))
@@ -350,7 +350,7 @@ bool NavigationDecoder::decodeAtPhaseOffset(int svId,
 
     if (decoded)
     {
-        bitOffset += 300;
+        bitOffset += GPS_NAV_BITS_PER_SUBFRAME;
     }
     else if (hadEnoughData)
     {
@@ -377,8 +377,9 @@ bool NavigationDecoder::tryDecodeAtBitPosition(int svId,
         return false;
     }
 
-    const size_t startSample = phaseBase + (bitPosition * 20);
-    if (startSample + static_cast<size_t>(300 * 20) > promptHistory.size())
+    const size_t startSample = phaseBase + (bitPosition * GPS_NAV_CODE_PERIODS_PER_BIT);
+    if (startSample + static_cast<size_t>(GPS_NAV_BITS_PER_SUBFRAME * GPS_NAV_CODE_PERIODS_PER_BIT) >
+        promptHistory.size())
     {
         return false;
     }
@@ -388,15 +389,15 @@ bool NavigationDecoder::tryDecodeAtBitPosition(int svId,
     auto demodulateBit = [&](size_t bitIndex) -> bool
     {
         float sumRe = 0.0f;
-        const size_t base = startSample + (bitIndex * 20);
-        for (int k = 0; k < 20; k++)
+        const size_t base = startSample + (bitIndex * GPS_NAV_CODE_PERIODS_PER_BIT);
+        for (int k = 0; k < GPS_NAV_CODE_PERIODS_PER_BIT; k++)
         {
             sumRe += promptHistory[base + k].real();
         }
         return sumRe > 0.0f;
     };
 
-    std::array<bool, 300> bits{};
+    std::array<bool, GPS_NAV_BITS_PER_SUBFRAME> bits{};
     for (size_t i = 0; i < 8; i++)
     {
         bits[i] = demodulateBit(i);
@@ -439,9 +440,9 @@ bool NavigationDecoder::tryDecodeAtBitPosition(int svId,
     {
         for (int back = 2; back >= 1; back--)
         {
-            const size_t base = startSample - (static_cast<size_t>(back) * 20);
+            const size_t base = startSample - (static_cast<size_t>(back) * GPS_NAV_CODE_PERIODS_PER_BIT);
             float sumRe = 0.0f;
-            for (int k = 0; k < 20; k++)
+            for (int k = 0; k < GPS_NAV_CODE_PERIODS_PER_BIT; k++)
             {
                 sumRe += promptHistory[base + k].real();
             }
@@ -483,17 +484,10 @@ bool NavigationDecoder::tryDecodeAtBitPosition(int svId,
         prevD30 = (raw & 1u) != 0;
     }
 
-    // The first bit-sync phase whose preamble and parity pass can sit a whole block away from the
-    // true bit edge (19 of 20 blocks per bit still integrate correctly), which would shift every
-    // derived transmit time by that block. The decoded bits are parity-verified, so a matched
-    // filter over candidate start blocks pins the block containing the true edge: each bit's first
-    // block carries mixed adjacent-bit signal split at the sub-block edge position known from the
-    // DLL code phase, and modeling that split keeps adjacent candidates distinguishable by a full
-    // block of energy per bit transition wherever the edge sits inside the block.
     double edgeFraction = 0.5;
     if (codePhaseHistory != nullptr && startSample < codePhaseHistory->size())
     {
-        const double phaseChips = static_cast<double>((*codePhaseHistory)[startSample]);
+        const auto phaseChips = static_cast<double>((*codePhaseHistory)[startSample]);
         edgeFraction = (1023.0 - phaseChips) / 1023.0;
         edgeFraction = std::min(std::max(edgeFraction, 0.0), 1.0);
     }
@@ -507,7 +501,8 @@ bool NavigationDecoder::tryDecodeAtBitPosition(int svId,
             continue;
         }
         const size_t candidateStart = startSample + candidate;
-        if (candidateStart + static_cast<size_t>(300 * 20) > promptHistory.size())
+        if (candidateStart + static_cast<size_t>(GPS_NAV_BITS_PER_SUBFRAME * GPS_NAV_CODE_PERIODS_PER_BIT) >
+            promptHistory.size())
         {
             continue;
         }
@@ -515,7 +510,7 @@ bool NavigationDecoder::tryDecodeAtBitPosition(int svId,
         double metric = 0.0;
         for (size_t i = 0; i < 300; i++)
         {
-            const size_t base = candidateStart + (i * 20);
+            const size_t base = candidateStart + (i * GPS_NAV_CODE_PERIODS_PER_BIT);
             const double sign = bits[i] ? 1.0 : -1.0;
 
             float sumRe = 0.0f;
@@ -567,12 +562,12 @@ bool NavigationDecoder::processPromptSignal(int svId,
     }
     else
     {
-        if (searchPositions.size() != 20)
+        if (searchPositions.size() != GPS_NAV_CODE_PERIODS_PER_BIT)
         {
-            searchPositions.assign(20, 0);
+            searchPositions.assign(GPS_NAV_CODE_PERIODS_PER_BIT, 0);
         }
 
-        for (int phase = 0; phase < 20 && !decoded; phase++)
+        for (int phase = 0; phase < GPS_NAV_CODE_PERIODS_PER_BIT && !decoded; phase++)
         {
             bool hadEnoughData = false;
             decoded = tryDecodeAtBitPosition(svId,
@@ -586,7 +581,7 @@ bool NavigationDecoder::processPromptSignal(int svId,
             if (decoded)
             {
                 bitSyncPhase = phase;
-                bitOffset = searchPositions[static_cast<size_t>(phase)] + 300;
+                bitOffset = searchPositions[static_cast<size_t>(phase)] + GPS_NAV_BITS_PER_SUBFRAME;
             }
             else if (hadEnoughData)
             {

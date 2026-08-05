@@ -9,12 +9,12 @@ Profiler::Profiler()
 
 Profiler::~Profiler() = default;
 
-void Profiler::startBlock(uint32_t blockIndex, double timestamp)
+void Profiler::startBlock(uint32_t blockIndex, double timestampSec)
 {
     m_currentOutput = ProfilerOutput{};
     m_currentOutput.structVersion = STRUCT_VERSION_1;
     m_currentOutput.blockIndex = blockIndex;
-    m_currentOutput.timestamp = timestamp;
+    m_currentOutput.timestampSec = timestampSec;
     m_blockStart = std::chrono::high_resolution_clock::now();
 }
 

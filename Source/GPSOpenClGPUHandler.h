@@ -63,15 +63,15 @@ class GpuHandler
      *  @return 0 on success. */
     int determineLocalMemorySize();
 
-    cl_context m_context;                              ///< OpenCL context.
-    std::vector<cl_program> m_programList;             ///< Compiled programs.
-    std::vector<cl_kernel> m_acquisitionKernelList;    ///< Acquisition kernels.
-    cl_device_id m_device;                             ///< OpenCL device ID.
-    cl_ulong m_localMemorySize;                        ///< Device local memory (bytes).
+    cl_context context{nullptr};                     ///< OpenCL context.
+    std::vector<cl_program> programList;             ///< Compiled programs.
+    std::vector<cl_kernel> acquisitionKernelList;    ///< Acquisition kernels.
+    cl_device_id device{nullptr};                    ///< OpenCL device ID.
+    cl_ulong localMemorySize{0};                     ///< Device local memory (bytes).
 
   private:
-    cl_platform_id m_platform;    ///< OpenCL platform ID.
-    cl_int m_error;               ///< Last OpenCL error code.
+    cl_platform_id m_platform{nullptr};    ///< OpenCL platform ID.
+    cl_int m_lastError{0};                 ///< Last OpenCL error code.
     std::string m_programCharList[GPSOpenClProgramCount]{"Acquisition.cl"};
 
     std::string m_acquisitionKernelCharList[AcquisitionKernelCount]{"fft_init",

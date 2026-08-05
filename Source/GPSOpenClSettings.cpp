@@ -10,10 +10,7 @@ using namespace GPSOpenCl;
 
 Settings::Settings() : m_confFileName("DefaultConf.ini")
 {
-
-    configuration.rawDataSettings.dataSource = "capture.dat";
-    configuration.rawDataSettings.samplingFrequency = 4096000.0f;
-    configuration.rawDataSettings.numberOfSamplesPerCode = 4096;
+    snprintf(configuration.sourceInput.fifoPath, sizeof(configuration.sourceInput.fifoPath), "capture.dat");
 }
 
 Settings::~Settings() = default;
@@ -58,6 +55,12 @@ void Settings::captureSettings()
 
 void Settings::fillMap(const std::string &line)
 {
+    const std::string trimmedLine = trim(line, " \t");
+    if (trimmedLine.empty() || trimmedLine[0] == '#' || trimmedLine[0] == ';' || trimmedLine[0] == '[')
+    {
+        return;
+    }
+
     std::string::size_type keyPos = 0;
     std::string::size_type keyEnd = 0;
     std::string::size_type valPos = 0;
@@ -91,7 +94,6 @@ void Settings::updateConfigurationStruct()
 {
     if (!m_configurationMap["DataSource"].empty())
     {
-        configuration.rawDataSettings.dataSource = m_configurationMap["DataSource"];
         snprintf(configuration.sourceInput.fifoPath,
                  sizeof(configuration.sourceInput.fifoPath),
                  "%s",
@@ -102,29 +104,26 @@ void Settings::updateConfigurationStruct()
     {
         try
         {
-            const float samplingFrequency = std::stof(m_configurationMap["SamplingFrequency"]);
+            const float samplingFrequencyHz = std::stof(m_configurationMap["SamplingFrequency"]);
             const double samplesPerCodeReal =
-                std::round(static_cast<double>(samplingFrequency) / (GPS_CA_CODE_FREQUENCY_HZ / GPS_CA_CODE_LENGTH));
-            if (!std::isfinite(samplingFrequency) || samplingFrequency <= 0.0f || samplesPerCodeReal < 1.0 ||
+                std::round(static_cast<double>(samplingFrequencyHz) / (GPS_CA_CODE_FREQUENCY_HZ / GPS_CA_CODE_LENGTH));
+            if (!std::isfinite(samplingFrequencyHz) || samplingFrequencyHz <= 0.0f || samplesPerCodeReal < 1.0 ||
                 samplesPerCodeReal > 16777216.0)
             {
                 throw std::invalid_argument("SamplingFrequency out of range");
             }
 
-            configuration.rawDataSettings.samplingFrequency = samplingFrequency;
-            configuration.rawDataSettings.numberOfSamplesPerCode = static_cast<int>(samplesPerCodeReal);
-            configuration.sourceInput.samplingRate = configuration.rawDataSettings.samplingFrequency;
-            configuration.acquisitionInput.samplingFrequency = configuration.rawDataSettings.samplingFrequency;
-            configuration.acquisitionInput.numberOfSamplesPerCode =
-                configuration.rawDataSettings.numberOfSamplesPerCode;
-            configuration.trackingInput.samplingFrequency = configuration.rawDataSettings.samplingFrequency;
-            configuration.trackingInput.numberOfSamplesPerCode = configuration.rawDataSettings.numberOfSamplesPerCode;
+            configuration.sourceInput.samplingRateHz = samplingFrequencyHz;
+            configuration.acquisitionInput.samplingFrequencyHz = samplingFrequencyHz;
+            configuration.acquisitionInput.numberOfSamplesPerCode = static_cast<int>(samplesPerCodeReal);
+            configuration.trackingInput.samplingFrequencyHz = samplingFrequencyHz;
+            configuration.trackingInput.numberOfSamplesPerCode = static_cast<int>(samplesPerCodeReal);
 
-            const int samplesPerCode = configuration.rawDataSettings.numberOfSamplesPerCode;
+            const int samplesPerCode = configuration.acquisitionInput.numberOfSamplesPerCode;
             const bool isPowerOfTwo = samplesPerCode > 0 && (samplesPerCode & (samplesPerCode - 1)) == 0;
             if (!isPowerOfTwo)
             {
-                std::cerr << "Warning: SamplingFrequency=" << configuration.rawDataSettings.samplingFrequency
+                std::cerr << "Warning: SamplingFrequency=" << configuration.acquisitionInput.samplingFrequencyHz
                           << " yields " << samplesPerCode << " samples per code period, which is not a power of "
                           << "two. The FFT-based acquisition/lookup-table path requires a power-of-two length and "
                           << "will fail for this configuration." << '\n';

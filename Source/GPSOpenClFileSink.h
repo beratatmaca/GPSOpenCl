@@ -13,10 +13,9 @@
 
 namespace GPSOpenCl
 {
-/** @brief Telemetry sink that writes to a binary log file. publish() copies onto a bounded queue
- *   and returns immediately; a dedicated background thread does the actual file I/O, so a slow or
- *   stalled disk never blocks the calling (real-time) thread. The queue drops new messages once
- *   full rather than blocking the caller, matching the project's "Sink path may drop" design. */
+/** @brief Telemetry sink writing a binary log file. publish() copies onto a bounded queue and
+ *   returns. A background thread does the file I/O. A stalled disk never blocks the caller. A
+ *   full queue drops new messages. This matches the sink may drop design. */
 class FileSink : public Sink
 {
   public:
@@ -36,8 +35,8 @@ class FileSink : public Sink
     void publish(const std::string &identifier, const void *data, size_t size) override;
 
   private:
-    /** @brief Background thread body: drains the queue and writes each message to file until
-     *   the queue is finished and empty. */
+    /** @brief Background thread body. Drains the queue and writes each message. Stops when the
+     *   queue finishes empty. */
     void writerThreadLoop();
 
     std::ofstream m_file;                 ///< Output file stream, touched only by the writer thread.

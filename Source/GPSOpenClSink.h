@@ -16,11 +16,10 @@
 
 namespace GPSOpenCl
 {
-/** @brief Owned copy of one publish() call's identifier and struct bytes, queued for a background
- *   writer thread. Sink implementations that do real I/O (file writes, network sends) should copy
- *   into this on their real-time-facing publish() call and hand the actual I/O to a dedicated
- *   thread, so a slow write never stalls the caller. Uses fixed inline storage so queueing a
- *   message performs no heap allocation on the publishing thread. */
+/** @brief Owned copy of one publish() call. Holds identifier and struct bytes. Queued for a
+ *   background writer thread. Real I/O sinks should copy here on publish(). A dedicated thread
+ *   does the actual I/O. A slow write never stalls the caller. Fixed inline storage, no heap
+ *   allocation on publish. */
 struct SinkMessage
 {
     static constexpr size_t MAX_IDENTIFIER_BYTES = 32;    ///< Inline identifier capacity.
@@ -28,11 +27,11 @@ struct SinkMessage
 
     uint16_t identifierLength{0};                         ///< Used bytes of identifier.
     uint16_t dataLength{0};                               ///< Used bytes of data.
-    char identifier[MAX_IDENTIFIER_BYTES];                ///< Topic/module name (not NUL-terminated).
-    char data[MAX_DATA_BYTES];                            ///< Copied struct bytes.
+    char identifier[MAX_IDENTIFIER_BYTES]{};              ///< Topic/module name (not NUL-terminated).
+    char data[MAX_DATA_BYTES]{};                          ///< Copied struct bytes.
 
-    /** @brief Fill from a publish() call, truncating nothing: returns false if either field does
-     *   not fit, in which case the message must not be queued.
+    /** @brief Fill from a publish() call. Truncates nothing. Returns false when a field does not
+     *   fit. Do not queue the message then.
      *  @param id   Topic/module name.
      *  @param src  Pointer to struct data.
      *  @param size Size of data (bytes).
@@ -63,9 +62,9 @@ static_assert(sizeof(NmeaGeneratorOutput) <= SinkMessage::MAX_DATA_BYTES,
               "NmeaGeneratorOutput exceeds SinkMessage capacity");
 static_assert(sizeof(ProfilerOutput) <= SinkMessage::MAX_DATA_BYTES, "ProfilerOutput exceeds SinkMessage capacity");
 
-/** @brief Abstract telemetry output interface. Publish calls are serialized by this base class,
- *   so concrete implementations (including test doubles) don't each need their own locking even
- *   when multiple satellite channels publish concurrently from the tracking worker pool. */
+/** @brief Abstract telemetry output interface. The base class serializes publish calls. So
+ *   implementations need no locking of their own. Channels publish concurrently from the worker
+ *   pool. */
 class Sink
 {
   public:
@@ -155,7 +154,7 @@ class NullSink : public Sink
 {
   public:
     /** @brief Discard published data. */
-    void publish(const std::string &, const void *, size_t) override {}
+    void publish(const std::string & /*identifier*/, const void * /*data*/, size_t /*size*/) override {}
 };
 
 /** @brief Fan-out sink that forwards to multiple downstream sinks. */

@@ -29,9 +29,9 @@ class Code
     Code(Code &&) = delete;
     Code &operator=(Code &&) = delete;
 
-    char m_caCode[GPS_CA_SV_COUNT][GPS_CA_CODE_LENGTH]{};           ///< Raw C/A code chips per PRN.
-    std::vector<FloatVector> m_upsampledCaCode;                     ///< Upsampled time-domain C/A codes.
-    std::vector<ComplexFloatVector> m_upsampledFreqDomainCaCode;    ///< Frequency-domain C/A codes.
+    char caCode[GPS_CA_SV_COUNT][GPS_CA_CODE_LENGTH]{};           ///< Raw C/A code chips per PRN.
+    std::vector<FloatVector> upsampledCaCode;                     ///< Upsampled time-domain C/A codes.
+    std::vector<ComplexFloatVector> upsampledFreqDomainCaCode;    ///< Frequency-domain C/A codes.
 
     /** @brief Set configuration.
      *  @param conf Application configuration. */

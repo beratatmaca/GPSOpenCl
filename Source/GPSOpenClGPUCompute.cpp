@@ -49,7 +49,7 @@ bool deviceSupportsOpenCl2(cl_device_id device)
 }
 }
 
-Compute::Compute() : m_queue(nullptr), m_error(-1)
+Compute::Compute()
 {
     if (m_gpu.createDevice() >= 0)
     {
@@ -57,9 +57,9 @@ Compute::Compute() : m_queue(nullptr), m_error(-1)
         {
             m_gpu.initKernels();
         }
-        if (deviceSupportsOpenCl2(m_gpu.m_device))
+        if (deviceSupportsOpenCl2(m_gpu.device))
         {
-            m_queue = clCreateCommandQueueWithProperties(m_gpu.m_context, m_gpu.m_device, nullptr, &m_error);
+            m_queue = clCreateCommandQueueWithProperties(m_gpu.context, m_gpu.device, nullptr, &m_error);
         }
         else
         {
@@ -67,7 +67,7 @@ Compute::Compute() : m_queue(nullptr), m_error(-1)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #endif
-            m_queue = clCreateCommandQueue(m_gpu.m_context, m_gpu.m_device, 0, &m_error);
+            m_queue = clCreateCommandQueue(m_gpu.context, m_gpu.device, 0, &m_error);
 #ifdef __GNUC__
 #pragma GCC diagnostic pop
 #endif
@@ -124,13 +124,13 @@ void Compute::cacheDeviceInfo()
     }
 
     m_gpu.determineLocalMemorySize();
-    m_localMemorySize = m_gpu.m_localMemorySize;
+    m_localMemorySize = m_gpu.localMemorySize;
 
     auto queryLocalSize = [&](cl_kernel kernel) -> size_t
     {
         size_t localSize = 0;
         const cl_int err = clGetKernelWorkGroupInfo(
-            kernel, m_gpu.m_device, CL_KERNEL_WORK_GROUP_SIZE, sizeof(localSize), &localSize, nullptr);
+            kernel, m_gpu.device, CL_KERNEL_WORK_GROUP_SIZE, sizeof(localSize), &localSize, nullptr);
         if (err != CL_SUCCESS || localSize == 0)
         {
             return 0;
@@ -138,21 +138,21 @@ void Compute::cacheDeviceInfo()
         return static_cast<size_t>(pow(2, trunc(log2(static_cast<double>(localSize)))));
     };
 
-    if (m_gpu.m_acquisitionKernelList.size() > GpuHandler::FFTInit)
+    if (m_gpu.acquisitionKernelList.size() > GpuHandler::FFTInit)
     {
-        m_fftLocalSize = queryLocalSize(m_gpu.m_acquisitionKernelList[GpuHandler::FFTInit]);
+        m_fftLocalSize = queryLocalSize(m_gpu.acquisitionKernelList[GpuHandler::FFTInit]);
     }
-    if (m_gpu.m_acquisitionKernelList.size() > GpuHandler::ComplexMultiplier)
+    if (m_gpu.acquisitionKernelList.size() > GpuHandler::ComplexMultiplier)
     {
-        m_complexMultiplierLocalSize = queryLocalSize(m_gpu.m_acquisitionKernelList[GpuHandler::ComplexMultiplier]);
+        m_complexMultiplierLocalSize = queryLocalSize(m_gpu.acquisitionKernelList[GpuHandler::ComplexMultiplier]);
     }
-    if (m_gpu.m_acquisitionKernelList.size() > GpuHandler::Absolute)
+    if (m_gpu.acquisitionKernelList.size() > GpuHandler::Absolute)
     {
-        m_absoluteLocalSize = queryLocalSize(m_gpu.m_acquisitionKernelList[GpuHandler::Absolute]);
+        m_absoluteLocalSize = queryLocalSize(m_gpu.acquisitionKernelList[GpuHandler::Absolute]);
     }
-    if (m_gpu.m_acquisitionKernelList.size() > GpuHandler::Sum)
+    if (m_gpu.acquisitionKernelList.size() > GpuHandler::Sum)
     {
-        m_sumLocalSize = queryLocalSize(m_gpu.m_acquisitionKernelList[GpuHandler::Sum]);
+        m_sumLocalSize = queryLocalSize(m_gpu.acquisitionKernelList[GpuHandler::Sum]);
     }
 
     m_deviceInfoCached = true;
@@ -173,7 +173,7 @@ cl_mem Compute::ensureBuffer(cl_mem &buffer, size_t &capacityFloats, size_t need
         capacityFloats = 0;
     }
 
-    buffer = clCreateBuffer(m_gpu.m_context, CL_MEM_READ_WRITE, neededFloats * sizeof(float), nullptr, &m_error);
+    buffer = clCreateBuffer(m_gpu.context, CL_MEM_READ_WRITE, neededFloats * sizeof(float), nullptr, &m_error);
     if (m_error == CL_SUCCESS)
     {
         capacityFloats = neededFloats;
@@ -188,7 +188,7 @@ cl_mem Compute::ensureBuffer(cl_mem &buffer, size_t &capacityFloats, size_t need
 
 int Compute::fftDeviceInPlace(cl_mem buffer, unsigned int length, FFTDirectionType direction)
 {
-    if ((m_queue == nullptr) || m_gpu.m_acquisitionKernelList.size() <= GpuHandler::FFTScale)
+    if ((m_queue == nullptr) || m_gpu.acquisitionKernelList.size() <= GpuHandler::FFTScale)
     {
         return -1;
     }
@@ -199,9 +199,9 @@ int Compute::fftDeviceInPlace(cl_mem buffer, unsigned int length, FFTDirectionTy
 
     cacheDeviceInfo();
 
-    cl_kernel initKernel = m_gpu.m_acquisitionKernelList[GpuHandler::FFTInit];
-    cl_kernel stageKernel = m_gpu.m_acquisitionKernelList[GpuHandler::FFTStage];
-    cl_kernel scaleKernel = m_gpu.m_acquisitionKernelList[GpuHandler::FFTScale];
+    cl_kernel initKernel = m_gpu.acquisitionKernelList[GpuHandler::FFTInit];
+    cl_kernel stageKernel = m_gpu.acquisitionKernelList[GpuHandler::FFTStage];
+    cl_kernel scaleKernel = m_gpu.acquisitionKernelList[GpuHandler::FFTScale];
 
     int dir = static_cast<int>(direction);
     size_t localSize = m_fftLocalSize;
@@ -258,7 +258,7 @@ int Compute::fftDeviceInPlace(cl_mem buffer, unsigned int length, FFTDirectionTy
 
 int Compute::fftDeviceInPlaceBatch(cl_mem buffer, unsigned int length, unsigned int count, FFTDirectionType direction)
 {
-    if ((m_queue == nullptr) || m_gpu.m_acquisitionKernelList.size() <= GpuHandler::FFTScale)
+    if ((m_queue == nullptr) || m_gpu.acquisitionKernelList.size() <= GpuHandler::FFTScale)
     {
         return -1;
     }
@@ -269,8 +269,8 @@ int Compute::fftDeviceInPlaceBatch(cl_mem buffer, unsigned int length, unsigned 
 
     cacheDeviceInfo();
 
-    cl_kernel initKernel = m_gpu.m_acquisitionKernelList[GpuHandler::FFTInit];
-    cl_kernel scaleKernel = m_gpu.m_acquisitionKernelList[GpuHandler::FFTScale];
+    cl_kernel initKernel = m_gpu.acquisitionKernelList[GpuHandler::FFTInit];
+    cl_kernel scaleKernel = m_gpu.acquisitionKernelList[GpuHandler::FFTScale];
 
     int dir = static_cast<int>(direction);
     size_t localSize = m_fftLocalSize;
@@ -316,7 +316,7 @@ int Compute::fftDeviceInPlaceBatch(cl_mem buffer, unsigned int length, unsigned 
 
 int Compute::fft(const ComplexFloatVector &input, ComplexFloatVector *output, FFTDirectionType direction)
 {
-    if ((m_queue != nullptr) && m_gpu.m_acquisitionKernelList.size() > GpuHandler::FFTScale)
+    if ((m_queue != nullptr) && m_gpu.acquisitionKernelList.size() > GpuHandler::FFTScale)
     {
         const unsigned int length = input.size();
 
@@ -364,6 +364,11 @@ int Compute::fft(const ComplexFloatVector &input, ComplexFloatVector *output, FF
         clFinish(m_queue);
     }
 
+    return fftCpu(input, output, direction);
+}
+
+int Compute::fftCpu(const ComplexFloatVector &input, ComplexFloatVector *output, FFTDirectionType direction)
+{
     output->clear();
     const size_t N = input.size();
     if (N == 0)
@@ -396,7 +401,7 @@ int Compute::fft(const ComplexFloatVector &input, ComplexFloatVector *output, FF
     const float dirSign = (direction == FFTInverse) ? 1.0f : -1.0f;
     for (size_t len = 2; len <= N; len <<= 1)
     {
-        const float ang = 2.0f * static_cast<float>(M_PI) / len * dirSign;
+        const float ang = 2.0f * static_cast<float>(M_PI) / static_cast<float>(len) * dirSign;
         const std::complex<float> wlen(std::cos(ang), std::sin(ang));
         for (size_t i = 0; i < N; i += len)
         {
@@ -439,7 +444,7 @@ cl_mem Compute::enqueueComplexMultiplier(cl_mem inputA,
                                          unsigned int offset,
                                          unsigned int inputBBase)
 {
-    cl_kernel complexMultiplierKernel = m_gpu.m_acquisitionKernelList[GpuHandler::ComplexMultiplier];
+    cl_kernel complexMultiplierKernel = m_gpu.acquisitionKernelList[GpuHandler::ComplexMultiplier];
     cl_mem dC = ensureBuffer(m_cmBufferC, m_cmBufferCapacityC, 2UL * length);
 
     if ((dC == nullptr) || m_error != CL_SUCCESS)
@@ -584,7 +589,7 @@ int Compute::complexMultiplier(const ComplexFloatVector &input1,
                                const ComplexFloatVector &input2,
                                ComplexFloatVector *output)
 {
-    if ((m_queue != nullptr) && m_gpu.m_acquisitionKernelList.size() > GpuHandler::ComplexMultiplier)
+    if ((m_queue != nullptr) && m_gpu.acquisitionKernelList.size() > GpuHandler::ComplexMultiplier)
     {
         auto length = static_cast<unsigned int>(input1.size());
         cl_mem dC = complexMultiplierDevice(input1, input2, length);
@@ -615,14 +620,14 @@ int Compute::complexMultiplier(const ComplexFloatVector &input1,
 
 int Compute::absoluteDeviceToHost(cl_mem inputBuffer, unsigned int length, FloatVector *output)
 {
-    if ((m_queue == nullptr) || m_gpu.m_acquisitionKernelList.size() <= GpuHandler::Absolute)
+    if ((m_queue == nullptr) || m_gpu.acquisitionKernelList.size() <= GpuHandler::Absolute)
     {
         return -1;
     }
 
     cacheDeviceInfo();
 
-    cl_kernel absoluteKernel = m_gpu.m_acquisitionKernelList[GpuHandler::Absolute];
+    cl_kernel absoluteKernel = m_gpu.acquisitionKernelList[GpuHandler::Absolute];
     cl_mem dC = ensureBuffer(m_absBufferC, m_absBufferCapacityC, length);
 
     if ((dC == nullptr) || m_error != CL_SUCCESS)
@@ -662,7 +667,7 @@ int Compute::absoluteDeviceToHost(cl_mem inputBuffer, unsigned int length, Float
 
 int Compute::absolute(const ComplexFloatVector &input1, FloatVector *output)
 {
-    if ((m_queue != nullptr) && m_gpu.m_acquisitionKernelList.size() > GpuHandler::Absolute)
+    if ((m_queue != nullptr) && m_gpu.acquisitionKernelList.size() > GpuHandler::Absolute)
     {
         auto length = static_cast<unsigned int>(input1.size());
 
@@ -697,11 +702,11 @@ int Compute::absolute(const ComplexFloatVector &input1, FloatVector *output)
 
 int Compute::sum(const FloatVector &input, float *sumValue)
 {
-    if ((m_queue != nullptr) && m_gpu.m_acquisitionKernelList.size() > GpuHandler::Sum && !input.empty())
+    if ((m_queue != nullptr) && m_gpu.acquisitionKernelList.size() > GpuHandler::Sum && !input.empty())
     {
         auto length = static_cast<unsigned int>(input.size());
 
-        cl_kernel sumKernel = m_gpu.m_acquisitionKernelList[GpuHandler::Sum];
+        cl_kernel sumKernel = m_gpu.acquisitionKernelList[GpuHandler::Sum];
 
         cacheDeviceInfo();
         const size_t localSize = m_sumLocalSize;
@@ -732,8 +737,6 @@ int Compute::sum(const FloatVector &input, float *sumValue)
 
             if ((dInput != nullptr) && (dSumValue != nullptr) && m_error == CL_SUCCESS)
             {
-                // Single dispatch: one work-group per localSize-sized chunk, each group's partial
-                // sum lands in its own slot of dSumValue, instead of a chunked host round-trip loop.
                 m_error = clEnqueueWriteBuffer(m_queue,
                                                dInput,
                                                CL_FALSE,
@@ -812,8 +815,8 @@ int Compute::complexMultiplyThenFftToSlot(const ComplexFloatVector &input1,
     m_slotStates[slotIndex] = SlotInvalid;
 
     auto length = static_cast<unsigned int>(input1.size());
-    if ((m_queue != nullptr) && m_gpu.m_acquisitionKernelList.size() > GpuHandler::FFTScale &&
-        m_gpu.m_acquisitionKernelList.size() > GpuHandler::ComplexMultiplier)
+    if ((m_queue != nullptr) && m_gpu.acquisitionKernelList.size() > GpuHandler::FFTScale &&
+        m_gpu.acquisitionKernelList.size() > GpuHandler::ComplexMultiplier)
     {
         cacheDeviceInfo();
 
@@ -940,7 +943,7 @@ int Compute::complexMultiplyResidentThenFftThenAbsoluteBatch(const ComplexFloatV
         return -1;
     }
 
-    if ((m_queue == nullptr) || m_gpu.m_acquisitionKernelList.size() <= GpuHandler::ComplexMultiplierBatch)
+    if ((m_queue == nullptr) || m_gpu.acquisitionKernelList.size() <= GpuHandler::ComplexMultiplierBatch)
     {
         return -1;
     }
@@ -1014,7 +1017,7 @@ int Compute::complexMultiplyResidentThenFftThenAbsoluteBatch(const ComplexFloatV
         return -1;
     }
 
-    cl_kernel batchKernel = m_gpu.m_acquisitionKernelList[GpuHandler::ComplexMultiplierBatch];
+    cl_kernel batchKernel = m_gpu.acquisitionKernelList[GpuHandler::ComplexMultiplierBatch];
     m_error = clSetKernelArg(batchKernel, 0, sizeof(cl_mem), reinterpret_cast<const void *>(&dA));
     m_error |= clSetKernelArg(batchKernel, 1, sizeof(cl_mem), reinterpret_cast<const void *>(&m_slotPoolBuffer));
     m_error |= clSetKernelArg(batchKernel, 2, sizeof(cl_mem), reinterpret_cast<const void *>(&work));
@@ -1039,7 +1042,7 @@ int Compute::complexMultiplyResidentThenFftThenAbsoluteBatch(const ComplexFloatV
         return -1;
     }
 
-    cl_kernel absoluteKernel = m_gpu.m_acquisitionKernelList[GpuHandler::Absolute];
+    cl_kernel absoluteKernel = m_gpu.acquisitionKernelList[GpuHandler::Absolute];
     size_t absoluteLocalSize = m_absoluteLocalSize;
     unsigned int absolutePointsPerGroup = clampPointsPerGroup(static_cast<unsigned int>(absoluteLocalSize), length);
     absoluteLocalSize =

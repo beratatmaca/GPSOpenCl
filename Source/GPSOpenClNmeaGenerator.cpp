@@ -108,12 +108,12 @@ std::string NmeaGenerator::generateGgga(const ReceiverPvtSolution &solution, int
     char timeBuf[16];
     std::snprintf(timeBuf, sizeof(timeBuf), "%02d%02d%05.2f", hours, minutes, seconds);
 
-    const std::string latStr = formatLatitude(solution.geodeticPosition.latitude);
-    const std::string lonStr = formatLongitude(solution.geodeticPosition.longitude);
+    const std::string latStr = formatLatitude(solution.geodeticPosition.latitudeDeg);
+    const std::string lonStr = formatLongitude(solution.geodeticPosition.longitudeDeg);
 
     const int fixQuality = solution.isValid ? 1 : 0;
     const double hdop = solution.isValid ? solution.dopHDOP : 99.9;
-    const double alt = solution.isValid ? solution.geodeticPosition.altitude : 0.0;
+    const double alt = solution.isValid ? solution.geodeticPosition.altitudeMeters : 0.0;
 
     char body[256];
     std::snprintf(body,
@@ -140,8 +140,8 @@ std::string NmeaGenerator::generateGprmc(const ReceiverPvtSolution &solution, do
     std::snprintf(timeBuf, sizeof(timeBuf), "%02d%02d%05.2f", hours, minutes, seconds);
 
     const char status = solution.isValid ? 'A' : 'V';
-    const std::string latStr = formatLatitude(solution.geodeticPosition.latitude);
-    const std::string lonStr = formatLongitude(solution.geodeticPosition.longitude);
+    const std::string latStr = formatLatitude(solution.geodeticPosition.latitudeDeg);
+    const std::string lonStr = formatLongitude(solution.geodeticPosition.longitudeDeg);
 
     char dateBuf[8] = "000000";
     {
@@ -227,7 +227,7 @@ std::vector<std::string> NmeaGenerator::generateGpgsvSentences(const Channel cha
             float peakRatio = 0.0f;
             channels[i].getAcquisitionResults(&peakIdx, &peakVal, &peakFreq, &meanVal, &cn0, &peakRatio);
 
-            SvInfo sv{channels[i].m_svId, static_cast<int>(std::round(cn0)), false, 0.0, 0.0};
+            SvInfo sv{channels[i].svId, static_cast<int>(std::round(cn0)), false, 0.0, 0.0};
 
             if (rxPositionValid && channels[i].hasCompleteEphemeris())
             {

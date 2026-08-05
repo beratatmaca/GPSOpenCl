@@ -43,6 +43,7 @@ add_executable(
     NavigationDecoderTest.cpp
     ApplicationTest.cpp
     BoundedQueueTest.cpp
+    TelemetryJsonTest.cpp
     PVTSolverTest.cpp
     NmeaGeneratorTest.cpp
     AtmosphericCorrectionsTest.cpp

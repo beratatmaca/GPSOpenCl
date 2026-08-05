@@ -16,11 +16,9 @@
 
 namespace GPSOpenCl
 {
-/** @brief Telemetry sink that publishes via ZMQ PUB socket. publish() copies onto a bounded queue
- *   and returns immediately; a dedicated background thread does the actual zmq_send calls, so a
- *   blocked or slow subscriber never stalls the calling (real-time) thread. The queue drops new
- *   messages once full rather than blocking the caller, matching the project's "Sink path may
- *   drop" design. */
+/** @brief Telemetry sink publishing via a ZMQ PUB socket. publish() copies onto a bounded queue
+ *   and returns. A background thread does the zmq_send calls. A slow subscriber never stalls the
+ *   caller. A full queue drops new messages. This matches the sink may drop design. */
 class ZmqSink : public Sink
 {
   public:
@@ -40,8 +38,8 @@ class ZmqSink : public Sink
     void publish(const std::string &identifier, const void *data, size_t size) override;
 
   private:
-    /** @brief Background thread body: drains the queue and sends each message over ZMQ until
-     *   the queue is finished and empty. */
+    /** @brief Background thread body. Drains the queue and sends each message. Stops when the
+     *   queue finishes empty. */
     void senderThreadLoop();
 
     std::string m_endpoint;               ///< ZMQ endpoint URI.

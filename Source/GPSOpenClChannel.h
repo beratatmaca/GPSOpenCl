@@ -20,9 +20,9 @@ namespace GPSOpenCl
 /** @brief Per-channel acquisition/tracking lifecycle state. */
 enum class ChannelState : uint8_t
 {
-    Acquiring = 0,     ///< No tracking loop running; eligible for acquisition search.
+    Acquiring = 0,     ///< No tracking loop running, eligible for acquisition.
     Confirming = 1,    ///< Tracking loop running, lock not yet confirmed.
-    Tracking = 2       ///< Confirmed lock; feeds nav decode and PVT.
+    Tracking = 2       ///< Confirmed lock, feeds nav decode and PVT.
 };
 
 /** @brief Per-satellite acquisition, tracking, and navigation channel. */
@@ -36,14 +36,14 @@ class Channel
     Channel(Channel &&) = delete;
     Channel &operator=(Channel &&) = delete;
 
-    int m_svId;    ///< Satellite vehicle ID.
+    int svId{0};    ///< Satellite vehicle ID.
 
     /** @brief Store acquisition peak metrics.
      *  @param peakValue     Correlation peak magnitude.
      *  @param peakIndex     Code phase of peak (samples).
-     *  @param peakFrequency Doppler at peak (Hz).
+     *  @param peakFrequencyHz Doppler at peak (Hz).
      *  @param meanValue     Mean correlation level. */
-    void insertAcquisitionMetrics(float peakValue, int peakIndex, float peakFrequency, float meanValue);
+    void insertAcquisitionMetrics(float peakValue, int peakIndex, float peakFrequencyHz, float meanValue);
 
     /** @brief Reset accumulated acquisition metrics before a fresh search sweep. */
     void resetAcquisitionMetrics();
@@ -51,24 +51,24 @@ class Channel
     /** @brief Retrieve acquisition results.
      *  @param peakIndex     Code phase of peak (output).
      *  @param peakValue     Peak magnitude (output).
-     *  @param peakFrequency Doppler at peak (output).
+     *  @param peakFrequencyHz Doppler at peak (output).
      *  @param meanValue     Mean level (output).
-     *  @param cno           C/N0 (output).
+     *  @param cnoDbHz           C/N0 (output).
      *  @param peakRatio     Peak-to-mean ratio (output). */
     void getAcquisitionResults(int *peakIndex,
                                float *peakValue,
-                               float *peakFrequency,
+                               float *peakFrequencyHz,
                                float *meanValue,
-                               float *cno,
+                               float *cnoDbHz,
                                float *peakRatio) const;
 
-    /** @brief Enable or disable tracking correlator timing samples; applied to the tracking engine
-     *   when it is (re)created, so a disabled profiler costs no clock reads per block.
+    /** @brief Enable or disable correlator timing samples. Applied when the tracking engine is
+     *   created. A disabled profiler costs no clock reads.
      *  @param enabled True to take timing samples. */
     void setTrackingTimingEnabled(bool enabled) { m_trackingTimingEnabled = enabled; }
 
-    /** @brief Get the tracking engine's current output snapshot, for publishing from the consumer
-     *   thread after the tracking barrier instead of inside the tracking workers.
+    /** @brief Get the current tracking output snapshot. Published from the consumer thread after
+     *   the barrier. Never from inside the tracking workers.
      *  @param out Output struct, filled on success.
      *  @return True if a tracking engine exists. */
     bool getTrackingOutput(TrackingOutput *out) const;
@@ -91,19 +91,16 @@ class Channel
      *  @param input IQ samples. */
     void trackBlock(const ComplexFloatVector &input);
 
-    /** @brief Get accumulated prompt correlator history. This and every other history accessor
-     *   (getCodePhaseAtSample, getCumulativeDriftChipsAtSample, getLastSubframeStartSample) must be
-     *   called from the consumer thread only: the histories carry no locking, tracking workers
-     *   append to them inside the trackSatellites() barrier, and updateNavigation() compacts them
-     *   on the consumer thread, rebasing every sample index by the dropped count.
+    /** @brief Get accumulated prompt correlator history. Call history accessors from the consumer
+     *   thread only. The histories carry no locking. Workers append inside the trackSatellites()
+     *   barrier. The consumer thread compacts them in updateNavigation().
      *  @return Prompt I/Q history. */
     const ComplexFloatVector &getPromptHistory() const { return m_promptHistory; }
 
-    /** @brief Get this channel's most recent block's tracking sub-stage timings (ms), or zero if not
-     *   currently tracking.
-     *  @param earlyLatePromptGenMs Output: earlyLatePromptGen duration (ms).
-     *  @param numericOscillatorMs  Output: numericOscillator duration (ms).
-     *  @param accumulatorMs        Output: accumulator duration (ms). */
+    /** @brief Get the latest tracking sub-stage timings (ms). Zero if not currently tracking.
+     *  @param earlyLatePromptGenMs Output, earlyLatePromptGen duration (ms).
+     *  @param numericOscillatorMs  Output, numericOscillator duration (ms).
+     *  @param accumulatorMs        Output, accumulator duration (ms). */
     void
         getTrackingSubStageTimings(float *earlyLatePromptGenMs, float *numericOscillatorMs, float *accumulatorMs) const;
 
@@ -158,23 +155,19 @@ class Channel
      *  @return True if complete. */
     bool hasCompleteEphemeris() const;
 
-    /** @brief Merge one decoded subframe into an accumulated ephemeris. Subframes 1-3 copy their
-     *   payload fields and set their bit in seenSubframeMask; subframes 4-5 only refresh the
-     *   svId/tow/subframeId header. Enforces broadcast data-set consistency: the just-decoded
-     *   subframe is taken as the current data set, and any previously accumulated subframe whose
-     *   issue-of-data disagrees (IODC low 8 bits vs IODE from subframes 2/3, per IS-GPS-200
-     *   20.3.3.4.1) has its mask bit cleared so a satellite mid-upload cannot silently mix orbit
-     *   and clock parameters from two different data sets.
+    /** @brief Merge one decoded subframe into accumulated ephemeris. Subframes 1-3 copy payload
+     *   and set their mask bit. Subframes 4-5 only refresh the header. Issue of data must match
+     *   across accumulated subframes. Mismatched subframes get their mask bit cleared. See
+     *   IS-GPS-200 20.3.3.4.1, IODC low bits vs IODE. A satellite mid-upload cannot mix data sets.
      *  @param decoded          Freshly decoded subframe.
      *  @param accumulated      Accumulated ephemeris, updated in place.
      *  @param seenSubframeMask Bitmask of accumulated subframes (bit N-1 = subframe N), updated. */
     static void mergeSubframe(const GpsEphemeris &decoded, GpsEphemeris &accumulated, uint8_t &seenSubframeMask);
 
-    /** @brief Take (and clear) console output describing state transitions since the last call.
-     *   Transitions are detected inside trackBlock() on a tracking worker thread, where a blocking
-     *   stdout write would stall the whole tracking barrier, so the message is buffered here and
-     *   drained by the consumer thread after the barrier.
-     *  @return Buffered transition message(s), empty if none. */
+    /** @brief Take and clear buffered state transition messages. Transitions are detected on a
+     *   worker thread. A blocking stdout write would stall the barrier. So messages wait here for
+     *   the consumer thread.
+     *  @return Buffered transition messages, empty if none. */
     std::string takePendingStateMessage()
     {
         std::string message = std::move(m_pendingStateMessage);
@@ -194,23 +187,20 @@ class Channel
      *  @return Sample index. */
     size_t getLastSubframeStartSample() const { return m_lastSubframeStartSample; }
 
-    /** @brief Get the DLL residual code phase recorded alongside a given prompt history sample, for
-     *   sub-millisecond transmit-time precision. Indices align 1:1 with getPromptHistory().
-     *  @param sampleIndex Index into the prompt/code-phase history.
+    /** @brief Get the DLL code phase at a prompt sample. Gives sub-millisecond transmit time
+     *   precision. Indices align one to one with getPromptHistory().
+     *  @param sampleIndex Index into the code phase history.
      *  @return Code phase (chips, 0-1023), or 0 if out of range. */
     float getCodePhaseAtSample(size_t sampleIndex) const
     {
         return (sampleIndex < m_codePhaseHistory.size()) ? m_codePhaseHistory[sampleIndex] : 0.0f;
     }
 
-    /** @brief Get the unwrapped, cumulative sub-chip DLL drift accumulated up to a given prompt
-     *   history sample, relative to tracking start. Unlike a raw code-phase difference between two
-     *   samples, this cannot alias: it is built from a running sum of per-block deltas that are each
-     *   individually far too small (bounded by one block's worth of Doppler-driven code-rate change)
-     *   to wrap past the +-511.5 chip disambiguation window, so subtracting two samples recovers the
-     *   true accumulated drift over any interval, no matter how long. Indices align 1:1 with
-     *   getPromptHistory().
-     *  @param sampleIndex Index into the prompt/code-phase history.
+    /** @brief Get unwrapped cumulative DLL drift at a sample. Relative to tracking start. Built
+     *   from a running sum of per-block deltas. Each delta is far too small to wrap. The wrap
+     *   window is +-511.5 chips. So differencing two samples never aliases. Indices align one to
+     *   one with getPromptHistory().
+     *  @param sampleIndex Index into the drift history.
      *  @return Cumulative drift (chips), or 0 if out of range. */
     float getCumulativeDriftChipsAtSample(size_t sampleIndex) const
     {
@@ -228,59 +218,54 @@ class Channel
     /** @brief Reset navigation decode state without reinitializing the tracking loop. */
     void resetNavigationState();
 
-    /** @brief Discard prompt/code-phase/drift history older than the navigation decoder and PVT
-     *   solver can still reference, rebasing every sample-indexed field by the dropped count. Only
-     *   whole nav bits (multiples of 20 samples) are dropped so the bit-sync phase stays valid.
-     *   Bounds per-channel memory and keeps the history vectors inside their initial reservation,
-     *   so the tracking path never reallocates them. */
+    /** @brief Discard history the decoders no longer need. Rebases sample indexed fields by the
+     *   dropped count. Drops whole nav bits only, 20 samples each. The bit sync phase stays valid.
+     *   History stays inside its initial reservation. The tracking path never reallocates it. */
     void compactNavigationHistory();
 
     /** @brief Evaluate lock quality and drive channel state transitions. */
     void evaluateLockState();
 
-    mutable std::mutex m_acquisitionMetricsMutex;    ///< Guards the acquisition metric fields below
-                                                     ///< against concurrent access from the background
-                                                     ///< acquisition worker thread and the consumer
-                                                     ///< thread's telemetry export.
-    int m_acquisitionPeakIndex;                      ///< Peak code phase (samples).
-    float m_acquisitionPeakValue;                    ///< Peak correlation magnitude.
-    float m_acquisitionPeakFrequency;                ///< Doppler at peak (Hz).
-    float m_acquisitionMeanValue;                    ///< Mean correlation level.
-    float m_acquisitionCN0;                          ///< Carrier-to-noise ratio (dB-Hz).
-    float m_acquisitionPeakRatio;                    ///< Peak-to-mean ratio.
-    float m_acquisitionProcessingGain;               ///< Processing gain (dB).
+    mutable std::mutex m_acquisitionMetricsMutex;        ///< Guards the acquisition metric fields below
+                                                         ///< against worker/consumer races.
+    int m_acquisitionPeakIndex{0};                       ///< Peak code phase (samples).
+    float m_acquisitionPeakValue{0.0f};                  ///< Peak correlation magnitude.
+    float m_acquisitionPeakFrequencyHz{0.0f};            ///< Doppler at peak (Hz).
+    float m_acquisitionMeanValue{0.0f};                  ///< Mean correlation level.
+    float m_acquisitionCN0{0.0f};                        ///< Carrier-to-noise ratio (dB-Hz).
+    float m_acquisitionPeakRatio{0.0f};                  ///< Peak-to-mean ratio.
+    float m_acquisitionProcessingGain;                   ///< Processing gain (dB).
 
-    bool m_isAcquired;                               ///< True if satellite acquired.
-    std::unique_ptr<Tracking> m_tracking;            ///< Tracking engine instance.
-    std::shared_ptr<Sink> m_sink{nullptr};           ///< Telemetry sink.
-    ComplexFloatVector m_promptHistory;              ///< Prompt correlator history.
-    std::vector<float> m_codePhaseHistory;    ///< DLL residual code phase per prompt sample, 1:1 with m_promptHistory.
+    bool m_isAcquired{false};                            ///< True if satellite acquired.
+    std::unique_ptr<Tracking> m_tracking;                ///< Tracking engine instance.
+    std::shared_ptr<Sink> m_sink{nullptr};               ///< Telemetry sink.
+    ComplexFloatVector m_promptHistory;                  ///< Prompt correlator history.
+    std::vector<float> m_codePhaseHistory;               ///< DLL residual code phase per prompt sample, aligned with
+                                                         ///< m_promptHistory.
     std::vector<float> m_cumulativeDriftChipsHistory;    ///< Unwrapped running-sum drift per prompt sample,
-                                                         ///< 1:1 with m_promptHistory; see
-                                                         ///< getCumulativeDriftChipsAtSample().
-    float m_lastRawCodePhaseForDrift;                    ///< Previous block's raw (wrapped) code phase, for the
-                                                         ///< per-block delta feeding m_cumulativeDriftChipsHistory.
-    float m_cumulativeDriftChips;                        ///< Running sum backing m_cumulativeDriftChipsHistory.
+                                                         ///< aligned with m_promptHistory.
+    float m_lastRawCodePhaseForDrift{0.0f};              ///< Previous block raw code phase, for the drift delta.
+    float m_cumulativeDriftChips{0.0f};                  ///< Running sum backing m_cumulativeDriftChipsHistory.
 
-    int m_bitSyncPhase;    ///< Locked sample-level bit-edge phase, 0-19 (-1 = not yet synced).
-    std::vector<size_t> m_bitSyncSearchPositions;    ///< Per-candidate-phase search cursor while unsynced.
-    size_t m_navBitOffset;                           ///< Current nav bit offset.
-    uint8_t m_seenSubframeMask;                      ///< Bitmask of decoded subframes.
-    GpsEphemeris m_accumulatedEphemeris;             ///< Accumulated ephemeris data.
-    double m_lastSubframeTow;                        ///< Last subframe TOW (s).
-    size_t m_lastSubframeStartSample;                ///< Last subframe start sample.
+    int m_bitSyncPhase{-1};    ///< Locked sample-level bit-edge phase, 0-19 (-1 = not yet synced).
+    std::vector<size_t> m_bitSyncSearchPositions;     ///< Per-candidate-phase search cursor while unsynced.
+    size_t m_navBitOffset{0};                         ///< Current nav bit offset.
+    uint8_t m_seenSubframeMask{0};                    ///< Bitmask of decoded subframes.
+    GpsEphemeris m_accumulatedEphemeris;              ///< Accumulated ephemeris data.
+    double m_lastSubframeTow{0.0};                    ///< Last subframe TOW (s).
+    size_t m_lastSubframeStartSample{0};              ///< Last subframe start sample.
 
-    ChannelState m_state;                            ///< Current lifecycle state.
-    std::string m_pendingStateMessage;               ///< Buffered state-transition console output.
-    int m_confirmProgress;                           ///< Leaky-bucket progress toward confirming lock.
-    int m_lossProgress;                              ///< Leaky-bucket progress toward declaring lock lost.
-    int m_blocksInConfirming;                        ///< Blocks spent in Confirming since last acquisition.
-    bool m_trackingTimingEnabled{true};              ///< Whether the tracking engine takes timing samples.
-    float m_carrierLockThreshold;                    ///< Min carrier lock indicator to count as locked.
-    float m_codeLockRatioTolerance;                  ///< Max |codeLockRatio - 1.0| to count as locked.
-    int m_confirmDebounceBlocks;                     ///< Good blocks needed to confirm tracking.
-    int m_confirmTimeoutBlocks;                      ///< Blocks before abandoning an unconfirmed acquisition.
-    int m_lossDebounceBlocks;                        ///< Bad blocks needed to declare lock lost.
+    ChannelState m_state{ChannelState::Acquiring};    ///< Current lifecycle state.
+    std::string m_pendingStateMessage;                ///< Buffered state-transition console output.
+    int m_confirmProgress{0};                         ///< Leaky-bucket progress toward confirming lock.
+    int m_lossProgress{0};                            ///< Leaky-bucket progress toward declaring lock lost.
+    int m_blocksInConfirming{0};                      ///< Blocks spent in Confirming since last acquisition.
+    bool m_trackingTimingEnabled{true};               ///< Whether the tracking engine takes timing samples.
+    float m_carrierLockThreshold{0.3f};               ///< Min carrier lock indicator to count as locked.
+    float m_codeLockRatioTolerance{0.3f};             ///< Max |codeLockRatio - 1.0| to count as locked.
+    int m_confirmDebounceBlocks{50};                  ///< Good blocks needed to confirm tracking.
+    int m_confirmTimeoutBlocks{200};                  ///< Blocks before abandoning an unconfirmed acquisition.
+    int m_lossDebounceBlocks{200};                    ///< Bad blocks needed to declare lock lost.
 };
 }
 

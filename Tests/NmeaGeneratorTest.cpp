@@ -37,9 +37,9 @@ TEST(NmeaGeneratorTest, GenerateGgga)
 {
     GPSOpenCl::ReceiverPvtSolution sol;
     sol.isValid = true;
-    sol.geodeticPosition.latitude = 48.1173;
-    sol.geodeticPosition.longitude = 11.5167;
-    sol.geodeticPosition.altitude = 545.4;
+    sol.geodeticPosition.latitudeDeg = 48.1173;
+    sol.geodeticPosition.longitudeDeg = 11.5167;
+    sol.geodeticPosition.altitudeMeters = 545.4;
     sol.dopHDOP = 0.9;
 
     std::string ggga = GPSOpenCl::NmeaGenerator::generateGgga(sol, 8, 45319.0);
@@ -53,8 +53,8 @@ TEST(NmeaGeneratorTest, GenerateGprmc)
 {
     GPSOpenCl::ReceiverPvtSolution sol;
     sol.isValid = true;
-    sol.geodeticPosition.latitude = 48.1173;
-    sol.geodeticPosition.longitude = 11.5167;
+    sol.geodeticPosition.latitudeDeg = 48.1173;
+    sol.geodeticPosition.longitudeDeg = 11.5167;
 
     std::string gprmc = GPSOpenCl::NmeaGenerator::generateGprmc(sol, 45319.0);
 
@@ -62,12 +62,11 @@ TEST(NmeaGeneratorTest, GenerateGprmc)
     struct tm utcTm{};
     gmtime_r(&now, &utcTm);
     char expectedDate[8];
-    std::snprintf(expectedDate, sizeof(expectedDate), "%02d%02d%02d", utcTm.tm_mday, utcTm.tm_mon + 1,
-                  utcTm.tm_year % 100);
+    std::snprintf(
+        expectedDate, sizeof(expectedDate), "%02d%02d%02d", utcTm.tm_mday, utcTm.tm_mon + 1, utcTm.tm_year % 100);
 
     EXPECT_EQ(gprmc.substr(0, 7), "$GPRMC,");
-    std::string expectedFragment =
-        std::string(",A,4807.0380,N,01131.0020,E,0.0,0.0,") + expectedDate + ",,,A*";
+    std::string expectedFragment = std::string(",A,4807.0380,N,01131.0020,E,0.0,0.0,") + expectedDate + ",,,A*";
     EXPECT_TRUE(gprmc.find(expectedFragment) != std::string::npos) << "gprmc was: " << gprmc;
 }
 
@@ -92,7 +91,7 @@ TEST(NmeaGeneratorTest, GenerateGpgsvOutputSplitsIntoMultipleMessages)
     GPSOpenCl::Channel channels[GPSOpenCl::GPS_CA_SV_COUNT];
     for (int i = 0; i < 5; i++)
     {
-        channels[i].m_svId = i + 1;
+        channels[i].svId = i + 1;
         channels[i].setAcquired(true);
         channels[i].insertAcquisitionMetrics(10.0f, 0, 1000.0f, 1.0f);
     }

@@ -42,7 +42,7 @@ AtmosphericOutput AtmosphericCorrections::computeCorrections(int svId,
     params.beta[3] = input.beta3;
 
     out.ionoDelayMeters = klobucharIonosphericDelay(rxPos, elDeg, azDeg, gpsTimeSec, params);
-    out.tropoDelayMeters = saastamoinenTroposphericDelay(rxPos.altitude, elDeg);
+    out.tropoDelayMeters = saastamoinenTroposphericDelay(rxPos.altitudeMeters, elDeg);
 
     return out;
 }
@@ -70,8 +70,8 @@ void AtmosphericCorrections::computeAzimuthElevation(const GeodeticPosition &rxG
                                                      double &azimuthDeg,
                                                      double &elevationDeg)
 {
-    const double latRad = rxGeodeticPos.latitude * M_PI / 180.0;
-    const double lonRad = rxGeodeticPos.longitude * M_PI / 180.0;
+    const double latRad = rxGeodeticPos.latitudeDeg * M_PI / 180.0;
+    const double lonRad = rxGeodeticPos.longitudeDeg * M_PI / 180.0;
 
     const double dx = satEcef.x - rxEcef.x;
     const double dy = satEcef.y - rxEcef.y;
@@ -102,10 +102,9 @@ double AtmosphericCorrections::klobucharIonosphericDelay(const GeodeticPosition 
                                                          double gpsTimeSec,
                                                          const KlobucharParams &params)
 {
-    const double c = 299792458.0;
 
-    const double phiU = rxPos.latitude / 180.0;
-    const double lambdaU = rxPos.longitude / 180.0;
+    const double phiU = rxPos.latitudeDeg / 180.0;
+    const double lambdaU = rxPos.longitudeDeg / 180.0;
     double el = elevationDeg / 180.0;
     const double az = azimuthDeg * M_PI / 180.0;
 
@@ -129,27 +128,27 @@ double AtmosphericCorrections::klobucharIonosphericDelay(const GeodeticPosition 
 
     const double F = 1.0 + (16.0 * std::pow(0.53 - el, 3));
 
-    double PER = params.beta[0] + (params.beta[1] * phiM) + (params.beta[2] * phiM * phiM) +
+    double per = params.beta[0] + (params.beta[1] * phiM) + (params.beta[2] * phiM * phiM) +
         (params.beta[3] * phiM * phiM * phiM);
-    PER = std::max(PER, 72000.0);
+    per = std::max(per, 72000.0);
 
-    double AMP = params.alpha[0] + (params.alpha[1] * phiM) + (params.alpha[2] * phiM * phiM) +
+    double amp = params.alpha[0] + (params.alpha[1] * phiM) + (params.alpha[2] * phiM * phiM) +
         (params.alpha[3] * phiM * phiM * phiM);
-    AMP = std::max(AMP, 0.0);
+    amp = std::max(amp, 0.0);
 
-    const double x = 2.0 * M_PI * (tLocal - 50400.0) / PER;
+    const double x = 2.0 * M_PI * (tLocal - 50400.0) / per;
 
     double delaySec = 0.0;
     if (std::fabs(x) < 1.57)
     {
-        delaySec = F * (5e-9 + AMP * (1.0 - (x * x) / 2.0 + (x * x * x * x) / 24.0));
+        delaySec = F * (5e-9 + amp * (1.0 - (x * x) / 2.0 + (x * x * x * x) / 24.0));
     }
     else
     {
         delaySec = F * 5e-9;
     }
 
-    return delaySec * c;
+    return delaySec * SPEED_OF_LIGHT_M_S;
 }
 
 double AtmosphericCorrections::saastamoinenTroposphericDelay(double rxAltitudeMeters, double elevationDeg)

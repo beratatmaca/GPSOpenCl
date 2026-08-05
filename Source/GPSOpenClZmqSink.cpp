@@ -27,6 +27,7 @@ void ensureIpcDirectoryExists(const std::string &endpoint)
 ZmqSink::ZmqSink(std::string endpoint) : m_endpoint(std::move(endpoint)), m_queue(1024)
 {
 #ifdef GPSOPENCL_ENABLE_ZMQ
+    // NOLINTNEXTLINE(cppcoreguidelines-prefer-member-initializer): zmq_ctx_new only exists when ZMQ is compiled in
     m_context = zmq_ctx_new();
 
     if (m_context != nullptr)

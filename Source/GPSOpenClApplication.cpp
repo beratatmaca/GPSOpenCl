@@ -37,7 +37,7 @@ bool computeElapsedSecondsSincePromptStart(size_t promptCount, size_t startSampl
 
 Application::Application(const Settings::Configuration &conf)
     : m_acquisition(nullptr),
-      m_tracking(nullptr),
+
       m_configuration(conf),
       m_code(nullptr),
       m_gpu(std::make_unique<Compute>()),
@@ -103,14 +103,14 @@ void Application::finalizeAcquisition(int channelIndex, double correlateMs)
     const float dopplerHz = -peakFreq;
 
     std::ostringstream acqMsg;
-    acqMsg << "SV ID " << channel.m_svId << " C/N0 : " << cn0 << "\n";
+    acqMsg << "SV ID " << channel.svId << " C/N0 : " << cn0 << "\n";
 
     const auto acquisitionCn0ThresholdDbHz =
         static_cast<float>(m_configuration.acquisitionInput.acquisitionCn0ThresholdDbHz);
     if (cn0 >= acquisitionCn0ThresholdDbHz)
     {
         channel.setAcquired(true);
-        const int numberOfSamplesPerCode = m_configuration.rawDataSettings.numberOfSamplesPerCode;
+        const int numberOfSamplesPerCode = m_configuration.acquisitionInput.numberOfSamplesPerCode;
         auto numSamplesFloat = static_cast<float>(numberOfSamplesPerCode);
         const int reflectedPeakIndex =
             (numberOfSamplesPerCode > 0) ? ((numberOfSamplesPerCode - peakIndex) % numberOfSamplesPerCode) : 0;
@@ -118,7 +118,7 @@ void Application::finalizeAcquisition(int channelIndex, double correlateMs)
             ? (static_cast<float>(reflectedPeakIndex) / numSamplesFloat) * GPS_CA_CODE_LENGTH
             : 0.0f;
         channel.initTracking(m_configuration, dopplerHz, codePhaseChips);
-        acqMsg << "--> SV ID " << channel.m_svId << " ACQUIRED! (C/N0: " << cn0 << " dB-Hz, Doppler: " << dopplerHz
+        acqMsg << "--> SV ID " << channel.svId << " ACQUIRED! (C/N0: " << cn0 << " dB-Hz, Doppler: " << dopplerHz
                << " Hz)" << '\n';
     }
 
@@ -132,12 +132,12 @@ void Application::finalizeAcquisition(int channelIndex, double correlateMs)
         AcquisitionOutput acqOut;
         acqOut.structVersion = STRUCT_VERSION_2;
         acqOut.correlateMs = correlateMs;
-        acqOut.prn = channel.m_svId;
+        acqOut.prn = channel.svId;
         acqOut.peakIndex = peakIndex;
         acqOut.peakValue = static_cast<double>(peakValue);
-        acqOut.peakFrequency = static_cast<double>(dopplerHz);
+        acqOut.peakFrequencyHz = static_cast<double>(dopplerHz);
         acqOut.meanValue = static_cast<double>(meanValue);
-        acqOut.cno = static_cast<double>(cn0);
+        acqOut.cnoDbHz = static_cast<double>(cn0);
         acqOut.peakRatio = static_cast<double>(peakRatio);
         acqOut.isAcquired = channel.isAcquired() ? 1 : 0;
         m_sink->publishAcquisitionOutput(acqOut);
@@ -231,7 +231,7 @@ void Application::trackFromCursor(const ComplexFloatVector &input)
         }
         catch (const std::exception &e)
         {
-            std::cerr << "Channel " << m_channels[i].m_svId << " tracking threw: " << e.what() << '\n';
+            std::cerr << "Channel " << m_channels[i].svId << " tracking threw: " << e.what() << '\n';
         }
     }
 }
@@ -419,9 +419,9 @@ std::vector<Application::ChannelDiagnostic> Application::getChannelDiagnostics()
         }
 
         ChannelDiagnostic diag;
-        diag.svId = channel.m_svId;
+        diag.svId = channel.svId;
         diag.bitSyncPhase = channel.getBitSyncPhase();
-        diag.subframeStartTow = channel.getLastSubframeTow() - 6.0;
+        diag.subframeStartTow = channel.getLastSubframeTow() - GPS_NAV_SUBFRAME_DURATION_SEC;
         diag.subframeStartSample = channel.getLastSubframeStartSample();
         diag.codePhaseAtSubframeStart = channel.getCodePhaseAtSample(diag.subframeStartSample);
         if (!computeElapsedSecondsSincePromptStart(promptCount, diag.subframeStartSample, diag.elapsedSeconds))
@@ -440,7 +440,7 @@ double Application::computeTransmitTime(double subframeStartTow,
                                         double driftChips,
                                         double anchorChipsRaw)
 {
-    const double anchorChips = anchorChipsRaw - 1023.0;
+    const double anchorChips = anchorChipsRaw - GPS_CA_CODE_LENGTH;
     return subframeStartTow + elapsedSeconds + ((driftChips + anchorChips) / GPS_CA_CODE_FREQUENCY_HZ);
 }
 
@@ -456,13 +456,14 @@ void Application::snapTransmitTimesToMedianArrival(std::vector<double> &transmit
     std::sort(sortedArrivals.begin(), sortedArrivals.end());
     const double medianArrival = sortedArrivals[sortedArrivals.size() / 2];
 
+    constexpr double snapGuardBandCodePeriods = 0.25;
     for (size_t i = 0; i < transmitTimes.size(); i++)
     {
-        const double offsetMs = (medianArrival - impliedArrivals[i]) * 1000.0;
-        const double wholeMs = std::round(offsetMs);
-        if (wholeMs != 0.0 && std::fabs(offsetMs - wholeMs) < 0.25)
+        const double offsetCodePeriods = (medianArrival - impliedArrivals[i]) / GPS_CA_CODE_PERIOD_SEC;
+        const double wholePeriods = std::round(offsetCodePeriods);
+        if (wholePeriods != 0.0 && std::fabs(offsetCodePeriods - wholePeriods) < snapGuardBandCodePeriods)
         {
-            transmitTimes[i] += wholeMs * 0.001;
+            transmitTimes[i] += wholePeriods * GPS_CA_CODE_PERIOD_SEC;
         }
     }
 }
@@ -472,8 +473,6 @@ bool Application::computeNavigationSolution(ReceiverPvtSolution &solution)
     std::vector<GpsEphemeris> ephemerides;
     std::vector<double> transmitTimes;
     std::vector<int> activePrns;
-
-    const double c = 299792458.0;
 
     for (auto &channel : m_channels)
     {
@@ -490,27 +489,24 @@ bool Application::computeNavigationSolution(ReceiverPvtSolution &solution)
             continue;
         }
 
-        // A healthy channel re-anchors every 6 s subframe. A channel whose decodes keep failing
-        // (weak signal) accumulates pseudorange error against its stale anchor, so exclude it until
-        // it re-anchors.
         const double maxAnchorAgeSeconds = 15.0;
         if (elapsedSeconds > maxAnchorAgeSeconds)
         {
             continue;
         }
 
-        const double subframeStartTow = channel.getLastSubframeTow() - 6.0;
+        const double subframeStartTow = channel.getLastSubframeTow() - GPS_NAV_SUBFRAME_DURATION_SEC;
 
         const double driftChips = static_cast<double>(channel.getCumulativeDriftChipsAtSample(promptCount - 1)) -
             static_cast<double>(channel.getCumulativeDriftChipsAtSample(subframeStartSample));
 
-        const double anchorChipsRaw = static_cast<double>(channel.getCodePhaseAtSample(subframeStartSample));
+        const auto anchorChipsRaw = static_cast<double>(channel.getCodePhaseAtSample(subframeStartSample));
 
         const double transmitTime = computeTransmitTime(subframeStartTow, elapsedSeconds, driftChips, anchorChipsRaw);
 
         ephemerides.push_back(channel.getAccumulatedEphemeris());
         transmitTimes.push_back(transmitTime);
-        activePrns.push_back(channel.m_svId);
+        activePrns.push_back(channel.svId);
     }
 
     if (ephemerides.size() < 4)
@@ -541,8 +537,8 @@ bool Application::computeNavigationSolution(ReceiverPvtSolution &solution)
             const double dx = orbit.position.x - referenceEcef.x;
             const double dy = orbit.position.y - referenceEcef.y;
             const double dz = orbit.position.z - referenceEcef.z;
-            impliedArrivals[i] =
-                transmitTimes[i] - orbit.clockBias + (std::sqrt((dx * dx) + (dy * dy) + (dz * dz)) / c);
+            impliedArrivals[i] = transmitTimes[i] - orbit.clockBias +
+                (std::sqrt((dx * dx) + (dy * dy) + (dz * dz)) / SPEED_OF_LIGHT_M_S);
         }
 
         snapTransmitTimesToMedianArrival(transmitTimes, impliedArrivals);
@@ -552,7 +548,7 @@ bool Application::computeNavigationSolution(ReceiverPvtSolution &solution)
     std::vector<double> measuredPseudoranges(transmitTimes.size());
     for (size_t i = 0; i < transmitTimes.size(); i++)
     {
-        measuredPseudoranges[i] = (receiverTime - transmitTimes[i]) * c;
+        measuredPseudoranges[i] = (receiverTime - transmitTimes[i]) * SPEED_OF_LIGHT_M_S;
     }
 
     m_lastPseudorangeSamples.clear();
@@ -575,9 +571,9 @@ bool Application::computeNavigationSolution(ReceiverPvtSolution &solution)
         consoleOut << "=============================================" << '\n';
         consoleOut << "ECEF Position : X = " << solution.ecefPosition.x << " m, Y = " << solution.ecefPosition.y
                    << " m, Z = " << solution.ecefPosition.z << " m" << '\n';
-        consoleOut << "WGS-84 Position: Lat = " << solution.geodeticPosition.latitude
-                   << " deg, Lon = " << solution.geodeticPosition.longitude
-                   << " deg, Alt = " << solution.geodeticPosition.altitude << " m" << '\n';
+        consoleOut << "WGS-84 Position: Lat = " << solution.geodeticPosition.latitudeDeg
+                   << " deg, Lon = " << solution.geodeticPosition.longitudeDeg
+                   << " deg, Alt = " << solution.geodeticPosition.altitudeMeters << " m" << '\n';
         consoleOut << "DOP Metrics    : HDOP = " << solution.dopHDOP << ", PDOP = " << solution.dopPDOP
                    << ", VDOP = " << solution.dopVDOP << '\n';
 
@@ -795,11 +791,11 @@ void Application::exportTelemetryJson(const std::string &filepath,
     snapshot->gsaSentence = gsaSentence;
 
     snapshot->satellites.reserve(GPS_CA_SV_COUNT);
-    for (int i = 0; i < GPS_CA_SV_COUNT; i++)
+    for (auto &channel : m_channels)
     {
         SatelliteTelemetry sat;
-        sat.prn = m_channels[i].m_svId;
-        sat.acquired = m_channels[i].isAcquired();
+        sat.prn = channel.svId;
+        sat.acquired = channel.isAcquired();
         if (sat.acquired)
         {
             snapshot->activePrns.push_back(sat.prn);
@@ -811,21 +807,21 @@ void Application::exportTelemetryJson(const std::string &filepath,
         float meanVal = 0.0f;
         float cn0 = 0.0f;
         float peakRatio = 0.0f;
-        m_channels[i].getAcquisitionResults(&peakIndex, &peakVal, &peakFreq, &meanVal, &cn0, &peakRatio);
+        channel.getAcquisitionResults(&peakIndex, &peakVal, &peakFreq, &meanVal, &cn0, &peakRatio);
         sat.cn0 = cn0;
         sat.doppler = -peakFreq;
 
-        if (solution.isValid && m_channels[i].hasCompleteEphemeris())
+        if (solution.isValid && channel.hasCompleteEphemeris())
         {
-            const size_t promptCount = m_channels[i].getPromptHistory().size();
-            const size_t subframeStartSample = m_channels[i].getLastSubframeStartSample();
+            const size_t promptCount = channel.getPromptHistory().size();
+            const size_t subframeStartSample = channel.getLastSubframeStartSample();
             if (promptCount >= subframeStartSample)
             {
-                const double subframeStartTow = m_channels[i].getLastSubframeTow() - 6.0;
+                const double subframeStartTow = channel.getLastSubframeTow() - GPS_NAV_SUBFRAME_DURATION_SEC;
                 const double elapsedSeconds =
                     static_cast<double>(promptCount - subframeStartSample) * GPS_CA_CODE_PERIOD_SEC;
                 sat.transmitTime = subframeStartTow + elapsedSeconds;
-                sat.ephemeris = m_channels[i].getAccumulatedEphemeris();
+                sat.ephemeris = channel.getAccumulatedEphemeris();
                 sat.computeOrbit = true;
             }
         }
@@ -854,9 +850,9 @@ std::string Application::formatTelemetryJson(const TelemetrySnapshot &snapshot)
 
     file << "  \"pvt\": {\n";
     file << "    \"valid\": " << (solution.isValid ? "true" : "false") << ",\n";
-    file << "    \"latitude\": " << json(solution.geodeticPosition.latitude) << ",\n";
-    file << "    \"longitude\": " << json(solution.geodeticPosition.longitude) << ",\n";
-    file << "    \"altitude\": " << json(solution.geodeticPosition.altitude) << ",\n";
+    file << "    \"latitude\": " << json(solution.geodeticPosition.latitudeDeg) << ",\n";
+    file << "    \"longitude\": " << json(solution.geodeticPosition.longitudeDeg) << ",\n";
+    file << "    \"altitude\": " << json(solution.geodeticPosition.altitudeMeters) << ",\n";
     file << "    \"ecef_x\": " << json(solution.ecefPosition.x) << ",\n";
     file << "    \"ecef_y\": " << json(solution.ecefPosition.y) << ",\n";
     file << "    \"ecef_z\": " << json(solution.ecefPosition.z) << ",\n";
@@ -906,7 +902,7 @@ void Application::initializeChannels()
 {
     for (int i = 0; i < GPS_CA_SV_COUNT; i++)
     {
-        m_channels[i].m_svId = i + 1;
+        m_channels[i].svId = i + 1;
         m_channels[i].setTrackingTimingEnabled(m_profiler.isEnabled());
     }
 }

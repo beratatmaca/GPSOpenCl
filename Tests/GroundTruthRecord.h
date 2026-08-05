@@ -26,7 +26,7 @@ struct GroundTruthRecord
     double gpsTimeSec;                ///< GPS time-of-week (s) of this exact sample.
     int32_t gpsWeek;                  ///< GPS week number.
     int32_t prn;                      ///< Satellite PRN number.
-    double trueDopplerHz;             ///< True carrier Doppler (Hz), same sign convention as Tracking::m_carrFreq.
+    double trueDopplerHz;             ///< True carrier Doppler (Hz), same sign convention as Tracking::m_carrFreqHz.
     double trueCodePhaseChips;        ///< True code phase (chips, 0..1023), exact at sampleIndex.
     int32_t trueDataBit;              ///< True navigation data bit (+-1), exact at sampleIndex.
     double truePseudorangeM;          ///< True pseudorange (m), includes ionospheric delay.

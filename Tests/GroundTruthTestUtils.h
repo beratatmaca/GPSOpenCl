@@ -77,4 +77,4 @@ inline bool readGroundTruth(const std::string &path, std::vector<GroundTruthReco
 }
 }
 
-#endif //! INCLUDED_GPSOPENCLTEST_GROUNDTRUTHTESTUTILS_H
+#endif    //! INCLUDED_GPSOPENCLTEST_GROUNDTRUTHTESTUTILS_H

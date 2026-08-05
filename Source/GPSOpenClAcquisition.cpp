@@ -11,10 +11,10 @@ Acquisition::Acquisition(const Settings::Configuration &conf)
       m_numberOfFreqencyBins(((m_inputConfig.acquisitionDopplerMaximum - m_inputConfig.acquisitionDopplerMinimum) /
                               m_inputConfig.acquisitionDopplerSearchRange) +
                              1),
-      m_initialFrequency(static_cast<float>(m_inputConfig.acquisitionDopplerMinimum)),
-      m_freqSpacing(static_cast<float>(m_inputConfig.acquisitionDopplerSearchRange)),
+      m_initialFrequencyHz(static_cast<float>(m_inputConfig.acquisitionDopplerMinimum)),
+      m_freqSpacingHz(static_cast<float>(m_inputConfig.acquisitionDopplerSearchRange)),
       m_length(m_inputConfig.numberOfSamplesPerCode),
-      m_samplingFrequency(static_cast<float>(m_inputConfig.samplingFrequency)),
+      m_samplingFrequencyHz(static_cast<float>(m_inputConfig.samplingFrequencyHz)),
       m_reuseFactor(computeReuseFactor())
 {
 
@@ -26,10 +26,10 @@ Acquisition::Acquisition(const AcquisitionInput &input)
       m_numberOfFreqencyBins(((m_inputConfig.acquisitionDopplerMaximum - m_inputConfig.acquisitionDopplerMinimum) /
                               m_inputConfig.acquisitionDopplerSearchRange) +
                              1),
-      m_initialFrequency(static_cast<float>(m_inputConfig.acquisitionDopplerMinimum)),
-      m_freqSpacing(static_cast<float>(m_inputConfig.acquisitionDopplerSearchRange)),
+      m_initialFrequencyHz(static_cast<float>(m_inputConfig.acquisitionDopplerMinimum)),
+      m_freqSpacingHz(static_cast<float>(m_inputConfig.acquisitionDopplerSearchRange)),
       m_length(m_inputConfig.numberOfSamplesPerCode),
-      m_samplingFrequency(static_cast<float>(m_inputConfig.samplingFrequency)),
+      m_samplingFrequencyHz(static_cast<float>(m_inputConfig.samplingFrequencyHz)),
       m_reuseFactor(computeReuseFactor())
 {
 
@@ -40,28 +40,28 @@ Acquisition::~Acquisition() = default;
 
 void Acquisition::createDopplerSearchTable()
 {
-    float frequency = m_initialFrequency;
+    float frequency = m_initialFrequencyHz;
 
     for (int freqBin = 0; freqBin < m_numberOfFreqencyBins; freqBin++)
     {
         m_dopplerSearch.emplace_back();
 
-        exp(m_length, frequency, m_samplingFrequency, 0.0, &m_dopplerSearch[freqBin]);
+        exp(m_length, frequency, m_samplingFrequencyHz, 0.0, &m_dopplerSearch[freqBin]);
 
-        frequency += m_freqSpacing;
+        frequency += m_freqSpacingHz;
     }
 }
 
-void Acquisition::exp(int length, float frequency, float samplingRate, float phaseOffset, ComplexFloatVector *output)
+void Acquisition::exp(int length, float frequency, float samplingRateHz, float phaseOffset, ComplexFloatVector *output)
 {
-    const float pi = std::acos(-1);
+    const float pi = std::acos(-1.0f);
     std::complex<float> value;
 
     for (int sample = 0; sample < length; sample++)
     {
         auto sampleFloating = static_cast<float>(sample);
-        value =
-            std::exp(IMAGINARY_UNIT * ((2.0f * pi * frequency * sampleFloating * (1.0f / samplingRate)) + phaseOffset));
+        value = std::exp(IMAGINARY_UNIT *
+                         ((2.0f * pi * frequency * sampleFloating * (1.0f / samplingRateHz)) + phaseOffset));
         output->push_back(value);
     }
 }
@@ -70,13 +70,13 @@ int Acquisition::computeReuseFactor() const
 {
     const int perBinFallback = std::max(m_numberOfFreqencyBins, 1);
 
-    if (m_length <= 0 || m_freqSpacing <= 0.0f || m_samplingFrequency <= 0.0f)
+    if (m_length <= 0 || m_freqSpacingHz <= 0.0f || m_samplingFrequencyHz <= 0.0f)
     {
         return perBinFallback;
     }
 
-    const float binResolution = m_samplingFrequency / static_cast<float>(m_length);
-    const float ratio = binResolution / m_freqSpacing;
+    const float binResolution = m_samplingFrequencyHz / static_cast<float>(m_length);
+    const float ratio = binResolution / m_freqSpacingHz;
     const int rounded = static_cast<int>(std::lround(ratio));
 
     if (rounded < 1 || rounded > m_numberOfFreqencyBins || std::fabs(ratio - static_cast<float>(rounded)) > 1e-3f)
@@ -91,15 +91,11 @@ void Acquisition::correlate(const ComplexFloatVector &input, Compute *gpu, Code 
 {
     acqChannel->resetAcquisitionMetrics();
 
-    // Reference spectra: one forward FFT per residue class (see computeReuseFactor), left resident
-    // in a compute slot (device buffer on GPU). Every other bin's carrier-wiped spectrum is derived
-    // from its residue's slot via an exact circular shift applied as an index offset during the
-    // multiply, so per-bin work involves no host-side shift, copy, or re-upload.
     for (int r = 0; r < m_reuseFactor; r++)
     {
         if (gpu->complexMultiplyThenFftToSlot(input, m_dopplerSearch[r], Compute::FFTForward, r) != 0)
         {
-            std::cerr << "Acquisition::correlate: forward FFT failed for SV " << acqChannel->m_svId
+            std::cerr << "Acquisition::correlate: forward FFT failed for SV " << acqChannel->svId
                       << " (samplesPerCode=" << m_length
                       << "; requires a power of two, otherwise the compute device reported an error); skipping "
                          "correlation"
@@ -108,11 +104,11 @@ void Acquisition::correlate(const ComplexFloatVector &input, Compute *gpu, Code 
         }
     }
 
-    const ComplexFloatVector &codeSpectrum = code->m_upsampledFreqDomainCaCode[acqChannel->m_svId - 1];
+    const ComplexFloatVector &codeSpectrum = code->upsampledFreqDomainCaCode[acqChannel->svId - 1];
 
     float bestPeakValue = 0.0f;
     int bestPeakIndex = 0;
-    float bestPeakFrequency = m_initialFrequency;
+    float bestPeakFrequency = m_initialFrequencyHz;
     float meanValueTotal = 0.0f;
     bool haveResult = false;
 
@@ -142,8 +138,6 @@ void Acquisition::correlate(const ComplexFloatVector &input, Compute *gpu, Code 
         }
     };
 
-    // One GPU submission covering every Doppler bin with a single readback; falls back to one
-    // round-trip per bin when the device or slot state cannot support the batch.
     std::vector<std::pair<int, int>> binSlotShift(static_cast<size_t>(m_numberOfFreqencyBins));
     for (int freqBin = 0; freqBin < m_numberOfFreqencyBins; freqBin++)
     {
@@ -155,17 +149,17 @@ void Acquisition::correlate(const ComplexFloatVector &input, Compute *gpu, Code 
             codeSpectrum, binSlotShift, Compute::FFTInverse, &batchAbs) == 0 &&
         batchAbs.size() == static_cast<size_t>(m_numberOfFreqencyBins) * static_cast<size_t>(m_length))
     {
-        float frequency = m_initialFrequency;
+        float frequency = m_initialFrequencyHz;
         for (int freqBin = 0; freqBin < m_numberOfFreqencyBins; freqBin++)
         {
             const float *binValues = batchAbs.data() + (static_cast<size_t>(freqBin) * static_cast<size_t>(m_length));
             accumulateBin(binValues, static_cast<size_t>(m_length), frequency);
-            frequency += m_freqSpacing;
+            frequency += m_freqSpacingHz;
         }
     }
     else
     {
-        float frequency = m_initialFrequency;
+        float frequency = m_initialFrequencyHz;
         FloatVector correlationAbs;
         for (int freqBin = 0; freqBin < m_numberOfFreqencyBins; freqBin++)
         {
@@ -176,19 +170,19 @@ void Acquisition::correlate(const ComplexFloatVector &input, Compute *gpu, Code 
                     codeSpectrum, residue, shift, Compute::FFTInverse, &correlationAbs) != 0)
             {
                 std::cerr << "Acquisition::correlate: inverse FFT failed (samplesPerCode=" << m_length
-                          << " is not a power of two); skipping correlation for SV " << acqChannel->m_svId << '\n';
+                          << " is not a power of two); skipping correlation for SV " << acqChannel->svId << '\n';
                 return;
             }
 
             if (correlationAbs.empty())
             {
-                std::cerr << "Acquisition::correlate: empty correlation result; skipping SV " << acqChannel->m_svId
+                std::cerr << "Acquisition::correlate: empty correlation result; skipping SV " << acqChannel->svId
                           << '\n';
                 return;
             }
 
             accumulateBin(correlationAbs.data(), correlationAbs.size(), frequency);
-            frequency += m_freqSpacing;
+            frequency += m_freqSpacingHz;
         }
     }
 

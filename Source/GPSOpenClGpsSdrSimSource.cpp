@@ -41,10 +41,10 @@ bool GpsSdrSimSource::initialize(const SourceInput &input)
     m_ctrlFd = open(m_ctrlFifoPath.c_str(), O_RDWR | O_NONBLOCK);
 
     m_samplesPerBlock = 4096;
-    if (m_inputConfig.samplingRate > 0.0)
+    if (m_inputConfig.samplingRateHz > 0.0)
     {
         m_samplesPerBlock = static_cast<size_t>(
-            std::round(m_inputConfig.samplingRate / (GPS_CA_CODE_FREQUENCY_HZ / GPS_CA_CODE_LENGTH)));
+            std::round(m_inputConfig.samplingRateHz / (GPS_CA_CODE_FREQUENCY_HZ / GPS_CA_CODE_LENGTH)));
     }
     m_byteBuffer.resize(m_samplesPerBlock * 2 * sizeof(int8_t));
 
@@ -129,7 +129,7 @@ bool GpsSdrSimSource::readBlock(ComplexFloatVector &outputSamples, SourceOutput 
 
     telemetry.structVersion = STRUCT_VERSION_1;
     telemetry.blockIndex = m_blockIndex;
-    telemetry.timestamp = static_cast<double>(m_blockIndex) * 0.001;
+    telemetry.timestampSec = static_cast<double>(m_blockIndex) * GPS_CA_CODE_PERIOD_SEC;
     m_blockIndex++;
     telemetry.fifoUnderrunCount = m_underrunCount;
     telemetry.fifoOverrunCount = m_overrunCount;

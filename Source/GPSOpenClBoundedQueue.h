@@ -13,16 +13,17 @@
 
 namespace GPSOpenCl
 {
-/** @brief Thread-safe bounded blocking queue over a fixed ring buffer. Storage is allocated once
- *   at construction, so steady-state push/pop performs no heap allocation per item.
- *  @tparam T Element type; must be default-constructible and movable. */
+/** @brief Thread safe bounded blocking queue over a fixed ring. Storage is allocated once at
+ *   construction. Steady state push and pop never allocate.
+ *  @tparam T Element type, must be default constructible and movable. */
 template<typename T> class BoundedQueue
 {
   public:
     /** @brief Construct with max capacity.
      *  @param maxCapacity Maximum queue size. */
     explicit BoundedQueue(size_t maxCapacity = 16)
-        : m_storage(maxCapacity == 0 ? 1 : maxCapacity), m_maxCapacity(maxCapacity == 0 ? 1 : maxCapacity)
+        : m_storage(maxCapacity == 0 ? 1 : maxCapacity),
+          m_maxCapacity(maxCapacity == 0 ? 1 : maxCapacity)
     {
     }
 
@@ -44,11 +45,10 @@ template<typename T> class BoundedQueue
         return true;
     }
 
-    /** @brief Push an item without blocking; drops it if the queue is full instead of waiting.
-     *   For producers that must never stall on a slow consumer (e.g. telemetry callers on a
-     *   real-time path), matching a "may drop" delivery contract rather than backpressure.
+    /** @brief Push without blocking. A full queue drops the item. For producers that must never
+     *   stall on a slow consumer. Matches a may drop delivery contract.
      *  @param item Item to push.
-     *  @return True if enqueued; false if the queue was full or finished (item is dropped). */
+     *  @return True if enqueued. False when full or finished, item dropped. */
     bool tryPush(T item)
     {
         {
@@ -81,11 +81,10 @@ template<typename T> class BoundedQueue
         return true;
     }
 
-    /** @brief Pop an item without blocking; returns false immediately if the queue is empty instead
-     *   of waiting. For consumers that must never stall waiting on a producer (e.g. draining
-     *   best-effort background results on a real-time path).
+    /** @brief Pop without blocking. An empty queue returns false at once. For consumers that must
+     *   never stall waiting on a producer.
      *  @param item Output item.
-     *  @return True if an item was popped; false if the queue was empty. */
+     *  @return True if an item was popped. False when the queue was empty. */
     bool tryPop(T &item)
     {
         {
@@ -110,7 +109,7 @@ template<typename T> class BoundedQueue
     }
 
   private:
-    /** @brief Append an item at the ring tail; caller holds the mutex.
+    /** @brief Append an item at the ring tail. Caller holds the mutex.
      *  @param item Item to append. */
     void enqueueLocked(T &&item)
     {
@@ -118,7 +117,7 @@ template<typename T> class BoundedQueue
         m_count++;
     }
 
-    /** @brief Remove the item at the ring head; caller holds the mutex.
+    /** @brief Remove the item at the ring head. Caller holds the mutex.
      *  @param item Output item. */
     void dequeueLocked(T &item)
     {
