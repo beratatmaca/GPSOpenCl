@@ -156,6 +156,7 @@ class PVTSolver
         4180483.4,
         851798.0,
         4725999.8};    ///< Coarse receiver position estimate (m), seeds the solve and transit-time estimates.
+    bool m_hasValidFix{false};    ///< True once a solve has succeeded; gates the elevation mask.
 };
 }
 

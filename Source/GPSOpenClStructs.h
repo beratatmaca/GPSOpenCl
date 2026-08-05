@@ -145,9 +145,15 @@ struct PvtSolverInput
 {
     uint32_t structVersion{STRUCT_VERSION_1};    ///< Struct version tag.
     uint32_t minSatellites{4};                   ///< Min satellites for solution.
-    double maxPseudorangeErrMeters{100.0};       ///< Max pseudorange error (m).
+    double maxPseudorangeErrMeters{30.0};        ///< Max converged residual (m) before the fix is
+                                                 ///< rejected or, with two spare satellites, the
+                                                 ///< worst-residual satellite is excluded.
     int32_t fixOutputIntervalBlocks{
-        100};    ///< Blocks between PVT solve + telemetry output (100 = 10 Hz at 1ms/block).
+        100};                        ///< Blocks between PVT solve + telemetry output (100 = 10 Hz at 1ms/block).
+    int32_t tropoEnabled{1};         ///< Apply Saastamoinen tropospheric correction (0 for simulated
+                                     ///< signals: gps-sdr-sim models ionosphere but no troposphere).
+    double elevationMaskDeg{0.0};    ///< Exclude satellites below this elevation once a fix exists
+                                     ///< (0 disables; enable ~5-10 deg for real-sky operation).
 };
 
 /** @brief PVT solver output with position and DOP. */

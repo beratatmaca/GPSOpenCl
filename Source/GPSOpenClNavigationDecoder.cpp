@@ -571,7 +571,8 @@ bool NavigationDecoder::processPromptSignal(int svId,
                                             std::vector<size_t> &searchPositions,
                                             size_t &bitOffset,
                                             GpsEphemeris &ephem,
-                                            size_t &subframeStartSample)
+                                            size_t &subframeStartSample,
+                                            const FloatVector *codePhaseHistory)
 {
     ephem.svId = svId;
     ephem.isValid = false;
@@ -580,7 +581,8 @@ bool NavigationDecoder::processPromptSignal(int svId,
 
     if (bitSyncPhase >= 0)
     {
-        decoded = decodeAtPhaseOffset(svId, promptHistory, bitSyncPhase, bitOffset, ephem, subframeStartSample);
+        decoded = decodeAtPhaseOffset(
+            svId, promptHistory, bitSyncPhase, bitOffset, ephem, subframeStartSample, codePhaseHistory);
     }
     else
     {
@@ -598,7 +600,8 @@ bool NavigationDecoder::processPromptSignal(int svId,
                                              searchPositions[static_cast<size_t>(phase)],
                                              hadEnoughData,
                                              ephem,
-                                             subframeStartSample);
+                                             subframeStartSample,
+                                             codePhaseHistory);
             if (decoded)
             {
                 bitSyncPhase = phase;
@@ -624,11 +627,12 @@ bool NavigationDecoder::processPromptSignal(int svId,
                                             std::vector<size_t> &searchPositions,
                                             size_t &bitOffset,
                                             NavDecoderOutput &output,
-                                            size_t &subframeStartSample)
+                                            size_t &subframeStartSample,
+                                            const FloatVector *codePhaseHistory)
 {
     GpsEphemeris ephem{};
-    const bool res =
-        processPromptSignal(svId, promptHistory, bitSyncPhase, searchPositions, bitOffset, ephem, subframeStartSample);
+    const bool res = processPromptSignal(
+        svId, promptHistory, bitSyncPhase, searchPositions, bitOffset, ephem, subframeStartSample, codePhaseHistory);
     if (res)
     {
         output = ephemerisToOutput(ephem);

@@ -344,7 +344,8 @@ bool Channel::updateNavigation(NavigationDecoder &decoder)
                                      m_bitSyncSearchPositions,
                                      m_navBitOffset,
                                      ephem,
-                                     subframeStartSample))
+                                     subframeStartSample,
+                                     &m_codePhaseHistory))
     {
         return hasCompleteEphemeris();
     }

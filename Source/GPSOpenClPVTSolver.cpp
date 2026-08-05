@@ -74,7 +74,7 @@ bool invert4x4(const double m[4][4], double inv[4][4])
 }
 }
 
-PVTSolver::PVTSolver() : m_inputConfig{STRUCT_VERSION_1, 4, 100.0}
+PVTSolver::PVTSolver() : m_inputConfig{STRUCT_VERSION_1, 4, 30.0}
 {
 }
 
@@ -269,7 +269,7 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
                               ReceiverPvtSolution &solution)
 {
     solution.isValid = false;
-    const size_t numSats = ephemerides.size();
+    size_t numSats = ephemerides.size();
     if (numSats < static_cast<size_t>(m_inputConfig.minSatellites) || measuredPseudoranges.size() < numSats ||
         transmitTimesSeconds.size() < numSats)
     {
@@ -289,211 +289,292 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
         correctedRanges[i] = measuredPseudoranges[i] + c * orbits[i].clockBias;
     }
 
-    double state[4] = {m_referenceEcef.x, m_referenceEcef.y, m_referenceEcef.z, 0.0};
+    std::vector<double> usedTransmitTimes(transmitTimesSeconds.begin(),
+                                          transmitTimesSeconds.begin() + static_cast<std::ptrdiff_t>(numSats));
 
-    std::vector<std::vector<double>> H(numSats, std::vector<double>(4, 0.0));
-    std::vector<double> deltaRho(numSats, 0.0);
-    std::vector<double> weight(numSats, 1.0);
-
-    for (int iter = 0; iter < 15; iter++)
+    // The elevation mask needs a trustworthy position to judge elevations from, so it engages only
+    // once a previous solve has succeeded; a cold start uses every satellite.
+    if (m_hasValidFix && m_inputConfig.elevationMaskDeg > 0.0)
     {
-
-        const EcefPosition rxEcefEstimate{state[0], state[1], state[2]};
-        const GeodeticPosition rxGeodeticEstimate = ecefToWgs84(rxEcefEstimate);
-
+        size_t keptSats = 0;
         for (size_t i = 0; i < numSats; i++)
         {
-            double dx = orbits[i].position.x - state[0];
-            double dy = orbits[i].position.y - state[1];
-            double dz = orbits[i].position.z - state[2];
-            double range = std::sqrt((dx * dx) + (dy * dy) + (dz * dz));
-
-            const double travelTime = range / c;
-            const double sagnacX = orbits[i].position.x + (omegaE * travelTime * orbits[i].position.y);
-            const double sagnacY = orbits[i].position.y - (omegaE * travelTime * orbits[i].position.x);
-
-            dx = sagnacX - state[0];
-            dy = sagnacY - state[1];
-            dz = orbits[i].position.z - state[2];
-            range = std::sqrt((dx * dx) + (dy * dy) + (dz * dz));
-
-            const AtmosphericOutput atmo = AtmosphericCorrections::computeCorrections(orbits[i].svId,
-                                                                                      rxGeodeticEstimate,
-                                                                                      rxEcefEstimate,
-                                                                                      orbits[i].position,
-                                                                                      transmitTimesSeconds[i],
-                                                                                      m_ionoParams);
-
-            const double predictedPseudorange = range + state[3];
-            deltaRho[i] = (correctedRanges[i] - atmo.ionoDelayMeters - atmo.tropoDelayMeters) - predictedPseudorange;
-
-            H[i][0] = -dx / range;
-            H[i][1] = -dy / range;
-            H[i][2] = -dz / range;
-            H[i][3] = 1.0;
-
-            const double elevRad = std::clamp(atmo.elevationDeg, 5.0, 90.0) * M_PI / 180.0;
-            const double sinElev = std::sin(elevRad);
-            weight[i] = sinElev * sinElev;
+            double azimuthDeg = 0.0;
+            double elevationDeg = 0.0;
+            AtmosphericCorrections::computeAzimuthElevation(
+                m_referenceEcef, orbits[i].position, azimuthDeg, elevationDeg);
+            if (elevationDeg < m_inputConfig.elevationMaskDeg)
+            {
+                continue;
+            }
+            orbits[keptSats] = orbits[i];
+            correctedRanges[keptSats] = correctedRanges[i];
+            usedTransmitTimes[keptSats] = usedTransmitTimes[i];
+            keptSats++;
         }
-
-        double HtH[4][4] = {{0}};
-        double HtHUnweighted[4][4] = {{0}};
-        double HtY[4] = {0};
-
-        for (size_t i = 0; i < numSats; i++)
+        if (keptSats < static_cast<size_t>(m_inputConfig.minSatellites))
         {
-            for (int r = 0; r < 4; r++)
-            {
-                HtY[r] += weight[i] * H[i][r] * deltaRho[i];
-                for (int col = 0; col < 4; col++)
-                {
-                    HtH[r][col] += weight[i] * H[i][r] * H[i][col];
-                    HtHUnweighted[r][col] += H[i][r] * H[i][col];
-                }
-            }
+            return false;
         }
-
-        double A[4][8] = {{0}};
-        for (int r = 0; r < 4; r++)
-        {
-            for (int col = 0; col < 4; col++)
-            {
-                A[r][col] = HtH[r][col];
-            }
-            A[r][r + 4] = 1.0;
-        }
-
-        for (int i = 0; i < 4; i++)
-        {
-            int pivotRow = i;
-            double pivotAbs = std::fabs(A[i][i]);
-            for (int k = i + 1; k < 4; k++)
-            {
-                if (std::fabs(A[k][i]) > pivotAbs)
-                {
-                    pivotAbs = std::fabs(A[k][i]);
-                    pivotRow = k;
-                }
-            }
-            if (pivotAbs < 1e-12)
-            {
-                return false;
-            }
-            if (pivotRow != i)
-            {
-                for (int j = 0; j < 8; j++)
-                {
-                    const double tmp = A[i][j];
-                    A[i][j] = A[pivotRow][j];
-                    A[pivotRow][j] = tmp;
-                }
-            }
-            const double pivot = A[i][i];
-            for (int j = 0; j < 8; j++)
-            {
-                A[i][j] /= pivot;
-            }
-            for (int k = 0; k < 4; k++)
-            {
-                if (k != i)
-                {
-                    const double factor = A[k][i];
-                    for (int j = 0; j < 8; j++)
-                    {
-                        A[k][j] -= factor * A[i][j];
-                    }
-                }
-            }
-        }
-
-        double deltaX[4] = {0};
-        for (int i = 0; i < 4; i++)
-        {
-            for (int j = 0; j < 4; j++)
-            {
-                deltaX[i] += A[i][j + 4] * HtY[j];
-            }
-            state[i] += deltaX[i];
-        }
-
-        const double stepNorm = std::sqrt((deltaX[0] * deltaX[0]) + (deltaX[1] * deltaX[1]) + (deltaX[2] * deltaX[2]));
-        if (stepNorm < 1e-4)
-        {
-            double maxAbsResidual = 0.0;
-            for (size_t i = 0; i < numSats; i++)
-            {
-                const double absResidual = std::fabs(deltaRho[i]);
-                maxAbsResidual = std::max(absResidual, maxAbsResidual);
-            }
-
-            if (maxAbsResidual > m_inputConfig.maxPseudorangeErrMeters)
-            {
-                return false;
-            }
-
-            solution.ecefPosition.x = state[0];
-            solution.ecefPosition.y = state[1];
-            solution.ecefPosition.z = state[2];
-            solution.clockBiasMeters = state[3];
-            solution.clockBiasSeconds = state[3] / c;
-            solution.geodeticPosition = ecefToWgs84(solution.ecefPosition);
-
-            double invHtH[4][4] = {{0}};
-            if (!invert4x4(HtHUnweighted, invHtH))
-            {
-                solution.dopGDOP = 0.0;
-                solution.dopPDOP = 0.0;
-                solution.dopHDOP = 0.0;
-                solution.dopVDOP = 0.0;
-                solution.isValid = true;
-                m_referenceEcef = solution.ecefPosition;
-                return true;
-            }
-
-            solution.dopGDOP = std::sqrt(invHtH[0][0] + invHtH[1][1] + invHtH[2][2] + invHtH[3][3]);
-            solution.dopPDOP = std::sqrt(invHtH[0][0] + invHtH[1][1] + invHtH[2][2]);
-
-            const double latRad = solution.geodeticPosition.latitude * M_PI / 180.0;
-            const double lonRad = solution.geodeticPosition.longitude * M_PI / 180.0;
-            double sinLat = std::sin(latRad);
-            double cosLat = std::cos(latRad);
-            const double sinLon = std::sin(lonRad);
-            double cosLon = std::cos(lonRad);
-
-            const double enuRotation[3][3] = {
-                {-sinLon,          cosLon,           0.0   },
-                {-sinLat * cosLon, -sinLat * sinLon, cosLat},
-                {cosLat * cosLon,  cosLat * sinLon,  sinLat}
-            };
-
-            double enuCovariance[3][3] = {{0.0}};
-            for (int r = 0; r < 3; r++)
-            {
-                for (int col = 0; col < 3; col++)
-                {
-                    double sum = 0.0;
-                    for (int a = 0; a < 3; a++)
-                    {
-                        for (int b = 0; b < 3; b++)
-                        {
-                            sum += enuRotation[r][a] * invHtH[a][b] * enuRotation[col][b];
-                        }
-                    }
-                    enuCovariance[r][col] = sum;
-                }
-            }
-
-            solution.dopHDOP = std::sqrt(enuCovariance[0][0] + enuCovariance[1][1]);
-            solution.dopVDOP = std::sqrt(enuCovariance[2][2]);
-
-            solution.isValid = true;
-            m_referenceEcef = solution.ecefPosition;
-            return true;
-        }
+        numSats = keptSats;
+        orbits.resize(numSats);
+        correctedRanges.resize(numSats);
+        usedTransmitTimes.resize(numSats);
     }
 
-    return false;
+    // Receiver-autonomous outlier rejection: when the converged solution's worst residual exceeds
+    // the gate and spare satellites remain, drop the worst-residual satellite and re-solve, so one
+    // faulted measurement (weak-signal drift, decode fault) cannot poison the whole fix.
+    while (true)
+    {
+        double state[4] = {m_referenceEcef.x, m_referenceEcef.y, m_referenceEcef.z, 0.0};
+
+        std::vector<std::vector<double>> H(numSats, std::vector<double>(4, 0.0));
+        std::vector<double> deltaRho(numSats, 0.0);
+        std::vector<double> weight(numSats, 1.0);
+        bool rejectedSatellite = false;
+
+        for (int iter = 0; iter < 15; iter++)
+        {
+
+            const EcefPosition rxEcefEstimate{state[0], state[1], state[2]};
+            const GeodeticPosition rxGeodeticEstimate = ecefToWgs84(rxEcefEstimate);
+
+            for (size_t i = 0; i < numSats; i++)
+            {
+                double dx = orbits[i].position.x - state[0];
+                double dy = orbits[i].position.y - state[1];
+                double dz = orbits[i].position.z - state[2];
+                double range = std::sqrt((dx * dx) + (dy * dy) + (dz * dz));
+
+                const double travelTime = range / c;
+                const double sagnacX = orbits[i].position.x + (omegaE * travelTime * orbits[i].position.y);
+                const double sagnacY = orbits[i].position.y - (omegaE * travelTime * orbits[i].position.x);
+
+                dx = sagnacX - state[0];
+                dy = sagnacY - state[1];
+                dz = orbits[i].position.z - state[2];
+                range = std::sqrt((dx * dx) + (dy * dy) + (dz * dz));
+
+                const AtmosphericOutput atmo = AtmosphericCorrections::computeCorrections(orbits[i].svId,
+                                                                                          rxGeodeticEstimate,
+                                                                                          rxEcefEstimate,
+                                                                                          orbits[i].position,
+                                                                                          usedTransmitTimes[i],
+                                                                                          m_ionoParams);
+
+                const double predictedPseudorange = range + state[3];
+                const double tropoDelayMeters = (m_inputConfig.tropoEnabled != 0) ? atmo.tropoDelayMeters : 0.0;
+                deltaRho[i] = (correctedRanges[i] - atmo.ionoDelayMeters - tropoDelayMeters) - predictedPseudorange;
+
+                H[i][0] = -dx / range;
+                H[i][1] = -dy / range;
+                H[i][2] = -dz / range;
+                H[i][3] = 1.0;
+
+                const double elevRad = std::clamp(atmo.elevationDeg, 5.0, 90.0) * M_PI / 180.0;
+                const double sinElev = std::sin(elevRad);
+                weight[i] = sinElev * sinElev;
+            }
+
+            double HtH[4][4] = {{0}};
+            double HtHUnweighted[4][4] = {{0}};
+            double HtY[4] = {0};
+
+            for (size_t i = 0; i < numSats; i++)
+            {
+                for (int r = 0; r < 4; r++)
+                {
+                    HtY[r] += weight[i] * H[i][r] * deltaRho[i];
+                    for (int col = 0; col < 4; col++)
+                    {
+                        HtH[r][col] += weight[i] * H[i][r] * H[i][col];
+                        HtHUnweighted[r][col] += H[i][r] * H[i][col];
+                    }
+                }
+            }
+
+            double A[4][8] = {{0}};
+            for (int r = 0; r < 4; r++)
+            {
+                for (int col = 0; col < 4; col++)
+                {
+                    A[r][col] = HtH[r][col];
+                }
+                A[r][r + 4] = 1.0;
+            }
+
+            for (int i = 0; i < 4; i++)
+            {
+                int pivotRow = i;
+                double pivotAbs = std::fabs(A[i][i]);
+                for (int k = i + 1; k < 4; k++)
+                {
+                    if (std::fabs(A[k][i]) > pivotAbs)
+                    {
+                        pivotAbs = std::fabs(A[k][i]);
+                        pivotRow = k;
+                    }
+                }
+                if (pivotAbs < 1e-12)
+                {
+                    return false;
+                }
+                if (pivotRow != i)
+                {
+                    for (int j = 0; j < 8; j++)
+                    {
+                        const double tmp = A[i][j];
+                        A[i][j] = A[pivotRow][j];
+                        A[pivotRow][j] = tmp;
+                    }
+                }
+                const double pivot = A[i][i];
+                for (int j = 0; j < 8; j++)
+                {
+                    A[i][j] /= pivot;
+                }
+                for (int k = 0; k < 4; k++)
+                {
+                    if (k != i)
+                    {
+                        const double factor = A[k][i];
+                        for (int j = 0; j < 8; j++)
+                        {
+                            A[k][j] -= factor * A[i][j];
+                        }
+                    }
+                }
+            }
+
+            double deltaX[4] = {0};
+            for (int i = 0; i < 4; i++)
+            {
+                for (int j = 0; j < 4; j++)
+                {
+                    deltaX[i] += A[i][j + 4] * HtY[j];
+                }
+                state[i] += deltaX[i];
+            }
+
+            const double stepNorm =
+                std::sqrt((deltaX[0] * deltaX[0]) + (deltaX[1] * deltaX[1]) + (deltaX[2] * deltaX[2]));
+            if (stepNorm < 1e-4)
+            {
+                double maxAbsResidual = 0.0;
+                for (size_t i = 0; i < numSats; i++)
+                {
+                    const double absResidual = std::fabs(deltaRho[i]);
+                    maxAbsResidual = std::max(absResidual, maxAbsResidual);
+                }
+
+                if (maxAbsResidual > m_inputConfig.maxPseudorangeErrMeters)
+                {
+                    if (numSats < static_cast<size_t>(m_inputConfig.minSatellites) + 2)
+                    {
+                        return false;
+                    }
+
+                    size_t worst = 0;
+                    for (size_t i = 1; i < numSats; i++)
+                    {
+                        if (std::fabs(deltaRho[i]) > std::fabs(deltaRho[worst]))
+                        {
+                            worst = i;
+                        }
+                    }
+                    orbits.erase(orbits.begin() + static_cast<std::ptrdiff_t>(worst));
+                    correctedRanges.erase(correctedRanges.begin() + static_cast<std::ptrdiff_t>(worst));
+                    usedTransmitTimes.erase(usedTransmitTimes.begin() + static_cast<std::ptrdiff_t>(worst));
+                    numSats--;
+                    rejectedSatellite = true;
+                    break;
+                }
+
+                solution.ecefPosition.x = state[0];
+                solution.ecefPosition.y = state[1];
+                solution.ecefPosition.z = state[2];
+                solution.clockBiasMeters = state[3];
+                solution.clockBiasSeconds = state[3] / c;
+                solution.geodeticPosition = ecefToWgs84(solution.ecefPosition);
+
+                double invHtH[4][4] = {{0}};
+                if (!invert4x4(HtHUnweighted, invHtH))
+                {
+                    solution.dopGDOP = 0.0;
+                    solution.dopPDOP = 0.0;
+                    solution.dopHDOP = 0.0;
+                    solution.dopVDOP = 0.0;
+                    solution.isValid = true;
+                    m_referenceEcef = solution.ecefPosition;
+                    m_hasValidFix = true;
+                    return true;
+                }
+
+                solution.dopGDOP = std::sqrt(invHtH[0][0] + invHtH[1][1] + invHtH[2][2] + invHtH[3][3]);
+                solution.dopPDOP = std::sqrt(invHtH[0][0] + invHtH[1][1] + invHtH[2][2]);
+
+                const double latRad = solution.geodeticPosition.latitude * M_PI / 180.0;
+                const double lonRad = solution.geodeticPosition.longitude * M_PI / 180.0;
+                double sinLat = std::sin(latRad);
+                double cosLat = std::cos(latRad);
+                const double sinLon = std::sin(lonRad);
+                double cosLon = std::cos(lonRad);
+
+                const double enuRotation[3][3] = {
+                    {-sinLon,          cosLon,           0.0   },
+                    {-sinLat * cosLon, -sinLat * sinLon, cosLat},
+                    {cosLat * cosLon,  cosLat * sinLon,  sinLat}
+                };
+
+                double enuCovariance[3][3] = {{0.0}};
+                for (int r = 0; r < 3; r++)
+                {
+                    for (int col = 0; col < 3; col++)
+                    {
+                        double sum = 0.0;
+                        for (int a = 0; a < 3; a++)
+                        {
+                            for (int b = 0; b < 3; b++)
+                            {
+                                sum += enuRotation[r][a] * invHtH[a][b] * enuRotation[col][b];
+                            }
+                        }
+                        enuCovariance[r][col] = sum;
+                    }
+                }
+
+                solution.dopHDOP = std::sqrt(enuCovariance[0][0] + enuCovariance[1][1]);
+                solution.dopVDOP = std::sqrt(enuCovariance[2][2]);
+
+                solution.isValid = true;
+                m_referenceEcef = solution.ecefPosition;
+                m_hasValidFix = true;
+                return true;
+            }
+        }
+
+        if (!rejectedSatellite)
+        {
+            if (numSats < static_cast<size_t>(m_inputConfig.minSatellites) + 2)
+            {
+                return false;
+            }
+
+            size_t worst = 0;
+            for (size_t i = 1; i < numSats; i++)
+            {
+                if (std::fabs(deltaRho[i]) > std::fabs(deltaRho[worst]))
+                {
+                    worst = i;
+                }
+            }
+            orbits.erase(orbits.begin() + static_cast<std::ptrdiff_t>(worst));
+            correctedRanges.erase(correctedRanges.begin() + static_cast<std::ptrdiff_t>(worst));
+            usedTransmitTimes.erase(usedTransmitTimes.begin() + static_cast<std::ptrdiff_t>(worst));
+            numSats--;
+        }
+    }
 }
 
 bool PVTSolver::solvePosition(const std::vector<NavDecoderOutput> &outputs,

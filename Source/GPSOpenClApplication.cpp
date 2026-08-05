@@ -419,6 +419,15 @@ bool Application::computeNavigationSolution(ReceiverPvtSolution &solution)
             continue;
         }
 
+        // A healthy channel re-anchors every 6 s subframe. A channel whose decodes keep failing
+        // (weak signal) accumulates pseudorange error against its stale anchor, so exclude it until
+        // it re-anchors.
+        const double maxAnchorAgeSeconds = 15.0;
+        if (elapsedSeconds > maxAnchorAgeSeconds)
+        {
+            continue;
+        }
+
         const double subframeStartTow = channel.getLastSubframeTow() - 6.0;
 
         const double driftChips = static_cast<double>(channel.getCumulativeDriftChipsAtSample(promptCount - 1)) -
@@ -459,6 +468,38 @@ bool Application::computeNavigationSolution(ReceiverPvtSolution &solution)
     }
 
     const EcefPosition referenceEcef = m_pvtSolver.getReferenceEcef();
+
+    // C/A millisecond-ambiguity resolution: every satellite received the same epoch, so each
+    // transmit time plus its modeled travel time from the reference position must agree across the
+    // constellation to well under a millisecond. A bit-edge attributed one block off in the decoder
+    // shifts a satellite's transmit time by an integer millisecond; snap such outliers back to the
+    // constellation median.
+    {
+        std::vector<double> impliedArrivals(transmitTimes.size());
+        for (size_t i = 0; i < transmitTimes.size(); i++)
+        {
+            const SatelliteOrbit orbit = PVTSolver::computeSatelliteOrbit(ephemerides[i], transmitTimes[i]);
+            const double dx = orbit.position.x - referenceEcef.x;
+            const double dy = orbit.position.y - referenceEcef.y;
+            const double dz = orbit.position.z - referenceEcef.z;
+            impliedArrivals[i] =
+                transmitTimes[i] - orbit.clockBias + (std::sqrt((dx * dx) + (dy * dy) + (dz * dz)) / c);
+        }
+
+        std::vector<double> sortedArrivals = impliedArrivals;
+        std::sort(sortedArrivals.begin(), sortedArrivals.end());
+        const double medianArrival = sortedArrivals[sortedArrivals.size() / 2];
+
+        for (size_t i = 0; i < transmitTimes.size(); i++)
+        {
+            const double offsetMs = (medianArrival - impliedArrivals[i]) * 1000.0;
+            const double wholeMs = std::round(offsetMs);
+            if (wholeMs != 0.0 && std::fabs(offsetMs - wholeMs) < 0.25)
+            {
+                transmitTimes[i] += wholeMs * 0.001;
+            }
+        }
+    }
     const double receiverTime = PVTSolver::computeReceiverTime(ephemerides, transmitTimes, referenceEcef);
 
     std::vector<double> measuredPseudoranges(transmitTimes.size());

@@ -246,6 +246,30 @@ void Settings::updateConfigurationStruct()
             std::cerr << "Invalid FixOutputIntervalBlocks value in config, using default." << '\n';
         }
     }
+
+    if (!m_configurationMap["PvtTropoEnabled"].empty())
+    {
+        try
+        {
+            configuration.pvtSolverInput.tropoEnabled = std::stoi(m_configurationMap["PvtTropoEnabled"]);
+        }
+        catch (const std::exception &)
+        {
+            std::cerr << "Invalid PvtTropoEnabled value in config, using default." << '\n';
+        }
+    }
+
+    if (!m_configurationMap["PvtElevationMaskDeg"].empty())
+    {
+        try
+        {
+            configuration.pvtSolverInput.elevationMaskDeg = std::stod(m_configurationMap["PvtElevationMaskDeg"]);
+        }
+        catch (const std::exception &)
+        {
+            std::cerr << "Invalid PvtElevationMaskDeg value in config, using default." << '\n';
+        }
+    }
 }
 
 std::string Settings::trim(const std::string &str, const std::string &whitespace = " \t")

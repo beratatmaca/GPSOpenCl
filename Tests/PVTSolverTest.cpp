@@ -84,7 +84,7 @@ TEST(PVTSolverTest, MinSatellitesGateRejectsBelowThreshold)
     EXPECT_FALSE(solution.isValid);
 }
 
-TEST(PVTSolverTest, MaxPseudorangeErrGateRejectsOutlierWithRedundantSatellites)
+TEST(PVTSolverTest, OutlierWithMinimalRedundancyYieldsNoFix)
 {
     GPSOpenCl::EcefPosition rxEcef;
     rxEcef.x = 4239828.0;
@@ -144,6 +144,9 @@ TEST(PVTSolverTest, MaxPseudorangeErrGateRejectsOutlierWithRedundantSatellites)
     GPSOpenCl::ReceiverPvtSolution cleanSolution;
     EXPECT_TRUE(solver.solvePosition(ephemerides, measuredRanges, transmitTimes, cleanSolution));
 
+    // With four unknowns and five satellites there is a single degree of redundancy: a fault can be
+    // detected but not attributed to a satellite, so the solver must reject the fix rather than
+    // guess. Identification and recovery require at least two spare satellites.
     measuredRanges[2] += 10000.0;
     GPSOpenCl::ReceiverPvtSolution corruptedSolution;
     bool success = solver.solvePosition(ephemerides, measuredRanges, transmitTimes, corruptedSolution);
@@ -296,7 +299,7 @@ TEST(PVTSolverTest, ElevationWeightingTrustsHighElevationSatelliteMoreThanLowEle
         << "Test satellite geometry does not produce enough elevation spread to be meaningful. "
         << "high=" << elevations[highIdx] << " low=" << elevations[lowIdx];
 
-    const double injectedBiasMeters = 80.0;
+    const double injectedBiasMeters = 20.0;
     std::vector<double> transmitTimes(numSats, 0.0);
 
     std::vector<double> rangesHighCorrupted = measuredRanges;
@@ -317,7 +320,7 @@ TEST(PVTSolverTest, ElevationWeightingTrustsHighElevationSatelliteMoreThanLowEle
                                 std::pow(solutionLow.ecefPosition.y - rxEcef.y, 2) +
                                 std::pow(solutionLow.ecefPosition.z - rxEcef.z, 2));
 
-    EXPECT_GT(errorHigh - errorLow, 30.0)
+    EXPECT_GT(errorHigh - errorLow, 7.5)
         << "Expected an equal-size range error on the high-elevation (more trusted) satellite to pull "
         << "the weighted solution noticeably further off than the same-size error on the low-elevation "
         << "satellite -- errorHigh=" << errorHigh << "m errorLow=" << errorLow << "m";
