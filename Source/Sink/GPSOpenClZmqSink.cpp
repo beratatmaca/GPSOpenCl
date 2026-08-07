@@ -26,8 +26,7 @@ void ensureIpcDirectoryExists(const std::string &endpoint)
 
 ZmqSink::ZmqSink(std::string endpoint) : m_endpoint(std::move(endpoint)), m_queue(1024)
 {
-#ifdef GPSOPENCL_ENABLE_ZMQ
-    // NOLINTNEXTLINE(cppcoreguidelines-prefer-member-initializer): zmq_ctx_new only exists when ZMQ is compiled in
+    // NOLINTNEXTLINE(cppcoreguidelines-prefer-member-initializer): zmq_ctx_new must run in the body
     m_context = zmq_ctx_new();
 
     if (m_context != nullptr)
@@ -46,7 +45,6 @@ ZmqSink::ZmqSink(std::string endpoint) : m_endpoint(std::move(endpoint)), m_queu
             }
         }
     }
-#endif
     m_senderThread = std::thread([this] { senderThreadLoop(); });
 }
 
@@ -57,7 +55,6 @@ ZmqSink::~ZmqSink()
     {
         m_senderThread.join();
     }
-#ifdef GPSOPENCL_ENABLE_ZMQ
     if (m_publisher != nullptr)
     {
         zmq_close(m_publisher);
@@ -66,7 +63,6 @@ ZmqSink::~ZmqSink()
     {
         zmq_ctx_destroy(m_context);
     }
-#endif
 }
 
 void ZmqSink::publish(const std::string &identifier, const void *data, size_t size)
@@ -84,7 +80,6 @@ void ZmqSink::senderThreadLoop()
     SinkMessage message;
     while (m_queue.pop(message))
     {
-#ifdef GPSOPENCL_ENABLE_ZMQ
         if (m_publisher == nullptr)
         {
             continue;
@@ -101,7 +96,6 @@ void ZmqSink::senderThreadLoop()
         {
             std::cerr << "ZmqSink: data frame send failed: " << zmq_strerror(zmq_errno()) << '\n';
         }
-#endif
     }
 }
 }

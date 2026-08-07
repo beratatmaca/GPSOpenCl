@@ -10,7 +10,6 @@
 #include "Input/GPSOpenClGpsSdrSimSource.hpp"
 #include "Sink/GPSOpenClFileSink.hpp"
 #include "Sink/GPSOpenClSink.hpp"
-#include "Sink/GPSOpenClZmqSink.hpp"
 
 using namespace GPSOpenCl;
 
@@ -136,13 +135,6 @@ TEST(FileSinkTest, WritesLengthPrefixedRecordsReadableByTheDashboardParser)
 TEST(FileSinkTest, UnwritablePathIsHandledWithoutCrashing)
 {
     FileSink sink("/nonexistent_gpsopencl_dir/wire.log");
-    SourceOutput srcOut{};
-    sink.publishSourceOutput(srcOut);
-}
-
-TEST(ZmqSinkTest, FailedBindDropsMessagesWithoutHangingOrCrashing)
-{
-    ZmqSink sink("bogus-transport://nowhere");
     SourceOutput srcOut{};
     sink.publishSourceOutput(srcOut);
 }

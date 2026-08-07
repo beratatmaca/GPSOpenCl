@@ -5,6 +5,7 @@
  *  @brief Abstract telemetry output interface and implementations.
  */
 
+#include "Common/GPSOpenClEndian.hpp"
 #include "Common/GPSOpenClStructs.hpp"
 #include <cstddef>
 #include <cstdint>
@@ -12,6 +13,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <tuple>
 #include <vector>
 
 namespace GPSOpenCl
@@ -80,69 +82,50 @@ class Sink
 
     /** @brief Publish SourceOutput telemetry.
      *  @param out Source output struct. */
-    void publishSourceOutput(const SourceOutput &out)
-    {
-        const std::lock_guard<std::mutex> lock(m_publishMutex);
-        publish("SourceOutput", &out, sizeof(out));
-    }
+    void publishSourceOutput(const SourceOutput &out) { publishStruct("SourceOutput", out); }
 
     /** @brief Publish AcquisitionOutput telemetry.
      *  @param out Acquisition output struct. */
-    void publishAcquisitionOutput(const AcquisitionOutput &out)
-    {
-        const std::lock_guard<std::mutex> lock(m_publishMutex);
-        publish("AcquisitionOutput", &out, sizeof(out));
-    }
+    void publishAcquisitionOutput(const AcquisitionOutput &out) { publishStruct("AcquisitionOutput", out); }
 
     /** @brief Publish TrackingOutput telemetry.
      *  @param out Tracking output struct. */
-    void publishTrackingOutput(const TrackingOutput &out)
-    {
-        const std::lock_guard<std::mutex> lock(m_publishMutex);
-        publish("TrackingOutput", &out, sizeof(out));
-    }
+    void publishTrackingOutput(const TrackingOutput &out) { publishStruct("TrackingOutput", out); }
 
     /** @brief Publish NavDecoderOutput telemetry.
      *  @param out Nav decoder output struct. */
-    void publishNavDecoderOutput(const NavDecoderOutput &out)
-    {
-        const std::lock_guard<std::mutex> lock(m_publishMutex);
-        publish("NavDecoderOutput", &out, sizeof(out));
-    }
+    void publishNavDecoderOutput(const NavDecoderOutput &out) { publishStruct("NavDecoderOutput", out); }
 
     /** @brief Publish PvtSolverOutput telemetry.
      *  @param out PVT solver output struct. */
-    void publishPvtSolverOutput(const PvtSolverOutput &out)
-    {
-        const std::lock_guard<std::mutex> lock(m_publishMutex);
-        publish("PvtSolverOutput", &out, sizeof(out));
-    }
+    void publishPvtSolverOutput(const PvtSolverOutput &out) { publishStruct("PvtSolverOutput", out); }
 
     /** @brief Publish AtmosphericOutput telemetry.
      *  @param out Atmospheric output struct. */
-    void publishAtmosphericOutput(const AtmosphericOutput &out)
-    {
-        const std::lock_guard<std::mutex> lock(m_publishMutex);
-        publish("AtmosphericOutput", &out, sizeof(out));
-    }
+    void publishAtmosphericOutput(const AtmosphericOutput &out) { publishStruct("AtmosphericOutput", out); }
 
     /** @brief Publish NmeaGeneratorOutput telemetry.
      *  @param out NMEA output struct. */
-    void publishNmeaGeneratorOutput(const NmeaGeneratorOutput &out)
-    {
-        const std::lock_guard<std::mutex> lock(m_publishMutex);
-        publish("NmeaGeneratorOutput", &out, sizeof(out));
-    }
+    void publishNmeaGeneratorOutput(const NmeaGeneratorOutput &out) { publishStruct("NmeaGeneratorOutput", out); }
 
     /** @brief Publish ProfilerOutput telemetry.
      *  @param out Profiler output struct. */
-    void publishProfilerOutput(const ProfilerOutput &out)
-    {
-        const std::lock_guard<std::mutex> lock(m_publishMutex);
-        publish("ProfilerOutput", &out, sizeof(out));
-    }
+    void publishProfilerOutput(const ProfilerOutput &out) { publishStruct("ProfilerOutput", out); }
 
   private:
+    /** @brief Convert a wire struct to little-endian and publish it under one identifier. Every
+     *   publishXxxOutput() overload above funnels through here, so the endian conversion and
+     *   locking exist in exactly one place.
+     *  @param identifier Topic/module name.
+     *  @param out        Wire struct to publish. */
+    template<typename T> void publishStruct(const char *identifier, const T &out)
+    {
+        T wireCopy = out;
+        std::apply([](auto &...fields) { swapFieldsToLittleEndian(fields...); }, wireCopy.wireFields());
+        const std::lock_guard<std::mutex> lock(m_publishMutex);
+        publish(identifier, &wireCopy, sizeof(wireCopy));
+    }
+
     std::mutex m_publishMutex;    ///< Serializes publish() calls across concurrent callers.
 };
 

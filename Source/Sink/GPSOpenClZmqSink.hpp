@@ -10,9 +10,7 @@
 #include <string>
 #include <thread>
 
-#ifdef GPSOPENCL_ENABLE_ZMQ
 #include <zmq.h>
-#endif
 
 namespace GPSOpenCl
 {
@@ -50,10 +48,8 @@ class ZmqSink : public Sink
     std::string m_endpoint;               ///< ZMQ endpoint URI.
     BoundedQueue<SinkMessage> m_queue;    ///< Handoff queue from callers to the sender thread.
     std::thread m_senderThread;           ///< Background ZMQ-sender thread.
-#ifdef GPSOPENCL_ENABLE_ZMQ
     void *m_context{nullptr};             ///< ZMQ context.
     void *m_publisher{nullptr};           ///< ZMQ PUB socket.
-#endif
 };
 }
 

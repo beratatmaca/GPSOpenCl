@@ -60,6 +60,7 @@ add_executable(
     NmeaGeneratorTest.cpp
     AtmosphericCorrectionsTest.cpp
     StructsSourceSinkTest.cpp
+    EndianTest.cpp
     LockDetectorTest.cpp
     ChannelTest.cpp
     GroundTruthVerificationTest.cpp
@@ -68,10 +69,14 @@ add_executable(
     E2ETest.cpp
 )
 
+# ZmqSinkTest touches the real ZmqSink type, so it can only compile in when that type exists.
+if(GPSOPENCL_ENABLE_ZMQ)
+    target_sources(GPSOpenClTest PRIVATE ZmqSinkTest.cpp)
+endif()
+
 target_compile_definitions(GPSOpenClTest PUBLIC CTEST)
 
 if(GPSOPENCL_ENABLE_ZMQ)
-    target_compile_definitions(GPSOpenClTest PRIVATE GPSOPENCL_ENABLE_ZMQ)
     target_link_libraries(GPSOpenClTest PRIVATE ${ZMQ_LIB})
 endif()
 

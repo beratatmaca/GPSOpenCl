@@ -5,7 +5,7 @@
 #include "Input/GPSOpenClFileSource.hpp"
 #include "Input/GPSOpenClGpsSdrSimSource.hpp"
 #include "Sink/GPSOpenClFileSink.hpp"
-#include "Sink/GPSOpenClZmqSink.hpp"
+#include "Sink/GPSOpenClZmqSinkFactory.hpp"
 
 #include <exception>
 #include <fstream>
@@ -56,9 +56,10 @@ int main(int argc, char **argv)
 
     auto compositeSink = std::make_shared<GPSOpenCl::CompositeSink>();
     compositeSink->addSink(std::make_shared<GPSOpenCl::FileSink>("build/telemetry_wire.log"));
-#ifdef GPSOPENCL_ENABLE_ZMQ
-    compositeSink->addSink(std::make_shared<GPSOpenCl::ZmqSink>("ipc:///tmp/gpsopencl/telemetry.sock"));
-#endif
+    if (auto zmqSink = GPSOpenCl::createZmqSinkIfEnabled())
+    {
+        compositeSink->addSink(zmqSink);
+    }
     auto sink = std::static_pointer_cast<GPSOpenCl::Sink>(compositeSink);
 
     std::shared_ptr<GPSOpenCl::Source> source;

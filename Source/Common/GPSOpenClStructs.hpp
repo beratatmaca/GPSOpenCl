@@ -6,6 +6,7 @@
  */
 
 #include <cstdint>
+#include <tuple>
 
 /*
  * Wire protocol. Every output struct below is one telemetry message.
@@ -13,7 +14,9 @@
  * name as ASCII text. Frame two is the raw struct bytes. FileSink logs
  * the same messages as length-prefixed records. Record layout is
  * nameLen (u32), name bytes, dataLen (u32), struct bytes. All fields
- * are little-endian and packed with no padding. structVersion is always
+ * are little-endian and packed with no padding, converted from host
+ * byte order at runtime (see GPSOpenClEndian.hpp) on publish, so no
+ * platform byte-order #ifdef is needed. structVersion is always
  * the first field. New fields append at the end and bump the version,
  * so old readers can still parse the leading fields. The golden sizeof
  * assertions in Tests/StructsSourceSinkTest.cpp and the parser table in
@@ -22,11 +25,6 @@
 
 namespace GPSOpenCl
 {
-
-#if defined(__BYTE_ORDER__) && defined(__ORDER_LITTLE_ENDIAN__) && (__BYTE_ORDER__ != __ORDER_LITTLE_ENDIAN__)
-#error "Wire structs are written in host byte order and the protocol is little-endian"
-#endif
-
 #pragma pack(push, 1)
 
 /** @brief Struct wire-format version tag. */
@@ -53,6 +51,10 @@ struct SourceOutput
     double timestampSec{0.0};                    ///< Block timestamp in seconds.
     uint32_t fifoUnderrunCount{0};               ///< FIFO underrun count.
     uint32_t fifoOverrunCount{0};                ///< FIFO overrun count.
+
+    /** @brief Multi-byte fields, for wire endian conversion.
+     *  @return Tie of every field wider than one byte. */
+    auto wireFields() { return std::tie(structVersion, blockIndex, timestampSec, fifoUnderrunCount, fifoOverrunCount); }
 };
 
 /** @brief Acquisition module input parameters. */
@@ -81,6 +83,10 @@ struct AcquisitionOutput
     double peakRatio{0.0};                       ///< Peak-to-mean ratio.
     uint32_t isAcquired{0};                      ///< 1 if satellite acquired.
     double correlateMs{0.0};                     ///< Wall-clock duration of the correlate() call (ms).
+
+    /** @brief Multi-byte fields, for wire endian conversion.
+     *  @return Tie of every field wider than one byte. */
+    auto wireFields() { return std::tie(structVersion, prn, peakIndex, peakValue, peakFrequencyHz, meanValue, cnoDbHz, peakRatio, isAcquired, correlateMs); }
 };
 
 /** @brief Tracking module input parameters. */
@@ -122,6 +128,28 @@ struct TrackingOutput
     double carrierLockIndicator{0.0};            ///< Smoothed carrier lock indicator.
     double codeLockRatio{0.0};                   ///< Smoothed code lock ratio.
     double correlatorTimeMs{0.0};                ///< Fused correlator pass duration this block (ms).
+
+    /** @brief Multi-byte fields, for wire endian conversion.
+     *  @return Tie of every field wider than one byte. */
+    auto wireFields()
+    {
+        return std::tie(structVersion,
+                        prn,
+                        carrierFreqHz,
+                        codeFreqHz,
+                        carrierErrorCycles,
+                        codeErrorChips,
+                        Ie,
+                        Ip,
+                        Il,
+                        Qe,
+                        Qp,
+                        Ql,
+                        channelState,
+                        carrierLockIndicator,
+                        codeLockRatio,
+                        correlatorTimeMs);
+    }
 };
 
 /** @brief Navigation decoder input parameters. */
@@ -165,6 +193,39 @@ struct NavDecoderOutput
     double Crs{0.0};                             ///< Harmonic correction, sin orbit radius (m).
     double Cic{0.0};                             ///< Harmonic correction, cos inclination (rad).
     double Cis{0.0};                             ///< Harmonic correction, sin inclination (rad).
+
+    /** @brief Multi-byte fields, for wire endian conversion.
+     *  @return Tie of every field wider than one byte. */
+    auto wireFields()
+    {
+        return std::tie(structVersion,
+                        svId,
+                        weekNumber,
+                        tow,
+                        subframeId,
+                        isValid,
+                        toc,
+                        af0,
+                        af1,
+                        af2,
+                        tgd,
+                        toe,
+                        sqrtA,
+                        e,
+                        i0,
+                        omega0,
+                        omega,
+                        M0,
+                        deltaN,
+                        omegaDot,
+                        idot,
+                        Cuc,
+                        Cus,
+                        Crc,
+                        Crs,
+                        Cic,
+                        Cis);
+    }
 };
 
 /** @brief PVT solver input parameters. */
@@ -197,6 +258,28 @@ struct PvtSolverOutput
     uint32_t isValid{0};                         ///< 1 if solution valid.
     uint32_t satellitesUsed{0};                  ///< Satellites in the accepted solution.
     double maxResidualMeters{0.0};               ///< Largest converged pseudorange residual (m).
+
+    /** @brief Multi-byte fields, for wire endian conversion.
+     *  @return Tie of every field wider than one byte. */
+    auto wireFields()
+    {
+        return std::tie(structVersion,
+                        ecefXMeters,
+                        ecefYMeters,
+                        ecefZMeters,
+                        latitudeDeg,
+                        longitudeDeg,
+                        altitudeMeters,
+                        clockBiasMeters,
+                        clockBiasSeconds,
+                        dopGDOP,
+                        dopPDOP,
+                        dopHDOP,
+                        dopVDOP,
+                        isValid,
+                        satellitesUsed,
+                        maxResidualMeters);
+    }
 };
 
 /** @brief Atmospheric corrections input (Klobuchar coefficients). */
@@ -222,6 +305,10 @@ struct AtmosphericOutput
     double tropoDelayMeters{0.0};                ///< Tropospheric delay (m).
     double azimuthDeg{0.0};                      ///< Satellite azimuth (deg).
     double elevationDeg{0.0};                    ///< Satellite elevation (deg).
+
+    /** @brief Multi-byte fields, for wire endian conversion.
+     *  @return Tie of every field wider than one byte. */
+    auto wireFields() { return std::tie(structVersion, svId, ionoDelayMeters, tropoDelayMeters, azimuthDeg, elevationDeg); }
 };
 
 /** @brief NMEA generator input parameters. */
@@ -239,6 +326,10 @@ struct NmeaGeneratorOutput
 {
     uint32_t structVersion{STRUCT_VERSION_1};    ///< Struct version tag.
     char sentence[256]{};                        ///< NMEA sentence string.
+
+    /** @brief Multi-byte fields, for wire endian conversion. sentence is single-byte, no swap needed.
+     *  @return Tie of every field wider than one byte. */
+    auto wireFields() { return std::tie(structVersion); }
 };
 
 /** @brief Profiler input parameters. */
@@ -263,6 +354,24 @@ struct ProfilerOutput
     double numericOscillatorTimeMs{0.0};         ///< Aggregate numericOscillator time across active channels (ms).
     double accumulatorTimeMs{0.0};               ///< Aggregate correlator-accumulation time across active channels (ms).
     double trackingMaxWorkerTimeMs{0.0};         ///< Slowest tracking worker wall-clock time this block (ms).
+
+    /** @brief Multi-byte fields, for wire endian conversion.
+     *  @return Tie of every field wider than one byte. */
+    auto wireFields()
+    {
+        return std::tie(structVersion,
+                        blockIndex,
+                        timestampSec,
+                        acquisitionTimeMs,
+                        trackingTimeMs,
+                        navDecodeTimeMs,
+                        pvtSolveTimeMs,
+                        totalTimeMs,
+                        earlyLatePromptGenTimeMs,
+                        numericOscillatorTimeMs,
+                        accumulatorTimeMs,
+                        trackingMaxWorkerTimeMs);
+    }
 };
 
 #pragma pack(pop)

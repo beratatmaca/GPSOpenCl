@@ -65,22 +65,16 @@ SpectrumEngine::SpectrumEngine()
         {
             m_gpu.initKernels();
         }
-#ifdef CL_VERSION_2_0
         if (deviceSupportsOpenCl2(m_gpu.device))
         {
             m_queue = clCreateCommandQueueWithProperties(m_gpu.context, m_gpu.device, nullptr, &m_error);
         }
         else
-#endif
         {
-#ifdef __GNUC__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-#endif
             m_queue = clCreateCommandQueue(m_gpu.context, m_gpu.device, 0, &m_error);
-#ifdef __GNUC__
 #pragma GCC diagnostic pop
-#endif
         }
         if (m_error < 0)
         {
