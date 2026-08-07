@@ -5,9 +5,9 @@
  *  @brief Builds pseudorange measurements from channel state.
  */
 
-#include "Tracking/GPSOpenClChannel.hpp"
 #include "NavDecode/GPSOpenClNavigationDecoder.hpp"
 #include "Pvt/GPSOpenClPVTSolver.hpp"
+#include "Tracking/GPSOpenClChannel.hpp"
 
 #include <vector>
 
@@ -45,8 +45,7 @@ class MeasurementAssembler
      *  @param driftChips       Accumulated code frequency drift since the anchor in chips.
      *  @param anchorChipsRaw   DLL code phase at the anchor block in chips, 0 to 1023.
      *  @return Satellite transmit time in seconds of week. */
-    static double
-        computeTransmitTime(double subframeStartTow, double elapsedSeconds, double driftChips, double anchorChipsRaw);
+    static double computeTransmitTime(double subframeStartTow, double elapsedSeconds, double driftChips, double anchorChipsRaw);
 
     /** @brief Resolve C A millisecond ambiguity across the constellation.
      *   A bit edge attributed one block off shifts a transmit time by a
@@ -55,8 +54,7 @@ class MeasurementAssembler
      *   absorbed by the receiver clock bias, so only consistency matters.
      *  @param transmitTimes   Per satellite transmit times in seconds, corrected in place.
      *  @param impliedArrivals Per satellite modeled arrival instants in seconds, same order. */
-    static void snapTransmitTimesToMedianArrival(std::vector<double> &transmitTimes,
-                                                 const std::vector<double> &impliedArrivals);
+    static void snapTransmitTimesToMedianArrival(std::vector<double> &transmitTimes, const std::vector<double> &impliedArrivals);
 
     /** @brief Gather measurements from every usable channel.
      *   A channel needs confirmed tracking, a complete ephemeris, and a
@@ -71,11 +69,7 @@ class MeasurementAssembler
      *  @param referenceTrusted True once the reference comes from a successful fix.
      *  @param out              Assembled measurements (output).
      *  @return True if at least four satellites were usable. */
-    static bool assemble(const Channel *channels,
-                         int channelCount,
-                         const EcefPosition &referenceEcef,
-                         bool referenceTrusted,
-                         Measurements &out);
+    static bool assemble(const Channel *channels, int channelCount, const EcefPosition &referenceEcef, bool referenceTrusted, Measurements &out);
 };
 }
 

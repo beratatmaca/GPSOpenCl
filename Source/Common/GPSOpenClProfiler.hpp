@@ -5,8 +5,8 @@
  *  @brief Per-block processing time profiler.
  */
 
-#include "Sink/GPSOpenClSink.hpp"
 #include "Common/GPSOpenClStructs.hpp"
+#include "Sink/GPSOpenClSink.hpp"
 #include <chrono>
 #include <cstdint>
 #include <memory>

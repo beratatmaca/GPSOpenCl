@@ -64,9 +64,7 @@ class SpectrumEngine
      *  @param input2 Second complex vector.
      *  @param output Product vector.
      *  @return 0 on success. */
-    int complexMultiplier(const ComplexFloatVector &input1,
-                          const ComplexFloatVector &input2,
-                          ComplexFloatVector *output);
+    int complexMultiplier(const ComplexFloatVector &input1, const ComplexFloatVector &input2, ComplexFloatVector *output);
 
     /** @brief Compute magnitude squared of complex vector.
      *  @param input1 Complex input.
@@ -82,10 +80,7 @@ class SpectrumEngine
      *  @param direction Forward or inverse FFT.
      *  @param slot      Slot index to store the result in (grown on demand).
      *  @return 0 on success. */
-    int complexMultiplyThenFftToSlot(const ComplexFloatVector &input1,
-                                     const ComplexFloatVector &input2,
-                                     FFTDirectionType direction,
-                                     int slot);
+    int complexMultiplyThenFftToSlot(const ComplexFloatVector &input1, const ComplexFloatVector &input2, FFTDirectionType direction, int slot);
 
     /** @brief Forget the device-resident input1 cache. The cache keys on the host pointer, so a
      *   reused buffer with new contents at the same address would otherwise be mistaken for the
@@ -107,11 +102,7 @@ class SpectrumEngine
      *  @param direction Forward or inverse FFT.
      *  @param output    Magnitude squared of the FFT of the product.
      *  @return 0 on success. */
-    int complexMultiplyResidentThenFftThenAbsolute(const ComplexFloatVector &input1,
-                                                   int slot,
-                                                   int shiftBins,
-                                                   FFTDirectionType direction,
-                                                   FloatVector *output);
+    int complexMultiplyResidentThenFftThenAbsolute(const ComplexFloatVector &input1, int slot, int shiftBins, FFTDirectionType direction, FloatVector *output);
 
     /** @brief Batched form of complexMultiplyResidentThenFftThenAbsolute(). All bins run in one
      *   GPU submission. One readback at the end. Bin k occupies output[k * length, (k + 1) *
@@ -150,9 +141,7 @@ class SpectrumEngine
      *  @param pointsPerGroup   Points processed per work-group.
      *  @param minPointsPerItem Minimum points each work-item must process.
      *  @return Clamped work-group size. */
-    static unsigned int clampLocalSizeForMinPointsPerItem(unsigned int localSize,
-                                                          unsigned int pointsPerGroup,
-                                                          unsigned int minPointsPerItem);
+    static unsigned int clampLocalSizeForMinPointsPerItem(unsigned int localSize, unsigned int pointsPerGroup, unsigned int minPointsPerItem);
 
   private:
     /** @brief Query and cache per-kernel work-group size and device local memory size, once. */
@@ -172,9 +161,7 @@ class SpectrumEngine
      *  @param input2 Second complex vector.
      *  @param length Element count (equal for both inputs).
      *  @return The device output buffer (m_cmBufferC), or nullptr on failure. */
-    cl_mem complexMultiplierDevice(const ComplexFloatVector &input1,
-                                   const ComplexFloatVector &input2,
-                                   unsigned int length);
+    cl_mem complexMultiplierDevice(const ComplexFloatVector &input1, const ComplexFloatVector &input2, unsigned int length);
 
     /** @brief GPU complexMultiplier stage with a resident second operand. Reads it with a circular
      *   offset. input1 uploads only when it changed.
@@ -183,10 +170,7 @@ class SpectrumEngine
      *  @param length Element count (equal for both inputs).
      *  @param offset Circular read offset into input2, in [0, length).
      *  @return The device output buffer (m_cmBufferC), or nullptr on failure. */
-    cl_mem complexMultiplierResidentDevice(const ComplexFloatVector &input1,
-                                           cl_mem input2,
-                                           unsigned int length,
-                                           unsigned int offset);
+    cl_mem complexMultiplierResidentDevice(const ComplexFloatVector &input1, cl_mem input2, unsigned int length, unsigned int offset);
 
     /** @brief Enqueue the complexMultiplier kernel on already-populated device buffers.
      *  @param inputA     First operand device buffer.
@@ -195,11 +179,7 @@ class SpectrumEngine
      *  @param offset     Circular read offset into inputB, in [0, length).
      *  @param inputBBase Element offset of the operand vector inside inputB.
      *  @return The device output buffer (m_cmBufferC), or nullptr on failure. */
-    cl_mem enqueueComplexMultiplier(cl_mem inputA,
-                                    cl_mem inputB,
-                                    unsigned int length,
-                                    unsigned int offset,
-                                    unsigned int inputBBase);
+    cl_mem enqueueComplexMultiplier(cl_mem inputA, cl_mem inputB, unsigned int length, unsigned int offset, unsigned int inputBBase);
 
     /** @brief Upload input1 into the persistent input buffer. Skips the upload when input1 is
      *   already resident.

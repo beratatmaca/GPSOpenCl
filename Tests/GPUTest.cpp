@@ -171,8 +171,7 @@ TEST_F(GPUTest, ComplexMultiplicationTest1)
 
     TestUtils::readFromFileComplex("../../Tests/Scripts/GPUTest/ComplexMultiplierTestCase1Input1.txt", &testInputVec1);
     TestUtils::readFromFileComplex("../../Tests/Scripts/GPUTest/ComplexMultiplierTestCase1Input2.txt", &testInputVec2);
-    TestUtils::readFromFileComplex("../../Tests/Scripts/GPUTest/ComplexMultiplierTestCase1Output.txt",
-                                   &expectedOutputVec);
+    TestUtils::readFromFileComplex("../../Tests/Scripts/GPUTest/ComplexMultiplierTestCase1Output.txt", &expectedOutputVec);
 
     auto timeBegin = TestUtils::startElapsedTimeMeasurement();
 
@@ -192,8 +191,7 @@ TEST_F(GPUTest, ComplexMultiplicationTest2)
 
     TestUtils::readFromFileComplex("../../Tests/Scripts/GPUTest/ComplexMultiplierTestCase2Input1.txt", &testInputVec1);
     TestUtils::readFromFileComplex("../../Tests/Scripts/GPUTest/ComplexMultiplierTestCase2Input2.txt", &testInputVec2);
-    TestUtils::readFromFileComplex("../../Tests/Scripts/GPUTest/ComplexMultiplierTestCase2Output.txt",
-                                   &expectedOutputVec);
+    TestUtils::readFromFileComplex("../../Tests/Scripts/GPUTest/ComplexMultiplierTestCase2Output.txt", &expectedOutputVec);
 
     auto timeBegin = TestUtils::startElapsedTimeMeasurement();
 

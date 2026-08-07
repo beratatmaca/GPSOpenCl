@@ -33,9 +33,7 @@ unsigned int SpectrumEngine::clampPointsPerGroup(unsigned int pointsPerGroup, un
     return std::min(pointsPerGroup, length);
 }
 
-unsigned int SpectrumEngine::clampLocalSizeForMinPointsPerItem(unsigned int localSize,
-                                                               unsigned int pointsPerGroup,
-                                                               unsigned int minPointsPerItem)
+unsigned int SpectrumEngine::clampLocalSizeForMinPointsPerItem(unsigned int localSize, unsigned int pointsPerGroup, unsigned int minPointsPerItem)
 {
     while (localSize > pointsPerGroup / minPointsPerItem && localSize > 1)
     {
@@ -139,8 +137,7 @@ void SpectrumEngine::cacheDeviceInfo()
     auto queryLocalSize = [&](cl_kernel kernel) -> size_t
     {
         size_t localSize = 0;
-        const cl_int err = clGetKernelWorkGroupInfo(
-            kernel, m_gpu.device, CL_KERNEL_WORK_GROUP_SIZE, sizeof(localSize), &localSize, nullptr);
+        const cl_int err = clGetKernelWorkGroupInfo(kernel, m_gpu.device, CL_KERNEL_WORK_GROUP_SIZE, sizeof(localSize), &localSize, nullptr);
         if (err != CL_SUCCESS || localSize == 0)
         {
             return 0;
@@ -240,8 +237,7 @@ int SpectrumEngine::fftDeviceInPlace(cl_mem buffer, unsigned int length, FFTDire
         for (unsigned int stage = 2; m_error == CL_SUCCESS && stage <= length / pointsPerGroup; stage <<= 1)
         {
             clSetKernelArg(stageKernel, 1, sizeof(stage), &stage);
-            m_error =
-                clEnqueueNDRangeKernel(m_queue, stageKernel, 1, nullptr, &globalSize, &localSize, 0, nullptr, nullptr);
+            m_error = clEnqueueNDRangeKernel(m_queue, stageKernel, 1, nullptr, &globalSize, &localSize, 0, nullptr, nullptr);
         }
     }
 
@@ -253,18 +249,14 @@ int SpectrumEngine::fftDeviceInPlace(cl_mem buffer, unsigned int length, FFTDire
 
         if (m_error == CL_SUCCESS)
         {
-            m_error =
-                clEnqueueNDRangeKernel(m_queue, scaleKernel, 1, nullptr, &globalSize, &localSize, 0, nullptr, nullptr);
+            m_error = clEnqueueNDRangeKernel(m_queue, scaleKernel, 1, nullptr, &globalSize, &localSize, 0, nullptr, nullptr);
         }
     }
 
     return (m_error == CL_SUCCESS) ? 0 : -1;
 }
 
-int SpectrumEngine::fftDeviceInPlaceBatch(cl_mem buffer,
-                                          unsigned int length,
-                                          unsigned int count,
-                                          FFTDirectionType direction)
+int SpectrumEngine::fftDeviceInPlaceBatch(cl_mem buffer, unsigned int length, unsigned int count, FFTDirectionType direction)
 {
     if ((m_queue == nullptr) || m_gpu.acquisitionKernelList.size() <= GpuHandler::FFTScale)
     {
@@ -313,8 +305,7 @@ int SpectrumEngine::fftDeviceInPlaceBatch(cl_mem buffer,
 
         if (m_error == CL_SUCCESS)
         {
-            m_error =
-                clEnqueueNDRangeKernel(m_queue, scaleKernel, 1, nullptr, &globalSize, &localSize, 0, nullptr, nullptr);
+            m_error = clEnqueueNDRangeKernel(m_queue, scaleKernel, 1, nullptr, &globalSize, &localSize, 0, nullptr, nullptr);
         }
     }
 
@@ -335,31 +326,14 @@ int SpectrumEngine::fft(const ComplexFloatVector &input, ComplexFloatVector *out
 
         if ((dataBuffer != nullptr) && m_error == CL_SUCCESS)
         {
-            m_error = clEnqueueWriteBuffer(m_queue,
-                                           dataBuffer,
-                                           CL_FALSE,
-                                           0,
-                                           2UL * length * sizeof(float),
-                                           m_allocatedMemory.data(),
-                                           0,
-                                           nullptr,
-                                           nullptr);
+            m_error = clEnqueueWriteBuffer(m_queue, dataBuffer, CL_FALSE, 0, 2UL * length * sizeof(float), m_allocatedMemory.data(), 0, nullptr, nullptr);
             if (m_error == CL_SUCCESS && fftDeviceInPlace(dataBuffer, length, direction) == 0)
             {
-                m_error = clEnqueueReadBuffer(m_queue,
-                                              dataBuffer,
-                                              CL_TRUE,
-                                              0,
-                                              2UL * length * sizeof(float),
-                                              m_allocatedMemory.data(),
-                                              0,
-                                              nullptr,
-                                              nullptr);
+                m_error = clEnqueueReadBuffer(m_queue, dataBuffer, CL_TRUE, 0, 2UL * length * sizeof(float), m_allocatedMemory.data(), 0, nullptr, nullptr);
                 if (m_error == CL_SUCCESS)
                 {
                     output->resize(length);
-                    std::memcpy(
-                        static_cast<void *>(output->data()), m_allocatedMemory.data(), 2UL * length * sizeof(float));
+                    std::memcpy(static_cast<void *>(output->data()), m_allocatedMemory.data(), 2UL * length * sizeof(float));
 
                     return 0;
                 }
@@ -460,11 +434,7 @@ void SpectrumEngine::packToStaging(const ComplexFloatVector &input, unsigned int
     std::memcpy(&m_allocatedMemory[floatOffset], input.data(), 2UL * length * sizeof(float));
 }
 
-cl_mem SpectrumEngine::enqueueComplexMultiplier(cl_mem inputA,
-                                                cl_mem inputB,
-                                                unsigned int length,
-                                                unsigned int offset,
-                                                unsigned int inputBBase)
+cl_mem SpectrumEngine::enqueueComplexMultiplier(cl_mem inputA, cl_mem inputB, unsigned int length, unsigned int offset, unsigned int inputBBase)
 {
     cl_kernel complexMultiplierKernel = m_gpu.acquisitionKernelList[GpuHandler::ComplexMultiplier];
     cl_mem dC = ensureBuffer(m_cmBufferC, m_cmBufferCapacityC, 2UL * length);
@@ -492,15 +462,12 @@ cl_mem SpectrumEngine::enqueueComplexMultiplier(cl_mem inputA,
     }
 
     const size_t globalSize = (length / pointsPerGroup) * localSize;
-    m_error = clEnqueueNDRangeKernel(
-        m_queue, complexMultiplierKernel, 1, nullptr, &globalSize, &localSize, 0, nullptr, nullptr);
+    m_error = clEnqueueNDRangeKernel(m_queue, complexMultiplierKernel, 1, nullptr, &globalSize, &localSize, 0, nullptr, nullptr);
 
     return (m_error == CL_SUCCESS) ? dC : nullptr;
 }
 
-cl_mem SpectrumEngine::complexMultiplierDevice(const ComplexFloatVector &input1,
-                                               const ComplexFloatVector &input2,
-                                               unsigned int length)
+cl_mem SpectrumEngine::complexMultiplierDevice(const ComplexFloatVector &input1, const ComplexFloatVector &input2, unsigned int length)
 {
     cacheDeviceInfo();
 
@@ -508,9 +475,7 @@ cl_mem SpectrumEngine::complexMultiplierDevice(const ComplexFloatVector &input1,
     packToStaging(input2, length, 2UL * length);
 
     cl_mem dA = ensureBuffer(m_cmBufferA, m_cmBufferCapacityA, 2UL * length);
-    cl_mem dB = ((dA != nullptr) && m_error == CL_SUCCESS)
-        ? ensureBuffer(m_cmBufferB, m_cmBufferCapacityB, 2UL * length)
-        : nullptr;
+    cl_mem dB = ((dA != nullptr) && m_error == CL_SUCCESS) ? ensureBuffer(m_cmBufferB, m_cmBufferCapacityB, 2UL * length) : nullptr;
 
     if ((dA == nullptr) || (dB == nullptr) || m_error != CL_SUCCESS)
     {
@@ -520,19 +485,10 @@ cl_mem SpectrumEngine::complexMultiplierDevice(const ComplexFloatVector &input1,
     m_cachedInput1Ptr = nullptr;
     m_cachedInput1Len = 0;
 
-    m_error = clEnqueueWriteBuffer(
-        m_queue, dA, CL_FALSE, 0, 2UL * length * sizeof(float), m_allocatedMemory.data(), 0, nullptr, nullptr);
+    m_error = clEnqueueWriteBuffer(m_queue, dA, CL_FALSE, 0, 2UL * length * sizeof(float), m_allocatedMemory.data(), 0, nullptr, nullptr);
     if (m_error == CL_SUCCESS)
     {
-        m_error = clEnqueueWriteBuffer(m_queue,
-                                       dB,
-                                       CL_FALSE,
-                                       0,
-                                       2UL * length * sizeof(float),
-                                       &m_allocatedMemory[2UL * length],
-                                       0,
-                                       nullptr,
-                                       nullptr);
+        m_error = clEnqueueWriteBuffer(m_queue, dB, CL_FALSE, 0, 2UL * length * sizeof(float), &m_allocatedMemory[2UL * length], 0, nullptr, nullptr);
     }
     if (m_error != CL_SUCCESS)
     {
@@ -556,8 +512,7 @@ cl_mem SpectrumEngine::ensureResidentInput1(const ComplexFloatVector &input1, un
     if (recreated || (m_cachedInput1Ptr != input1.data()) || (m_cachedInput1Len != length))
     {
         packToStaging(input1, length, 0);
-        m_error = clEnqueueWriteBuffer(
-            m_queue, dA, CL_TRUE, 0, 2UL * length * sizeof(float), m_allocatedMemory.data(), 0, nullptr, nullptr);
+        m_error = clEnqueueWriteBuffer(m_queue, dA, CL_TRUE, 0, 2UL * length * sizeof(float), m_allocatedMemory.data(), 0, nullptr, nullptr);
         if (m_error != CL_SUCCESS)
         {
             m_cachedInput1Ptr = nullptr;
@@ -571,10 +526,7 @@ cl_mem SpectrumEngine::ensureResidentInput1(const ComplexFloatVector &input1, un
     return dA;
 }
 
-cl_mem SpectrumEngine::complexMultiplierResidentDevice(const ComplexFloatVector &input1,
-                                                       cl_mem input2,
-                                                       unsigned int length,
-                                                       unsigned int offset)
+cl_mem SpectrumEngine::complexMultiplierResidentDevice(const ComplexFloatVector &input1, cl_mem input2, unsigned int length, unsigned int offset)
 {
     cacheDeviceInfo();
 
@@ -607,9 +559,7 @@ cl_mem SpectrumEngine::ensureSlotPool(int slot, size_t floatsPerSlot)
     return pool;
 }
 
-int SpectrumEngine::complexMultiplier(const ComplexFloatVector &input1,
-                                      const ComplexFloatVector &input2,
-                                      ComplexFloatVector *output)
+int SpectrumEngine::complexMultiplier(const ComplexFloatVector &input1, const ComplexFloatVector &input2, ComplexFloatVector *output)
 {
     if ((m_queue != nullptr) && m_gpu.acquisitionKernelList.size() > GpuHandler::ComplexMultiplier)
     {
@@ -618,14 +568,12 @@ int SpectrumEngine::complexMultiplier(const ComplexFloatVector &input1,
 
         if ((dC != nullptr) && m_error == CL_SUCCESS)
         {
-            m_error = clEnqueueReadBuffer(
-                m_queue, dC, CL_TRUE, 0, 2UL * length * sizeof(float), m_allocatedMemory.data(), 0, nullptr, nullptr);
+            m_error = clEnqueueReadBuffer(m_queue, dC, CL_TRUE, 0, 2UL * length * sizeof(float), m_allocatedMemory.data(), 0, nullptr, nullptr);
 
             if (m_error == CL_SUCCESS)
             {
                 output->resize(length);
-                std::memcpy(
-                    static_cast<void *>(output->data()), m_allocatedMemory.data(), 2UL * length * sizeof(float));
+                std::memcpy(static_cast<void *>(output->data()), m_allocatedMemory.data(), 2UL * length * sizeof(float));
 
                 return 0;
             }
@@ -675,8 +623,7 @@ int SpectrumEngine::absoluteDeviceToHost(cl_mem inputBuffer, unsigned int length
         {
             m_allocatedMemory.resize(length);
         }
-        m_error = clEnqueueReadBuffer(
-            m_queue, dC, CL_TRUE, 0, length * sizeof(float), m_allocatedMemory.data(), 0, nullptr, nullptr);
+        m_error = clEnqueueReadBuffer(m_queue, dC, CL_TRUE, 0, length * sizeof(float), m_allocatedMemory.data(), 0, nullptr, nullptr);
 
         if (m_error == CL_SUCCESS)
         {
@@ -702,8 +649,7 @@ int SpectrumEngine::absolute(const ComplexFloatVector &input1, FloatVector *outp
 
         if ((dA != nullptr) && m_error == CL_SUCCESS)
         {
-            clEnqueueWriteBuffer(
-                m_queue, dA, CL_FALSE, 0, 2UL * length * sizeof(float), m_allocatedMemory.data(), 0, nullptr, nullptr);
+            clEnqueueWriteBuffer(m_queue, dA, CL_FALSE, 0, 2UL * length * sizeof(float), m_allocatedMemory.data(), 0, nullptr, nullptr);
 
             if (absoluteDeviceToHost(dA, length, output) == 0)
             {
@@ -723,10 +669,7 @@ int SpectrumEngine::absolute(const ComplexFloatVector &input1, FloatVector *outp
     return 0;
 }
 
-int SpectrumEngine::complexMultiplyThenFftToSlot(const ComplexFloatVector &input1,
-                                                 const ComplexFloatVector &input2,
-                                                 FFTDirectionType direction,
-                                                 int slot)
+int SpectrumEngine::complexMultiplyThenFftToSlot(const ComplexFloatVector &input1, const ComplexFloatVector &input2, FFTDirectionType direction, int slot)
 {
     if (slot < 0)
     {
@@ -743,8 +686,7 @@ int SpectrumEngine::complexMultiplyThenFftToSlot(const ComplexFloatVector &input
     m_slotStates[slotIndex] = SlotInvalid;
 
     auto length = static_cast<unsigned int>(input1.size());
-    if ((m_queue != nullptr) && m_gpu.acquisitionKernelList.size() > GpuHandler::FFTScale &&
-        m_gpu.acquisitionKernelList.size() > GpuHandler::ComplexMultiplier)
+    if ((m_queue != nullptr) && m_gpu.acquisitionKernelList.size() > GpuHandler::FFTScale && m_gpu.acquisitionKernelList.size() > GpuHandler::ComplexMultiplier)
     {
         cacheDeviceInfo();
 
@@ -753,8 +695,7 @@ int SpectrumEngine::complexMultiplyThenFftToSlot(const ComplexFloatVector &input
         if ((dA != nullptr) && (dB != nullptr) && m_error == CL_SUCCESS)
         {
             packToStaging(input2, length, 0);
-            m_error = clEnqueueWriteBuffer(
-                m_queue, dB, CL_TRUE, 0, 2UL * length * sizeof(float), m_allocatedMemory.data(), 0, nullptr, nullptr);
+            m_error = clEnqueueWriteBuffer(m_queue, dB, CL_TRUE, 0, 2UL * length * sizeof(float), m_allocatedMemory.data(), 0, nullptr, nullptr);
 
             cl_mem product = (m_error == CL_SUCCESS) ? enqueueComplexMultiplier(dA, dB, length, 0, 0) : nullptr;
             if ((product != nullptr) && m_error == CL_SUCCESS && fftDeviceInPlace(product, length, direction) == 0)
@@ -763,15 +704,7 @@ int SpectrumEngine::complexMultiplyThenFftToSlot(const ComplexFloatVector &input
                 if (slotPool != nullptr && m_error == CL_SUCCESS)
                 {
                     const size_t destinationOffset = slotIndex * m_slotPoolStrideFloats * sizeof(float);
-                    m_error = clEnqueueCopyBuffer(m_queue,
-                                                  product,
-                                                  slotPool,
-                                                  0,
-                                                  destinationOffset,
-                                                  2UL * length * sizeof(float),
-                                                  0,
-                                                  nullptr,
-                                                  nullptr);
+                    m_error = clEnqueueCopyBuffer(m_queue, product, slotPool, 0, destinationOffset, 2UL * length * sizeof(float), 0, nullptr, nullptr);
                     if (m_error == CL_SUCCESS)
                     {
                         m_slotStates[slotIndex] = SlotDevice;
@@ -798,11 +731,7 @@ int SpectrumEngine::complexMultiplyThenFftToSlot(const ComplexFloatVector &input
     return 0;
 }
 
-int SpectrumEngine::complexMultiplyResidentThenFftThenAbsolute(const ComplexFloatVector &input1,
-                                                               int slot,
-                                                               int shiftBins,
-                                                               FFTDirectionType direction,
-                                                               FloatVector *output)
+int SpectrumEngine::complexMultiplyResidentThenFftThenAbsolute(const ComplexFloatVector &input1, int slot, int shiftBins, FFTDirectionType direction, FloatVector *output)
 {
     const auto slotIndex = static_cast<size_t>(slot);
     if (slot < 0 || m_slotStates.size() <= slotIndex || m_slotStates[slotIndex] == SlotInvalid)
@@ -816,8 +745,7 @@ int SpectrumEngine::complexMultiplyResidentThenFftThenAbsolute(const ComplexFloa
         return -1;
     }
 
-    const auto shift = static_cast<unsigned int>(((shiftBins % static_cast<int>(length)) + static_cast<int>(length)) %
-                                                 static_cast<int>(length));
+    const auto shift = static_cast<unsigned int>(((shiftBins % static_cast<int>(length)) + static_cast<int>(length)) % static_cast<int>(length));
     const unsigned int offset = (length - shift) % length;
 
     if (m_slotStates[slotIndex] == SlotDevice)
@@ -832,8 +760,7 @@ int SpectrumEngine::complexMultiplyResidentThenFftThenAbsolute(const ComplexFloa
 
         const auto slotBase = static_cast<unsigned int>(slotIndex * (m_slotPoolStrideFloats / 2));
         cl_mem product = enqueueComplexMultiplier(dA, m_slotPoolBuffer, length, offset, slotBase);
-        if ((product != nullptr) && m_error == CL_SUCCESS && fftDeviceInPlace(product, length, direction) == 0 &&
-            absoluteDeviceToHost(product, length, output) == 0)
+        if ((product != nullptr) && m_error == CL_SUCCESS && fftDeviceInPlace(product, length, direction) == 0 && absoluteDeviceToHost(product, length, output) == 0)
         {
             return 0;
         }
@@ -859,11 +786,10 @@ int SpectrumEngine::complexMultiplyResidentThenFftThenAbsolute(const ComplexFloa
     return absolute(m_hostFftScratch, output);
 }
 
-int SpectrumEngine::complexMultiplyResidentThenFftThenAbsoluteBatch(
-    const ComplexFloatVector &input1,
-    const std::vector<std::pair<int, int>> &slotAndShift,
-    FFTDirectionType direction,
-    FloatVector *output)
+int SpectrumEngine::complexMultiplyResidentThenFftThenAbsoluteBatch(const ComplexFloatVector &input1,
+                                                                    const std::vector<std::pair<int, int>> &slotAndShift,
+                                                                    FFTDirectionType direction,
+                                                                    FloatVector *output)
 {
     const auto bins = static_cast<unsigned int>(slotAndShift.size());
     const auto length = static_cast<unsigned int>(input1.size());
@@ -872,8 +798,7 @@ int SpectrumEngine::complexMultiplyResidentThenFftThenAbsoluteBatch(
         return -1;
     }
 
-    if (m_batchPathUnavailable || (m_queue == nullptr) ||
-        m_gpu.acquisitionKernelList.size() <= GpuHandler::ComplexMultiplierBatch)
+    if (m_batchPathUnavailable || (m_queue == nullptr) || m_gpu.acquisitionKernelList.size() <= GpuHandler::ComplexMultiplierBatch)
     {
         return -1;
     }
@@ -882,8 +807,7 @@ int SpectrumEngine::complexMultiplyResidentThenFftThenAbsoluteBatch(
     {
         const int slot = binSpec.first;
         const auto slotIndex = static_cast<size_t>(slot);
-        if (slot < 0 || m_slotStates.size() <= slotIndex || m_slotStates[slotIndex] != SlotDevice ||
-            m_slotLengths[slotIndex] != length)
+        if (slot < 0 || m_slotStates.size() <= slotIndex || m_slotStates[slotIndex] != SlotDevice || m_slotLengths[slotIndex] != length)
         {
             return -1;
         }
@@ -929,20 +853,11 @@ int SpectrumEngine::complexMultiplyResidentThenFftThenAbsoluteBatch(
     {
         const auto slotIndex = static_cast<size_t>(slotAndShift[k].first);
         const int shiftRaw = slotAndShift[k].second;
-        const auto shift = static_cast<unsigned int>(
-            ((shiftRaw % static_cast<int>(length)) + static_cast<int>(length)) % static_cast<int>(length));
+        const auto shift = static_cast<unsigned int>(((shiftRaw % static_cast<int>(length)) + static_cast<int>(length)) % static_cast<int>(length));
         m_batchParamsHost[2UL * k] = static_cast<cl_uint>(slotIndex * length);
         m_batchParamsHost[(2UL * k) + 1] = (length - shift) % length;
     }
-    m_error = clEnqueueWriteBuffer(m_queue,
-                                   params,
-                                   CL_TRUE,
-                                   0,
-                                   static_cast<size_t>(bins) * 2 * sizeof(cl_uint),
-                                   m_batchParamsHost.data(),
-                                   0,
-                                   nullptr,
-                                   nullptr);
+    m_error = clEnqueueWriteBuffer(m_queue, params, CL_TRUE, 0, static_cast<size_t>(bins) * 2 * sizeof(cl_uint), m_batchParamsHost.data(), 0, nullptr, nullptr);
     if (m_error != CL_SUCCESS)
     {
         return -1;
@@ -961,8 +876,7 @@ int SpectrumEngine::complexMultiplyResidentThenFftThenAbsoluteBatch(
 
     const size_t multiplyLocalSize = std::min(m_complexMultiplierLocalSize, static_cast<size_t>(length));
     const size_t totalElements = static_cast<size_t>(bins) * length;
-    m_error = clEnqueueNDRangeKernel(
-        m_queue, batchKernel, 1, nullptr, &totalElements, &multiplyLocalSize, 0, nullptr, nullptr);
+    m_error = clEnqueueNDRangeKernel(m_queue, batchKernel, 1, nullptr, &totalElements, &multiplyLocalSize, 0, nullptr, nullptr);
     if (m_error != CL_SUCCESS)
     {
         return -1;
@@ -976,23 +890,20 @@ int SpectrumEngine::complexMultiplyResidentThenFftThenAbsoluteBatch(
     cl_kernel absoluteKernel = m_gpu.acquisitionKernelList[GpuHandler::Absolute];
     size_t absoluteLocalSize = m_absoluteLocalSize;
     unsigned int absolutePointsPerGroup = clampPointsPerGroup(static_cast<unsigned int>(absoluteLocalSize), length);
-    absoluteLocalSize =
-        clampLocalSizeForMinPointsPerItem(static_cast<unsigned int>(absoluteLocalSize), absolutePointsPerGroup, 1);
+    absoluteLocalSize = clampLocalSizeForMinPointsPerItem(static_cast<unsigned int>(absoluteLocalSize), absolutePointsPerGroup, 1);
 
     clSetKernelArg(absoluteKernel, 0, sizeof(cl_mem), reinterpret_cast<const void *>(&work));
     clSetKernelArg(absoluteKernel, 1, sizeof(cl_mem), reinterpret_cast<const void *>(&absOut));
     clSetKernelArg(absoluteKernel, 2, sizeof(unsigned int), &absolutePointsPerGroup);
 
     const size_t absoluteGlobalSize = (totalElements / absolutePointsPerGroup) * absoluteLocalSize;
-    m_error = clEnqueueNDRangeKernel(
-        m_queue, absoluteKernel, 1, nullptr, &absoluteGlobalSize, &absoluteLocalSize, 0, nullptr, nullptr);
+    m_error = clEnqueueNDRangeKernel(m_queue, absoluteKernel, 1, nullptr, &absoluteGlobalSize, &absoluteLocalSize, 0, nullptr, nullptr);
     if (m_error != CL_SUCCESS)
     {
         return -1;
     }
 
     output->resize(totalElements);
-    m_error = clEnqueueReadBuffer(
-        m_queue, absOut, CL_TRUE, 0, totalElements * sizeof(float), output->data(), 0, nullptr, nullptr);
+    m_error = clEnqueueReadBuffer(m_queue, absOut, CL_TRUE, 0, totalElements * sizeof(float), output->data(), 0, nullptr, nullptr);
     return (m_error == CL_SUCCESS) ? 0 : -1;
 }

@@ -33,11 +33,7 @@ class AtmosphericCorrections
      *  @param gpsTimeSec   GPS time of week (s).
      *  @param params       Klobuchar alpha/beta coefficients.
      *  @return Ionospheric delay (m). */
-    static double klobucharIonosphericDelay(const GeodeticPosition &rxPos,
-                                            double elevationDeg,
-                                            double azimuthDeg,
-                                            double gpsTimeSec,
-                                            const KlobucharParams &params);
+    static double klobucharIonosphericDelay(const GeodeticPosition &rxPos, double elevationDeg, double azimuthDeg, double gpsTimeSec, const KlobucharParams &params);
 
     /** @brief Compute Saastamoinen tropospheric delay.
      *  @param rxAltitudeMeters Receiver altitude (m).
@@ -50,10 +46,7 @@ class AtmosphericCorrections
      *  @param satEcef      Satellite ECEF position.
      *  @param azimuthDeg   Azimuth output (deg).
      *  @param elevationDeg Elevation output (deg). */
-    static void computeAzimuthElevation(const EcefPosition &rxEcef,
-                                        const EcefPosition &satEcef,
-                                        double &azimuthDeg,
-                                        double &elevationDeg);
+    static void computeAzimuthElevation(const EcefPosition &rxEcef, const EcefPosition &satEcef, double &azimuthDeg, double &elevationDeg);
 
     /** @brief Compute azimuth and elevation to a satellite. Reuses an already computed geodetic
      *   position. Callers holding one should use this overload. It avoids repeating the ECEF to
@@ -63,11 +56,7 @@ class AtmosphericCorrections
      *  @param satEcef      Satellite ECEF position.
      *  @param azimuthDeg   Azimuth output (deg).
      *  @param elevationDeg Elevation output (deg). */
-    static void computeAzimuthElevation(const GeodeticPosition &rxGeodeticPos,
-                                        const EcefPosition &rxEcef,
-                                        const EcefPosition &satEcef,
-                                        double &azimuthDeg,
-                                        double &elevationDeg);
+    static void computeAzimuthElevation(const GeodeticPosition &rxGeodeticPos, const EcefPosition &rxEcef, const EcefPosition &satEcef, double &azimuthDeg, double &elevationDeg);
 
     /** @brief Compute all atmospheric corrections for one satellite (static).
      *  @param svId       Satellite vehicle ID.
@@ -77,13 +66,8 @@ class AtmosphericCorrections
      *  @param gpsTimeSec GPS time of week (s).
      *  @param input      Klobuchar alpha/beta coefficients.
      *  @return Atmospheric correction output. */
-    static AtmosphericOutput computeCorrections(int svId,
-                                                const GeodeticPosition &rxPos,
-                                                const EcefPosition &rxEcef,
-                                                const EcefPosition &satEcef,
-                                                double gpsTimeSec,
-                                                const AtmosphericInput &input);
-
+    static AtmosphericOutput
+        computeCorrections(int svId, const GeodeticPosition &rxPos, const EcefPosition &rxEcef, const EcefPosition &satEcef, double gpsTimeSec, const AtmosphericInput &input);
 };
 }
 

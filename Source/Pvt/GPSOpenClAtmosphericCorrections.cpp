@@ -38,10 +38,7 @@ AtmosphericOutput AtmosphericCorrections::computeCorrections(int svId,
     return out;
 }
 
-void AtmosphericCorrections::computeAzimuthElevation(const EcefPosition &rxEcef,
-                                                     const EcefPosition &satEcef,
-                                                     double &azimuthDeg,
-                                                     double &elevationDeg)
+void AtmosphericCorrections::computeAzimuthElevation(const EcefPosition &rxEcef, const EcefPosition &satEcef, double &azimuthDeg, double &elevationDeg)
 {
     computeAzimuthElevation(PVTSolver::ecefToWgs84(rxEcef), rxEcef, satEcef, azimuthDeg, elevationDeg);
 }
@@ -78,11 +75,7 @@ void AtmosphericCorrections::computeAzimuthElevation(const GeodeticPosition &rxG
     azimuthDeg = azRad * 180.0 / M_PI;
 }
 
-double AtmosphericCorrections::klobucharIonosphericDelay(const GeodeticPosition &rxPos,
-                                                         double elevationDeg,
-                                                         double azimuthDeg,
-                                                         double gpsTimeSec,
-                                                         const KlobucharParams &params)
+double AtmosphericCorrections::klobucharIonosphericDelay(const GeodeticPosition &rxPos, double elevationDeg, double azimuthDeg, double gpsTimeSec, const KlobucharParams &params)
 {
 
     const double phiU = rxPos.latitudeDeg / 180.0;
@@ -110,12 +103,10 @@ double AtmosphericCorrections::klobucharIonosphericDelay(const GeodeticPosition 
 
     const double F = 1.0 + (16.0 * std::pow(0.53 - el, 3));
 
-    double per = params.beta[0] + (params.beta[1] * phiM) + (params.beta[2] * phiM * phiM) +
-        (params.beta[3] * phiM * phiM * phiM);
+    double per = params.beta[0] + (params.beta[1] * phiM) + (params.beta[2] * phiM * phiM) + (params.beta[3] * phiM * phiM * phiM);
     per = std::max(per, 72000.0);
 
-    double amp = params.alpha[0] + (params.alpha[1] * phiM) + (params.alpha[2] * phiM * phiM) +
-        (params.alpha[3] * phiM * phiM * phiM);
+    double amp = params.alpha[0] + (params.alpha[1] * phiM) + (params.alpha[2] * phiM * phiM) + (params.alpha[3] * phiM * phiM * phiM);
     amp = std::max(amp, 0.0);
 
     const double x = 2.0 * M_PI * (tLocal - 50400.0) / per;

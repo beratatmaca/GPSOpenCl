@@ -32,8 +32,7 @@ TEST(E2ETest, GpsSdrSimPipeline)
         return;
     }
 
-    std::string cmd = gpsSimBin + " -e " + navFile + " -l 48.1173,11.5167,545.4 -s 4096000 -b 8 -d 1 -o " + simBin +
-        " > /dev/null 2>&1";
+    std::string cmd = gpsSimBin + " -e " + navFile + " -l 48.1173,11.5167,545.4 -s 4096000 -b 8 -d 1 -o " + simBin + " > /dev/null 2>&1";
     int sysRet = std::system(cmd.c_str());
     EXPECT_EQ(sysRet, 0);
 
@@ -79,8 +78,7 @@ TEST(E2ETest, ProcessBlockPipelineRunsOnSimulatedSignal)
         return;
     }
 
-    std::string cmd = gpsSimBin + " -e " + navFile + " -l 48.1173,11.5167,545.4 -s 4096000 -b 8 -d 1 -o " + simBin +
-        " > /dev/null 2>&1";
+    std::string cmd = gpsSimBin + " -e " + navFile + " -l 48.1173,11.5167,545.4 -s 4096000 -b 8 -d 1 -o " + simBin + " > /dev/null 2>&1";
     ASSERT_EQ(std::system(cmd.c_str()), 0);
 
     GPSOpenCl::ComplexFloatVector inputSignal;

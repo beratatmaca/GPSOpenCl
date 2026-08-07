@@ -40,8 +40,7 @@ TEST(PVTSolverTest, OrbitCalculation)
 
     GPSOpenCl::SatelliteOrbit orbit = GPSOpenCl::PVTSolver::computeSatelliteOrbit(ephem, 1000.0);
 
-    double radius = std::sqrt(orbit.position.x * orbit.position.x + orbit.position.y * orbit.position.y +
-                              orbit.position.z * orbit.position.z);
+    double radius = std::sqrt(orbit.position.x * orbit.position.x + orbit.position.y * orbit.position.y + orbit.position.z * orbit.position.z);
 
     double expectedRadius = ephem.sqrtA * ephem.sqrtA * (1.0 - ephem.e);
     EXPECT_NEAR(radius, expectedRadius, 10.0);
@@ -94,8 +93,7 @@ TEST(PVTSolverTest, OutlierWithMinimalRedundancyYieldsNoFix)
         ephemerides[i].omega0 = i * 1.57;
         ephemerides[i].omegaDot = 0.0;
         ephemerides[i].omega = 0.0;
-        ephemerides[i].Cuc = ephemerides[i].Cus = ephemerides[i].Crc = ephemerides[i].Crs = ephemerides[i].Cic =
-            ephemerides[i].Cis = 0.0;
+        ephemerides[i].Cuc = ephemerides[i].Cus = ephemerides[i].Crc = ephemerides[i].Crs = ephemerides[i].Cic = ephemerides[i].Cis = 0.0;
         ephemerides[i].af0 = ephemerides[i].af1 = ephemerides[i].af2 = 0.0;
 
         GPSOpenCl::SatelliteOrbit orbit = GPSOpenCl::PVTSolver::computeSatelliteOrbit(ephemerides[i], 0.0);
@@ -115,8 +113,7 @@ TEST(PVTSolverTest, OutlierWithMinimalRedundancyYieldsNoFix)
 
         GPSOpenCl::GeodeticPosition rxGeo = GPSOpenCl::PVTSolver::ecefToWgs84(rxEcef);
         GPSOpenCl::AtmosphericInput noIonoParams{};
-        GPSOpenCl::AtmosphericOutput atmo = GPSOpenCl::AtmosphericCorrections::computeCorrections(
-            ephemerides[i].svId, rxGeo, rxEcef, orbit.position, 0.0, noIonoParams);
+        GPSOpenCl::AtmosphericOutput atmo = GPSOpenCl::AtmosphericCorrections::computeCorrections(ephemerides[i].svId, rxGeo, rxEcef, orbit.position, 0.0, noIonoParams);
         measuredRanges[i] += atmo.ionoDelayMeters + atmo.tropoDelayMeters;
     }
 
@@ -173,8 +170,7 @@ TEST(PVTSolverTest, IonosphericCorrectionAppliedWhenParamsSet)
         ephemerides[i].omega0 = i * 1.57;
         ephemerides[i].omegaDot = 0.0;
         ephemerides[i].omega = 0.0;
-        ephemerides[i].Cuc = ephemerides[i].Cus = ephemerides[i].Crc = ephemerides[i].Crs = ephemerides[i].Cic =
-            ephemerides[i].Cis = 0.0;
+        ephemerides[i].Cuc = ephemerides[i].Cus = ephemerides[i].Crc = ephemerides[i].Crs = ephemerides[i].Cic = ephemerides[i].Cis = 0.0;
         ephemerides[i].af0 = ephemerides[i].af1 = ephemerides[i].af2 = 0.0;
 
         GPSOpenCl::SatelliteOrbit orbit = GPSOpenCl::PVTSolver::computeSatelliteOrbit(ephemerides[i], 45000.0);
@@ -193,8 +189,7 @@ TEST(PVTSolverTest, IonosphericCorrectionAppliedWhenParamsSet)
         measuredRanges[i] = std::sqrt(dx * dx + dy * dy + dz * dz);
 
         GPSOpenCl::GeodeticPosition rxGeo = GPSOpenCl::PVTSolver::ecefToWgs84(rxEcef);
-        GPSOpenCl::AtmosphericOutput atmo = GPSOpenCl::AtmosphericCorrections::computeCorrections(
-            ephemerides[i].svId, rxGeo, rxEcef, orbit.position, 45000.0, ionoParams);
+        GPSOpenCl::AtmosphericOutput atmo = GPSOpenCl::AtmosphericCorrections::computeCorrections(ephemerides[i].svId, rxGeo, rxEcef, orbit.position, 45000.0, ionoParams);
         measuredRanges[i] += atmo.ionoDelayMeters + atmo.tropoDelayMeters;
     }
 
@@ -211,8 +206,7 @@ TEST(PVTSolverTest, IonosphericCorrectionAppliedWhenParamsSet)
     GPSOpenCl::PVTSolver uncorrectedSolver;
     GPSOpenCl::ReceiverPvtSolution uncorrectedSolution;
     uncorrectedSolver.solvePosition(ephemerides, measuredRanges, transmitTimes, uncorrectedSolution);
-    double uncorrectedError = std::sqrt(std::pow(uncorrectedSolution.ecefPosition.x - rxEcef.x, 2) +
-                                        std::pow(uncorrectedSolution.ecefPosition.y - rxEcef.y, 2) +
+    double uncorrectedError = std::sqrt(std::pow(uncorrectedSolution.ecefPosition.x - rxEcef.x, 2) + std::pow(uncorrectedSolution.ecefPosition.y - rxEcef.y, 2) +
                                         std::pow(uncorrectedSolution.ecefPosition.z - rxEcef.z, 2));
     EXPECT_GT(uncorrectedError, 1.0);
 }
@@ -246,8 +240,7 @@ TEST(PVTSolverTest, ElevationWeightingTrustsHighElevationSatelliteMoreThanLowEle
         ephemerides[i].omega0 = i * 1.05;
         ephemerides[i].omegaDot = 0.0;
         ephemerides[i].omega = 0.0;
-        ephemerides[i].Cuc = ephemerides[i].Cus = ephemerides[i].Crc = ephemerides[i].Crs = ephemerides[i].Cic =
-            ephemerides[i].Cis = 0.0;
+        ephemerides[i].Cuc = ephemerides[i].Cus = ephemerides[i].Crc = ephemerides[i].Crs = ephemerides[i].Cic = ephemerides[i].Cis = 0.0;
         ephemerides[i].af0 = ephemerides[i].af1 = ephemerides[i].af2 = 0.0;
 
         GPSOpenCl::SatelliteOrbit orbit = GPSOpenCl::PVTSolver::computeSatelliteOrbit(ephemerides[i], 0.0);
@@ -277,9 +270,8 @@ TEST(PVTSolverTest, ElevationWeightingTrustsHighElevationSatelliteMoreThanLowEle
         if (elevations[i] < elevations[lowIdx]) lowIdx = i;
     }
     ASSERT_NE(highIdx, lowIdx) << "Need distinct high/low elevation satellites for this test to be meaningful";
-    ASSERT_GT(elevations[highIdx] - elevations[lowIdx], 20.0)
-        << "Test satellite geometry does not produce enough elevation spread to be meaningful. "
-        << "high=" << elevations[highIdx] << " low=" << elevations[lowIdx];
+    ASSERT_GT(elevations[highIdx] - elevations[lowIdx], 20.0) << "Test satellite geometry does not produce enough elevation spread to be meaningful. "
+                                                              << "high=" << elevations[highIdx] << " low=" << elevations[lowIdx];
 
     const double injectedBiasMeters = 20.0;
     std::vector<double> transmitTimes(numSats, 0.0);
@@ -289,23 +281,20 @@ TEST(PVTSolverTest, ElevationWeightingTrustsHighElevationSatelliteMoreThanLowEle
     GPSOpenCl::PVTSolver solverHigh;
     GPSOpenCl::ReceiverPvtSolution solutionHigh;
     ASSERT_TRUE(solverHigh.solvePosition(ephemerides, rangesHighCorrupted, transmitTimes, solutionHigh));
-    double errorHigh = std::sqrt(std::pow(solutionHigh.ecefPosition.x - rxEcef.x, 2) +
-                                 std::pow(solutionHigh.ecefPosition.y - rxEcef.y, 2) +
-                                 std::pow(solutionHigh.ecefPosition.z - rxEcef.z, 2));
+    double errorHigh =
+        std::sqrt(std::pow(solutionHigh.ecefPosition.x - rxEcef.x, 2) + std::pow(solutionHigh.ecefPosition.y - rxEcef.y, 2) + std::pow(solutionHigh.ecefPosition.z - rxEcef.z, 2));
 
     std::vector<double> rangesLowCorrupted = measuredRanges;
     rangesLowCorrupted[static_cast<size_t>(lowIdx)] += injectedBiasMeters;
     GPSOpenCl::PVTSolver solverLow;
     GPSOpenCl::ReceiverPvtSolution solutionLow;
     ASSERT_TRUE(solverLow.solvePosition(ephemerides, rangesLowCorrupted, transmitTimes, solutionLow));
-    double errorLow = std::sqrt(std::pow(solutionLow.ecefPosition.x - rxEcef.x, 2) +
-                                std::pow(solutionLow.ecefPosition.y - rxEcef.y, 2) +
-                                std::pow(solutionLow.ecefPosition.z - rxEcef.z, 2));
+    double errorLow =
+        std::sqrt(std::pow(solutionLow.ecefPosition.x - rxEcef.x, 2) + std::pow(solutionLow.ecefPosition.y - rxEcef.y, 2) + std::pow(solutionLow.ecefPosition.z - rxEcef.z, 2));
 
-    EXPECT_GT(errorHigh - errorLow, 7.5)
-        << "Expected an equal-size range error on the high-elevation (more trusted) satellite to pull "
-        << "the weighted solution noticeably further off than the same-size error on the low-elevation "
-        << "satellite -- errorHigh=" << errorHigh << "m errorLow=" << errorLow << "m";
+    EXPECT_GT(errorHigh - errorLow, 7.5) << "Expected an equal-size range error on the high-elevation (more trusted) satellite to pull "
+                                         << "the weighted solution noticeably further off than the same-size error on the low-elevation "
+                                         << "satellite -- errorHigh=" << errorHigh << "m errorLow=" << errorLow << "m";
 }
 
 TEST(PVTSolverTest, ComputeReceiverTimeIsConsistentAcrossSatellites)
@@ -336,16 +325,14 @@ TEST(PVTSolverTest, ComputeReceiverTimeIsConsistentAcrossSatellites)
         ephemerides[i].omega0 = i * 1.05;
         ephemerides[i].omegaDot = 0.0;
         ephemerides[i].omega = 0.0;
-        ephemerides[i].Cuc = ephemerides[i].Cus = ephemerides[i].Crc = ephemerides[i].Crs = ephemerides[i].Cic =
-            ephemerides[i].Cis = 0.0;
+        ephemerides[i].Cuc = ephemerides[i].Cus = ephemerides[i].Crc = ephemerides[i].Crs = ephemerides[i].Cic = ephemerides[i].Cis = 0.0;
         ephemerides[i].af0 = ephemerides[i].af1 = ephemerides[i].af2 = 0.0;
 
         double transitTime = 0.075;
         for (int iter = 0; iter < 6; iter++)
         {
             double candidateTransmitTime = trueNowTow - transitTime;
-            GPSOpenCl::SatelliteOrbit orbit =
-                GPSOpenCl::PVTSolver::computeSatelliteOrbit(ephemerides[i], candidateTransmitTime);
+            GPSOpenCl::SatelliteOrbit orbit = GPSOpenCl::PVTSolver::computeSatelliteOrbit(ephemerides[i], candidateTransmitTime);
             double dx = orbit.position.x - rxEcef.x;
             double dy = orbit.position.y - rxEcef.y;
             double dz = orbit.position.z - rxEcef.z;
@@ -356,11 +343,9 @@ TEST(PVTSolverTest, ComputeReceiverTimeIsConsistentAcrossSatellites)
 
     double receiverTime = GPSOpenCl::PVTSolver::computeReceiverTime(ephemerides, transmitTimes, rxEcef);
 
-    EXPECT_NEAR(receiverTime, trueNowTow, 1e-6)
-        << "computeReceiverTime should reconstruct the true 'now' instant (to numerical precision) "
-        << "when every transmitTimeSeconds[i] is the true transmit time of the currently-arriving "
-        << "signal and referenceEcef is the true receiver position -- got " << receiverTime << " expected "
-        << trueNowTow;
+    EXPECT_NEAR(receiverTime, trueNowTow, 1e-6) << "computeReceiverTime should reconstruct the true 'now' instant (to numerical precision) "
+                                                << "when every transmitTimeSeconds[i] is the true transmit time of the currently-arriving "
+                                                << "signal and referenceEcef is the true receiver position -- got " << receiverTime << " expected " << trueNowTow;
 }
 
 TEST(PVTSolverTest, SvClockBiasDoesNotDegradePositionSolution)
@@ -394,15 +379,13 @@ TEST(PVTSolverTest, SvClockBiasDoesNotDegradePositionSolution)
         ephemerides[i].omega0 = i * 1.05;
         ephemerides[i].omegaDot = 0.0;
         ephemerides[i].omega = 0.0;
-        ephemerides[i].Cuc = ephemerides[i].Cus = ephemerides[i].Crc = ephemerides[i].Crs = ephemerides[i].Cic =
-            ephemerides[i].Cis = 0.0;
+        ephemerides[i].Cuc = ephemerides[i].Cus = ephemerides[i].Crc = ephemerides[i].Crs = ephemerides[i].Cic = ephemerides[i].Cis = 0.0;
         ephemerides[i].af0 = af0Values[i];
         ephemerides[i].af1 = 0.0;
         ephemerides[i].af2 = 0.0;
         ephemerides[i].tgd = 0.0;
 
-        GPSOpenCl::SatelliteOrbit orbit =
-            GPSOpenCl::PVTSolver::computeSatelliteOrbit(ephemerides[i], transmitTimes[static_cast<size_t>(i)]);
+        GPSOpenCl::SatelliteOrbit orbit = GPSOpenCl::PVTSolver::computeSatelliteOrbit(ephemerides[i], transmitTimes[static_cast<size_t>(i)]);
         double dx = orbit.position.x - rxEcef.x;
         double dy = orbit.position.y - rxEcef.y;
         double dz = orbit.position.z - rxEcef.z;
@@ -421,8 +404,8 @@ TEST(PVTSolverTest, SvClockBiasDoesNotDegradePositionSolution)
 
         GPSOpenCl::GeodeticPosition rxGeo = GPSOpenCl::PVTSolver::ecefToWgs84(rxEcef);
         GPSOpenCl::AtmosphericInput noIonoParams{};
-        GPSOpenCl::AtmosphericOutput atmo = GPSOpenCl::AtmosphericCorrections::computeCorrections(
-            ephemerides[i].svId, rxGeo, rxEcef, orbit.position, transmitTimes[static_cast<size_t>(i)], noIonoParams);
+        GPSOpenCl::AtmosphericOutput atmo =
+            GPSOpenCl::AtmosphericCorrections::computeCorrections(ephemerides[i].svId, rxGeo, rxEcef, orbit.position, transmitTimes[static_cast<size_t>(i)], noIonoParams);
         measuredRanges[static_cast<size_t>(i)] += atmo.ionoDelayMeters + atmo.tropoDelayMeters;
     }
 
@@ -430,9 +413,8 @@ TEST(PVTSolverTest, SvClockBiasDoesNotDegradePositionSolution)
     GPSOpenCl::ReceiverPvtSolution solution;
     ASSERT_TRUE(solver.solvePosition(ephemerides, measuredRanges, transmitTimes, solution));
 
-    EXPECT_NEAR(solution.ecefPosition.x, rxEcef.x, 1.0)
-        << "Per-satellite SV clock bias should cancel exactly against solvePosition's own "
-        << "c*orbit.clockBias correction and not leak into the position estimate";
+    EXPECT_NEAR(solution.ecefPosition.x, rxEcef.x, 1.0) << "Per-satellite SV clock bias should cancel exactly against solvePosition's own "
+                                                        << "c*orbit.clockBias correction and not leak into the position estimate";
     EXPECT_NEAR(solution.ecefPosition.y, rxEcef.y, 1.0);
     EXPECT_NEAR(solution.ecefPosition.z, rxEcef.z, 1.0);
 }

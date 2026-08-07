@@ -9,11 +9,11 @@
 #include <vector>
 
 #include "Acquisition/GPSOpenClCaCodeGenerator.hpp"
-#include "Tracking/GPSOpenClChannel.hpp"
 #include "Common/GPSOpenClCommon.hpp"
 #include "Common/GPSOpenClSettings.hpp"
-#include "Gpu/GPSOpenClSpectrumEngine.hpp"
 #include "Common/GPSOpenClStructs.hpp"
+#include "Gpu/GPSOpenClSpectrumEngine.hpp"
+#include "Tracking/GPSOpenClChannel.hpp"
 
 namespace GPSOpenCl
 {
@@ -87,7 +87,7 @@ class Acquisition
     float m_freqSpacingHz;                              ///< Doppler bin spacing (Hz).
     int m_length;                                       ///< Samples per code period.
     float m_samplingFrequencyHz;                        ///< Sampling rate (Hz).
-    int m_reuseFactor;    ///< Number of forward-FFT reference spectra (see computeReuseFactor).
+    int m_reuseFactor;                                  ///< Number of forward-FFT reference spectra (see computeReuseFactor).
 };
 }
 

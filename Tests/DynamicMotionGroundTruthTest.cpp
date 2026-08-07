@@ -35,8 +35,7 @@ TEST(DynamicMotionGroundTruthTest, AcquisitionAndTrackingMatchSimulatorTruthUnde
     std::string iqFile = "dynamic_motion_iq.bin";
     std::string truthFile = "dynamic_motion_truth.bin";
 
-    std::string cmd = gpsSimBin + " -e " + navFile + " -u " + motionFile + " -s 4096000 -b 8 -d 2 -o " + iqFile +
-        " -G " + truthFile + " > /dev/null 2>&1";
+    std::string cmd = gpsSimBin + " -e " + navFile + " -u " + motionFile + " -s 4096000 -b 8 -d 2 -o " + iqFile + " -G " + truthFile + " > /dev/null 2>&1";
     int sysRet = std::system(cmd.c_str());
     ASSERT_EQ(sysRet, 0);
 
@@ -99,12 +98,10 @@ TEST(DynamicMotionGroundTruthTest, AcquisitionAndTrackingMatchSimulatorTruthUnde
         ASSERT_NE(it, firstTruthByPrn.end()) << "Acquired PRN " << acq.prn << " has no ground truth record";
 
         double dopplerDiff = std::fabs(acq.peakFrequencyHz - it->second.trueDopplerHz);
-        EXPECT_LT(dopplerDiff, 400.0) << "PRN " << acq.prn << " acquired Doppler " << acq.peakFrequencyHz
-                                      << " Hz too far from true Doppler " << it->second.trueDopplerHz << " Hz";
+        EXPECT_LT(dopplerDiff, 400.0) << "PRN " << acq.prn << " acquired Doppler " << acq.peakFrequencyHz << " Hz too far from true Doppler " << it->second.trueDopplerHz << " Hz";
         acquiredCount++;
     }
-    EXPECT_GE(acquiredCount, 10)
-        << "Expected most of the scenario's real satellites to acquire under a moving receiver trajectory";
+    EXPECT_GE(acquiredCount, 10) << "Expected most of the scenario's real satellites to acquire under a moving receiver trajectory";
 
     ASSERT_FALSE(sink->trackingOutputs.empty());
 
@@ -134,8 +131,8 @@ TEST(DynamicMotionGroundTruthTest, AcquisitionAndTrackingMatchSimulatorTruthUnde
         }
 
         double dopplerDiff = std::fabs(entry.second.carrierFreqHz - it->second.trueDopplerHz);
-        EXPECT_LT(dopplerDiff, 50.0) << "PRN " << entry.first << " tracked Doppler " << entry.second.carrierFreqHz
-                                     << " Hz too far from true Doppler " << it->second.trueDopplerHz << " Hz";
+        EXPECT_LT(dopplerDiff, 50.0) << "PRN " << entry.first << " tracked Doppler " << entry.second.carrierFreqHz << " Hz too far from true Doppler " << it->second.trueDopplerHz
+                                     << " Hz";
         convergedCount++;
     }
     EXPECT_GT(convergedCount, 0) << "Expected at least one channel to reach confirmed Tracking under motion";

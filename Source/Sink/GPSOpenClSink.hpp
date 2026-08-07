@@ -51,15 +51,12 @@ struct SinkMessage
 };
 
 static_assert(sizeof(SourceOutput) <= SinkMessage::MAX_DATA_BYTES, "SourceOutput exceeds SinkMessage capacity");
-static_assert(sizeof(AcquisitionOutput) <= SinkMessage::MAX_DATA_BYTES,
-              "AcquisitionOutput exceeds SinkMessage capacity");
+static_assert(sizeof(AcquisitionOutput) <= SinkMessage::MAX_DATA_BYTES, "AcquisitionOutput exceeds SinkMessage capacity");
 static_assert(sizeof(TrackingOutput) <= SinkMessage::MAX_DATA_BYTES, "TrackingOutput exceeds SinkMessage capacity");
 static_assert(sizeof(NavDecoderOutput) <= SinkMessage::MAX_DATA_BYTES, "NavDecoderOutput exceeds SinkMessage capacity");
 static_assert(sizeof(PvtSolverOutput) <= SinkMessage::MAX_DATA_BYTES, "PvtSolverOutput exceeds SinkMessage capacity");
-static_assert(sizeof(AtmosphericOutput) <= SinkMessage::MAX_DATA_BYTES,
-              "AtmosphericOutput exceeds SinkMessage capacity");
-static_assert(sizeof(NmeaGeneratorOutput) <= SinkMessage::MAX_DATA_BYTES,
-              "NmeaGeneratorOutput exceeds SinkMessage capacity");
+static_assert(sizeof(AtmosphericOutput) <= SinkMessage::MAX_DATA_BYTES, "AtmosphericOutput exceeds SinkMessage capacity");
+static_assert(sizeof(NmeaGeneratorOutput) <= SinkMessage::MAX_DATA_BYTES, "NmeaGeneratorOutput exceeds SinkMessage capacity");
 static_assert(sizeof(ProfilerOutput) <= SinkMessage::MAX_DATA_BYTES, "ProfilerOutput exceeds SinkMessage capacity");
 
 /** @brief Abstract telemetry output interface. The base class serializes publish calls. So

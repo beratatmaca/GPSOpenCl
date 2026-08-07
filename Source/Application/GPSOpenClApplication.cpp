@@ -75,21 +75,16 @@ void Application::finalizeAcquisition(int channelIndex, double correlateMs)
     std::ostringstream acqMsg;
     acqMsg << "SV ID " << channel.svId << " C/N0 : " << cn0 << "\n";
 
-    const auto acquisitionCn0ThresholdDbHz =
-        static_cast<float>(m_configuration.acquisitionInput.acquisitionCn0ThresholdDbHz);
+    const auto acquisitionCn0ThresholdDbHz = static_cast<float>(m_configuration.acquisitionInput.acquisitionCn0ThresholdDbHz);
     if (cn0 >= acquisitionCn0ThresholdDbHz)
     {
         channel.setAcquired(true);
         const int numberOfSamplesPerCode = m_configuration.acquisitionInput.numberOfSamplesPerCode;
         auto numSamplesFloat = static_cast<float>(numberOfSamplesPerCode);
-        const int reflectedPeakIndex =
-            (numberOfSamplesPerCode > 0) ? ((numberOfSamplesPerCode - peakIndex) % numberOfSamplesPerCode) : 0;
-        const float codePhaseChips = (numSamplesFloat > 0.0f)
-            ? (static_cast<float>(reflectedPeakIndex) / numSamplesFloat) * GPS_CA_CODE_LENGTH
-            : 0.0f;
+        const int reflectedPeakIndex = (numberOfSamplesPerCode > 0) ? ((numberOfSamplesPerCode - peakIndex) % numberOfSamplesPerCode) : 0;
+        const float codePhaseChips = (numSamplesFloat > 0.0f) ? (static_cast<float>(reflectedPeakIndex) / numSamplesFloat) * GPS_CA_CODE_LENGTH : 0.0f;
         channel.initTracking(m_configuration, dopplerHz, codePhaseChips);
-        acqMsg << "--> SV ID " << channel.svId << " ACQUIRED! (C/N0: " << cn0 << " dB-Hz, Doppler: " << dopplerHz
-               << " Hz)" << '\n';
+        acqMsg << "--> SV ID " << channel.svId << " ACQUIRED! (C/N0: " << cn0 << " dB-Hz, Doppler: " << dopplerHz << " Hz)" << '\n';
     }
 
     m_telemetryExporter.pushConsole(acqMsg.str());
@@ -130,8 +125,7 @@ void Application::acquisitionWorkerLoop()
         }
         catch (const std::exception &e)
         {
-            std::cerr << "Acquisition worker: channel " << (job.channelIndex + 1) << " search threw: " << e.what()
-                      << '\n';
+            std::cerr << "Acquisition worker: channel " << (job.channelIndex + 1) << " search threw: " << e.what() << '\n';
             AcquisitionResult result;
             result.channelIndex = job.channelIndex;
             m_acquisitionResultQueue.tryPush(std::move(result));
@@ -227,8 +221,7 @@ std::vector<Application::ChannelDiagnostic> Application::getChannelDiagnostics()
     std::vector<ChannelDiagnostic> diagnostics;
     for (const auto &channel : m_channels)
     {
-        if (!channel.isTrackingConfirmed() || channel.getBitSyncPhase() < 0 ||
-            channel.getLastSubframeStartSample() == 0)
+        if (!channel.isTrackingConfirmed() || channel.getBitSyncPhase() < 0 || channel.getLastSubframeStartSample() == 0)
         {
             continue;
         }
@@ -245,8 +238,7 @@ std::vector<Application::ChannelDiagnostic> Application::getChannelDiagnostics()
         diag.subframeStartTow = channel.getLastSubframeTow() - GPS_NAV_SUBFRAME_DURATION_SEC;
         diag.subframeStartSample = channel.getLastSubframeStartSample();
         diag.codePhaseAtSubframeStart = channel.getCodePhaseAtSample(diag.subframeStartSample);
-        if (!MeasurementAssembler::computeElapsedSecondsSincePromptStart(
-                promptCount, diag.subframeStartSample, diag.elapsedSeconds))
+        if (!MeasurementAssembler::computeElapsedSecondsSincePromptStart(promptCount, diag.subframeStartSample, diag.elapsedSeconds))
         {
             continue;
         }
@@ -260,8 +252,7 @@ std::vector<Application::ChannelDiagnostic> Application::getChannelDiagnostics()
 bool Application::computeNavigationSolution(ReceiverPvtSolution &solution)
 {
     MeasurementAssembler::Measurements measurements;
-    if (!MeasurementAssembler::assemble(
-            m_channels, GPS_CA_SV_COUNT, m_pvtSolver.getReferenceEcef(), isReferencePositionTrusted(), measurements))
+    if (!MeasurementAssembler::assemble(m_channels, GPS_CA_SV_COUNT, m_pvtSolver.getReferenceEcef(), isReferencePositionTrusted(), measurements))
     {
         static int insufficientSatCount = 0;
         if (insufficientSatCount++ % 20 == 0)
@@ -304,13 +295,10 @@ bool Application::computeNavigationSolution(ReceiverPvtSolution &solution)
         consoleOut << "\n=============================================" << '\n';
         consoleOut << "   GPS PVT Position Solution Computed        " << '\n';
         consoleOut << "=============================================" << '\n';
-        consoleOut << "ECEF Position : X = " << solution.ecefPosition.x << " m, Y = " << solution.ecefPosition.y
-                   << " m, Z = " << solution.ecefPosition.z << " m" << '\n';
-        consoleOut << "WGS-84 Position: Lat = " << solution.geodeticPosition.latitudeDeg
-                   << " deg, Lon = " << solution.geodeticPosition.longitudeDeg
+        consoleOut << "ECEF Position : X = " << solution.ecefPosition.x << " m, Y = " << solution.ecefPosition.y << " m, Z = " << solution.ecefPosition.z << " m" << '\n';
+        consoleOut << "WGS-84 Position: Lat = " << solution.geodeticPosition.latitudeDeg << " deg, Lon = " << solution.geodeticPosition.longitudeDeg
                    << " deg, Alt = " << solution.geodeticPosition.altitudeMeters << " m" << '\n';
-        consoleOut << "DOP Metrics    : HDOP = " << solution.dopHDOP << ", PDOP = " << solution.dopPDOP
-                   << ", VDOP = " << solution.dopVDOP << '\n';
+        consoleOut << "DOP Metrics    : HDOP = " << solution.dopHDOP << ", PDOP = " << solution.dopPDOP << ", VDOP = " << solution.dopVDOP << '\n';
 
         std::vector<std::string> gpgsvSentences;
         if (m_nmeaGenerator.isGsvEnabled())
@@ -319,8 +307,7 @@ bool Application::computeNavigationSolution(ReceiverPvtSolution &solution)
         }
 
         const int gpsWeekNumber = ephemerides.empty() ? 0 : ephemerides[0].weekNumber;
-        const std::string ggaSentence =
-            NmeaGenerator::generateGgga(solution, static_cast<int>(activePrns.size()), receiverTime, gpsWeekNumber);
+        const std::string ggaSentence = NmeaGenerator::generateGgga(solution, static_cast<int>(activePrns.size()), receiverTime, gpsWeekNumber);
         const std::string rmcSentence = NmeaGenerator::generateGprmc(solution, receiverTime, gpsWeekNumber);
         const std::string gsaSentence = NmeaGenerator::generateGpgsa(solution, activePrns);
 
@@ -350,17 +337,12 @@ bool Application::computeNavigationSolution(ReceiverPvtSolution &solution)
         {
             m_sink->publishPvtSolverOutput(PVTSolver::solutionToOutput(solution));
 
-            const AtmosphericInput ionoParams =
-                m_navDecoder.hasIonosphericParams() ? m_navDecoder.getIonosphericParams() : AtmosphericInput{};
+            const AtmosphericInput ionoParams = m_navDecoder.hasIonosphericParams() ? m_navDecoder.getIonosphericParams() : AtmosphericInput{};
             for (size_t i = 0; i < ephemerides.size(); i++)
             {
                 const SatelliteOrbit orbit = PVTSolver::computeSatelliteOrbit(ephemerides[i], transmitTimes[i]);
-                const AtmosphericOutput atmoOut = AtmosphericCorrections::computeCorrections(activePrns[i],
-                                                                                             solution.geodeticPosition,
-                                                                                             solution.ecefPosition,
-                                                                                             orbit.position,
-                                                                                             receiverTime,
-                                                                                             ionoParams);
+                const AtmosphericOutput atmoOut =
+                    AtmosphericCorrections::computeCorrections(activePrns[i], solution.geodeticPosition, solution.ecefPosition, orbit.position, receiverTime, ionoParams);
                 m_sink->publishAtmosphericOutput(atmoOut);
             }
 
@@ -433,8 +415,7 @@ void Application::processBlock(const ComplexFloatVector &input, uint32_t blockIn
                 const int32_t slotWidth = std::max<int32_t>(1, reacquisitionIntervalBlocks / GPS_CA_SV_COUNT);
                 if (blockIndex % static_cast<uint32_t>(slotWidth) == 0)
                 {
-                    channelToSearch = static_cast<int>((blockIndex / static_cast<uint32_t>(slotWidth)) %
-                                                       static_cast<uint32_t>(GPS_CA_SV_COUNT));
+                    channelToSearch = static_cast<int>((blockIndex / static_cast<uint32_t>(slotWidth)) % static_cast<uint32_t>(GPS_CA_SV_COUNT));
                 }
             }
         }
@@ -521,8 +502,7 @@ void Application::exportTelemetryJson(const std::string &filepath,
             if (promptCount >= subframeStartSample)
             {
                 const double subframeStartTow = channel.getLastSubframeTow() - GPS_NAV_SUBFRAME_DURATION_SEC;
-                const double elapsedSeconds =
-                    static_cast<double>(promptCount - subframeStartSample) * GPS_CA_CODE_PERIOD_SEC;
+                const double elapsedSeconds = static_cast<double>(promptCount - subframeStartSample) * GPS_CA_CODE_PERIOD_SEC;
                 sat.transmitTime = subframeStartTow + elapsedSeconds;
                 sat.ephemeris = channel.getAccumulatedEphemeris();
                 sat.computeOrbit = true;

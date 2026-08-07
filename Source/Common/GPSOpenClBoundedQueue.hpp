@@ -21,11 +21,7 @@ template<typename T> class BoundedQueue
   public:
     /** @brief Construct with max capacity.
      *  @param maxCapacity Maximum queue size. */
-    explicit BoundedQueue(size_t maxCapacity = 16)
-        : m_storage(maxCapacity == 0 ? 1 : maxCapacity),
-          m_maxCapacity(maxCapacity == 0 ? 1 : maxCapacity)
-    {
-    }
+    explicit BoundedQueue(size_t maxCapacity = 16) : m_storage(maxCapacity == 0 ? 1 : maxCapacity), m_maxCapacity(maxCapacity == 0 ? 1 : maxCapacity) {}
 
     /** @brief Push an item, blocking if full.
      *  @param item Item to push.

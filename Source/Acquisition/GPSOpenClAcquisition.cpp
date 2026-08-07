@@ -65,8 +65,7 @@ void Acquisition::exp(int length, float frequency, float samplingRateHz, float p
     for (int sample = 0; sample < length; sample++)
     {
         auto sampleFloating = static_cast<float>(sample);
-        value = std::exp(IMAGINARY_UNIT *
-                         ((2.0f * pi * frequency * sampleFloating * (1.0f / samplingRateHz)) + phaseOffset));
+        value = std::exp(IMAGINARY_UNIT * ((2.0f * pi * frequency * sampleFloating * (1.0f / samplingRateHz)) + phaseOffset));
         output->push_back(value);
     }
 }
@@ -92,10 +91,7 @@ int Acquisition::computeReuseFactor() const
     return rounded;
 }
 
-void Acquisition::correlate(const ComplexFloatVector &input,
-                            SpectrumEngine *gpu,
-                            CaCodeGenerator *code,
-                            Channel *acqChannel)
+void Acquisition::correlate(const ComplexFloatVector &input, SpectrumEngine *gpu, CaCodeGenerator *code, Channel *acqChannel)
 {
     acqChannel->resetAcquisitionMetrics();
 
@@ -105,8 +101,7 @@ void Acquisition::correlate(const ComplexFloatVector &input,
     {
         if (gpu->complexMultiplyThenFftToSlot(input, m_dopplerSearch[r], SpectrumEngine::FFTForward, r) != 0)
         {
-            std::cerr << "Acquisition::correlate: forward FFT failed for SV " << acqChannel->svId
-                      << " (samplesPerCode=" << m_length
+            std::cerr << "Acquisition::correlate: forward FFT failed for SV " << acqChannel->svId << " (samplesPerCode=" << m_length
                       << "; requires a power of two, otherwise the compute device reported an error); skipping "
                          "correlation"
                       << '\n';
@@ -149,15 +144,13 @@ void Acquisition::correlate(const ComplexFloatVector &input,
     };
 
     m_batchAbs.clear();
-    if (gpu->complexMultiplyResidentThenFftThenAbsoluteBatch(
-            codeSpectrum, m_binSlotShift, SpectrumEngine::FFTInverse, &m_batchAbs) == 0 &&
+    if (gpu->complexMultiplyResidentThenFftThenAbsoluteBatch(codeSpectrum, m_binSlotShift, SpectrumEngine::FFTInverse, &m_batchAbs) == 0 &&
         m_batchAbs.size() == static_cast<size_t>(m_numberOfFreqencyBins) * static_cast<size_t>(m_length))
     {
         float frequency = m_initialFrequencyHz;
         for (int freqBin = 0; freqBin < m_numberOfFreqencyBins; freqBin++)
         {
-            const float *binValues =
-                m_batchAbs.data() + (static_cast<size_t>(freqBin) * static_cast<size_t>(m_length));
+            const float *binValues = m_batchAbs.data() + (static_cast<size_t>(freqBin) * static_cast<size_t>(m_length));
             accumulateBin(binValues, static_cast<size_t>(m_length), frequency);
             frequency += m_freqSpacingHz;
         }
@@ -171,18 +164,16 @@ void Acquisition::correlate(const ComplexFloatVector &input,
             const int residue = freqBin % m_reuseFactor;
             const int shift = freqBin / m_reuseFactor;
 
-            if (gpu->complexMultiplyResidentThenFftThenAbsolute(
-                    codeSpectrum, residue, shift, SpectrumEngine::FFTInverse, &correlationAbs) != 0)
+            if (gpu->complexMultiplyResidentThenFftThenAbsolute(codeSpectrum, residue, shift, SpectrumEngine::FFTInverse, &correlationAbs) != 0)
             {
-                std::cerr << "Acquisition::correlate: inverse FFT failed (samplesPerCode=" << m_length
-                          << " is not a power of two); skipping correlation for SV " << acqChannel->svId << '\n';
+                std::cerr << "Acquisition::correlate: inverse FFT failed (samplesPerCode=" << m_length << " is not a power of two); skipping correlation for SV "
+                          << acqChannel->svId << '\n';
                 return;
             }
 
             if (correlationAbs.empty())
             {
-                std::cerr << "Acquisition::correlate: empty correlation result; skipping SV " << acqChannel->svId
-                          << '\n';
+                std::cerr << "Acquisition::correlate: empty correlation result; skipping SV " << acqChannel->svId << '\n';
                 return;
             }
 

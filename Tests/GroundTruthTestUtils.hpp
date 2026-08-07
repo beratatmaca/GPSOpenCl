@@ -6,9 +6,9 @@
  *   and a reader for gps-sdr-sim's -G ground-truth export file.
  */
 
-#include "Sink/GPSOpenClSink.hpp"
 #include "Common/GPSOpenClStructs.hpp"
 #include "GroundTruthRecord.hpp"
+#include "Sink/GPSOpenClSink.hpp"
 
 #include <cstring>
 #include <fstream>

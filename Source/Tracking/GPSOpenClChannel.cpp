@@ -52,12 +52,7 @@ void Channel::resetAcquisitionMetrics()
     m_acquisitionPeakRatio = 0.0f;
 }
 
-void Channel::getAcquisitionResults(int *peakIndex,
-                                    float *peakValue,
-                                    float *peakFrequencyHz,
-                                    float *meanValue,
-                                    float *cnoDbHz,
-                                    float *peakRatio) const
+void Channel::getAcquisitionResults(int *peakIndex, float *peakValue, float *peakFrequencyHz, float *meanValue, float *cnoDbHz, float *peakRatio) const
 {
     const std::lock_guard<std::mutex> lock(m_acquisitionMetricsMutex);
     *peakIndex = m_acquisitionPeakIndex;
@@ -148,10 +143,8 @@ void Channel::trackBlock(const ComplexFloatVector &input)
             if (!m_cumulativeDriftChipsHistory.empty())
             {
                 const float halfCode = static_cast<float>(GPS_CA_CODE_LENGTH) / 2.0f;
-                const float delta = std::fmod(rawCodePhase - m_lastRawCodePhaseForDrift +
-                                                  static_cast<float>(GPS_CA_CODE_LENGTH) + halfCode,
-                                              static_cast<float>(GPS_CA_CODE_LENGTH)) -
-                    halfCode;
+                const float delta =
+                    std::fmod(rawCodePhase - m_lastRawCodePhaseForDrift + static_cast<float>(GPS_CA_CODE_LENGTH) + halfCode, static_cast<float>(GPS_CA_CODE_LENGTH)) - halfCode;
                 m_cumulativeDriftChips += delta;
             }
             m_lastRawCodePhaseForDrift = rawCodePhase;
@@ -208,26 +201,18 @@ ChannelState Channel::computeNextState(ChannelState current,
 
 void Channel::evaluateLockState()
 {
-    const bool good = m_tracking->getCarrierLockIndicator() >= m_carrierLockThreshold &&
-        std::fabs(m_tracking->getCodeLockRatio() - 1.0f) <= m_codeLockRatioTolerance;
+    const bool good = m_tracking->getCarrierLockIndicator() >= m_carrierLockThreshold && std::fabs(m_tracking->getCodeLockRatio() - 1.0f) <= m_codeLockRatioTolerance;
 
     const ChannelState previous = m_state;
-    m_state = computeNextState(m_state,
-                               good,
-                               m_confirmProgress,
-                               m_lossProgress,
-                               m_blocksInConfirming,
-                               m_confirmDebounceBlocks,
-                               m_confirmTimeoutBlocks,
-                               m_lossDebounceBlocks);
+    m_state = computeNextState(m_state, good, m_confirmProgress, m_lossProgress, m_blocksInConfirming, m_confirmDebounceBlocks, m_confirmTimeoutBlocks, m_lossDebounceBlocks);
 
     if (previous == ChannelState::Confirming && m_state == ChannelState::Acquiring)
     {
         m_isAcquired = false;
         resetNavigationState();
         std::ostringstream msg;
-        msg << "SV ID " << svId << " confirmation TIMED OUT (lock: carrier=" << m_tracking->getCarrierLockIndicator()
-            << " code=" << m_tracking->getCodeLockRatio() << "), back to acquiring\n";
+        msg << "SV ID " << svId << " confirmation TIMED OUT (lock: carrier=" << m_tracking->getCarrierLockIndicator() << " code=" << m_tracking->getCodeLockRatio()
+            << "), back to acquiring\n";
         m_pendingStateMessage += msg.str();
     }
     else if (previous == ChannelState::Tracking && m_state == ChannelState::Acquiring)
@@ -282,8 +267,7 @@ void Channel::compactNavigationHistory()
     const auto dropOffset = static_cast<std::ptrdiff_t>(dropSamples);
     m_promptHistory.erase(m_promptHistory.begin(), m_promptHistory.begin() + dropOffset);
     m_codePhaseHistory.erase(m_codePhaseHistory.begin(), m_codePhaseHistory.begin() + dropOffset);
-    m_cumulativeDriftChipsHistory.erase(m_cumulativeDriftChipsHistory.begin(),
-                                        m_cumulativeDriftChipsHistory.begin() + dropOffset);
+    m_cumulativeDriftChipsHistory.erase(m_cumulativeDriftChipsHistory.begin(), m_cumulativeDriftChipsHistory.begin() + dropOffset);
 
     const size_t dropBits = dropSamples / GPS_NAV_CODE_PERIODS_PER_BIT;
     if (m_bitSyncPhase >= 0)
@@ -306,14 +290,7 @@ bool Channel::updateNavigation(NavigationDecoder &decoder)
 
     GpsEphemeris ephem = GpsEphemeris();
     size_t subframeStartSample = 0;
-    if (!decoder.processPromptSignal(svId,
-                                     m_promptHistory,
-                                     m_bitSyncPhase,
-                                     m_bitSyncSearchPositions,
-                                     m_navBitOffset,
-                                     ephem,
-                                     subframeStartSample,
-                                     &m_codePhaseHistory))
+    if (!decoder.processPromptSignal(svId, m_promptHistory, m_bitSyncPhase, m_bitSyncSearchPositions, m_navBitOffset, ephem, subframeStartSample, &m_codePhaseHistory))
     {
         return hasCompleteEphemeris();
     }

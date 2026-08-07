@@ -40,8 +40,7 @@ TEST(TrackingCarrierAidingTest, CodeFreqTracksDopplerScaledRateWithinFewBlocks)
     ASSERT_GT(samplingFreq, 0.0f);
 
     const double trueDopplerHz = 2500.0;
-    const double trueCodeFreqHz = static_cast<double>(GPSOpenCl::GPS_CA_CODE_FREQUENCY_HZ) +
-        trueDopplerHz / static_cast<double>(GPSOpenCl::GPS_L1_CARRIER_TO_CODE_RATIO);
+    const double trueCodeFreqHz = static_cast<double>(GPSOpenCl::GPS_CA_CODE_FREQUENCY_HZ) + trueDopplerHz / static_cast<double>(GPSOpenCl::GPS_L1_CARRIER_TO_CODE_RATIO);
     const double codePhaseStep = trueCodeFreqHz / static_cast<double>(samplingFreq);
     const double carrierPhaseStep = 2.0 * M_PI * trueDopplerHz / static_cast<double>(samplingFreq);
 
@@ -64,8 +63,7 @@ TEST(TrackingCarrierAidingTest, CodeFreqTracksDopplerScaledRateWithinFewBlocks)
                 chipIdx += GPSOpenCl::GPS_CA_CODE_LENGTH;
             }
             float chip = static_cast<float>(code.caCode[svIndex][chipIdx]);
-            std::complex<float> carrier(static_cast<float>(std::cos(carrierPhase)),
-                                        static_cast<float>(std::sin(carrierPhase)));
+            std::complex<float> carrier(static_cast<float>(std::cos(carrierPhase)), static_cast<float>(std::sin(carrierPhase)));
             input[static_cast<size_t>(i)] = chip * carrier;
 
             codePhase = std::fmod(codePhase + codePhaseStep, static_cast<double>(GPSOpenCl::GPS_CA_CODE_LENGTH));
@@ -77,13 +75,11 @@ TEST(TrackingCarrierAidingTest, CodeFreqTracksDopplerScaledRateWithinFewBlocks)
         output = tracking.getTrackingOutput(prn);
     }
 
-    EXPECT_NEAR(output.carrierFreqHz, trueDopplerHz, 5.0)
-        << "Carrier loop failed to converge to the true Doppler within " << blocksToRun << " blocks";
+    EXPECT_NEAR(output.carrierFreqHz, trueDopplerHz, 5.0) << "Carrier loop failed to converge to the true Doppler within " << blocksToRun << " blocks";
 
-    EXPECT_NEAR(output.codeFreqHz, trueCodeFreqHz, 0.3)
-        << "Code loop failed to converge to the Doppler-scaled true code rate within " << blocksToRun
-        << " blocks -- carrier aiding should make this fast even though the DLL's own 2 Hz bandwidth "
-        << "alone would need far longer to settle";
+    EXPECT_NEAR(output.codeFreqHz, trueCodeFreqHz, 0.3) << "Code loop failed to converge to the Doppler-scaled true code rate within " << blocksToRun
+                                                        << " blocks -- carrier aiding should make this fast even though the DLL's own 2 Hz bandwidth "
+                                                        << "alone would need far longer to settle";
 }
 
 TEST(TrackingFllDiscriminatorTest, PullsInFullBinAcquisitionError)

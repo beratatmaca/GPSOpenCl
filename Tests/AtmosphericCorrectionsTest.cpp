@@ -48,8 +48,7 @@ TEST(AtmosphericCorrectionsTest, KlobucharDelayRange)
     params.beta[2] = -0.1311e+06;
     params.beta[3] = 0.1049e+07;
 
-    double delayMeters =
-        GPSOpenCl::AtmosphericCorrections::klobucharIonosphericDelay(rxPos, 45.0, 120.0, 45000.0, params);
+    double delayMeters = GPSOpenCl::AtmosphericCorrections::klobucharIonosphericDelay(rxPos, 45.0, 120.0, 45000.0, params);
 
     EXPECT_GT(delayMeters, 1.0);
     EXPECT_LT(delayMeters, 30.0);

@@ -144,14 +144,7 @@ class RinexNavParser
         return values;
     }
 
-    static bool epochToGpsSecondsOfWeek(int year,
-                                        int month,
-                                        int day,
-                                        int hour,
-                                        int minute,
-                                        double sec,
-                                        int gpsWeek,
-                                        double *outTowSec)
+    static bool epochToGpsSecondsOfWeek(int year, int month, int day, int hour, int minute, double sec, int gpsWeek, double *outTowSec)
     {
         int fullYear = (year < 80) ? (2000 + year) : (1900 + year);
 

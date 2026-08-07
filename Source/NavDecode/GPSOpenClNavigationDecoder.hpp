@@ -12,8 +12,8 @@
 #include <utility>
 #include <vector>
 
-#include "Sink/GPSOpenClSink.hpp"
 #include "Common/GPSOpenClStructs.hpp"
+#include "Sink/GPSOpenClSink.hpp"
 
 namespace GPSOpenCl
 {

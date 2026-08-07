@@ -93,8 +93,7 @@ TEST(NmeaGeneratorTest, GenerateGpgsvOutputSplitsIntoMultipleMessages)
 
     GPSOpenCl::EcefPosition rxEcef{0.0, 0.0, 0.0};
     std::string fullString = GPSOpenCl::NmeaGenerator::generateGpgsv(channels, rxEcef, false);
-    std::vector<GPSOpenCl::NmeaGeneratorOutput> outputs =
-        GPSOpenCl::NmeaGenerator::generateGpgsvOutput(channels, rxEcef, false);
+    std::vector<GPSOpenCl::NmeaGeneratorOutput> outputs = GPSOpenCl::NmeaGenerator::generateGpgsvOutput(channels, rxEcef, false);
 
     EXPECT_EQ(outputs.size(), 2u);
 

@@ -73,12 +73,7 @@ class GpuHandler
     cl_int m_lastError{0};                 ///< Last OpenCL error code.
     std::string m_programCharList[GPSOpenClProgramCount]{"Acquisition.cl"};
 
-    std::string m_acquisitionKernelCharList[AcquisitionKernelCount]{"fft_init",
-                                                                    "fft_stage",
-                                                                    "fft_scale",
-                                                                    "complexMultiplier",
-                                                                    "absolute",
-                                                                    "complexMultiplierBatch"};
+    std::string m_acquisitionKernelCharList[AcquisitionKernelCount]{"fft_init", "fft_stage", "fft_scale", "complexMultiplier", "absolute", "complexMultiplierBatch"};
 };
 }
 

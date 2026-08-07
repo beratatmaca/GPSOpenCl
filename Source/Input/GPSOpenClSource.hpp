@@ -6,8 +6,8 @@
  */
 
 #include "Common/GPSOpenClCommon.hpp"
-#include "Sink/GPSOpenClSink.hpp"
 #include "Common/GPSOpenClStructs.hpp"
+#include "Sink/GPSOpenClSink.hpp"
 
 #include <memory>
 #include <utility>

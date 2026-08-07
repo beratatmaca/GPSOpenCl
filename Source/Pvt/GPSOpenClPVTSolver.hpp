@@ -90,9 +90,7 @@ class PVTSolver
      *  @param transmitTimesSeconds Signal transmit times (s), one per satellite.
      *  @param referenceEcef        Reference receiver position (m).
      *  @return Receiver time estimate (s), or 0.0 if transmitTimesSeconds is empty. */
-    static double computeReceiverTime(const std::vector<GpsEphemeris> &ephemerides,
-                                      const std::vector<double> &transmitTimesSeconds,
-                                      const EcefPosition &referenceEcef);
+    static double computeReceiverTime(const std::vector<GpsEphemeris> &ephemerides, const std::vector<double> &transmitTimesSeconds, const EcefPosition &referenceEcef);
 
     /** @brief Convert ReceiverPvtSolution to PvtSolverOutput.
      *  @param sol Solution struct.
@@ -129,13 +127,10 @@ class PVTSolver
     bool hasValidFix() const { return m_hasValidFix; }
 
   private:
-    PvtSolverInput m_inputConfig;       ///< Solver parameters.
-    AtmosphericInput m_ionoParams{};    ///< Broadcast Klobuchar coefficients (zero until decoded).
-    EcefPosition m_referenceEcef{
-        4180483.4,
-        851798.0,
-        4725999.8};               ///< Coarse receiver position estimate (m), seeds the solve and transit times.
-    bool m_hasValidFix{false};    ///< True once a solve has succeeded, gates the elevation mask.
+    PvtSolverInput m_inputConfig;                                    ///< Solver parameters.
+    AtmosphericInput m_ionoParams{};                                 ///< Broadcast Klobuchar coefficients (zero until decoded).
+    EcefPosition m_referenceEcef{4180483.4, 851798.0, 4725999.8};    ///< Coarse receiver position estimate (m), seeds the solve and transit times.
+    bool m_hasValidFix{false};                                       ///< True once a solve has succeeded, gates the elevation mask.
 };
 }
 

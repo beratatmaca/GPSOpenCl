@@ -123,8 +123,7 @@ void TrackingWorkerPool::workerLoop(int workerIndex)
         auto workStart = std::chrono::high_resolution_clock::now();
         drainCursor();
         auto workEnd = std::chrono::high_resolution_clock::now();
-        m_workerDurationMs[static_cast<size_t>(workerIndex)] =
-            std::chrono::duration<double, std::milli>(workEnd - workStart).count();
+        m_workerDurationMs[static_cast<size_t>(workerIndex)] = std::chrono::duration<double, std::milli>(workEnd - workStart).count();
 
         lock.lock();
         m_pendingWorkers--;

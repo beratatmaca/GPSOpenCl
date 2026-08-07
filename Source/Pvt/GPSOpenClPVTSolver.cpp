@@ -196,8 +196,7 @@ GeodeticPosition PVTSolver::ecefToWgs84(const EcefPosition &ecef)
     const double sinTheta = std::sin(theta);
     const double cosTheta = std::cos(theta);
 
-    const double latRad =
-        std::atan2(ecef.z + (ep2 * b * sinTheta * sinTheta * sinTheta), p - (e2 * a * cosTheta * cosTheta * cosTheta));
+    const double latRad = std::atan2(ecef.z + (ep2 * b * sinTheta * sinTheta * sinTheta), p - (e2 * a * cosTheta * cosTheta * cosTheta));
     const double lonRad = std::atan2(ecef.y, ecef.x);
 
     const double sinLat = std::sin(latRad);
@@ -210,9 +209,7 @@ GeodeticPosition PVTSolver::ecefToWgs84(const EcefPosition &ecef)
     return geo;
 }
 
-double PVTSolver::computeReceiverTime(const std::vector<GpsEphemeris> &ephemerides,
-                                      const std::vector<double> &transmitTimesSeconds,
-                                      const EcefPosition &referenceEcef)
+double PVTSolver::computeReceiverTime(const std::vector<GpsEphemeris> &ephemerides, const std::vector<double> &transmitTimesSeconds, const EcefPosition &referenceEcef)
 {
     if (transmitTimesSeconds.empty() || ephemerides.size() < transmitTimesSeconds.size())
     {
@@ -244,8 +241,7 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
 {
     solution.isValid = false;
     size_t numSats = ephemerides.size();
-    if (numSats < static_cast<size_t>(m_inputConfig.minSatellites) || measuredPseudoranges.size() < numSats ||
-        transmitTimesSeconds.size() < numSats)
+    if (numSats < static_cast<size_t>(m_inputConfig.minSatellites) || measuredPseudoranges.size() < numSats || transmitTimesSeconds.size() < numSats)
     {
         return false;
     }
@@ -262,8 +258,7 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
         correctedRanges[i] = measuredPseudoranges[i] + SPEED_OF_LIGHT_M_S * orbits[i].clockBias;
     }
 
-    std::vector<double> usedTransmitTimes(transmitTimesSeconds.begin(),
-                                          transmitTimesSeconds.begin() + static_cast<std::ptrdiff_t>(numSats));
+    std::vector<double> usedTransmitTimes(transmitTimesSeconds.begin(), transmitTimesSeconds.begin() + static_cast<std::ptrdiff_t>(numSats));
 
     if (m_hasValidFix && m_inputConfig.elevationMaskDeg > 0.0)
     {
@@ -272,8 +267,7 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
         {
             double azimuthDeg = 0.0;
             double elevationDeg = 0.0;
-            AtmosphericCorrections::computeAzimuthElevation(
-                m_referenceEcef, orbits[i].position, azimuthDeg, elevationDeg);
+            AtmosphericCorrections::computeAzimuthElevation(m_referenceEcef, orbits[i].position, azimuthDeg, elevationDeg);
             if (elevationDeg < m_inputConfig.elevationMaskDeg)
             {
                 continue;
@@ -324,12 +318,8 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
                 dz = orbits[i].position.z - state[2];
                 range = std::sqrt((dx * dx) + (dy * dy) + (dz * dz));
 
-                const AtmosphericOutput atmo = AtmosphericCorrections::computeCorrections(orbits[i].svId,
-                                                                                          rxGeodeticEstimate,
-                                                                                          rxEcefEstimate,
-                                                                                          orbits[i].position,
-                                                                                          usedTransmitTimes[i],
-                                                                                          m_ionoParams);
+                const AtmosphericOutput atmo =
+                    AtmosphericCorrections::computeCorrections(orbits[i].svId, rxGeodeticEstimate, rxEcefEstimate, orbits[i].position, usedTransmitTimes[i], m_ionoParams);
 
                 const double predictedPseudorange = range + state[3];
                 const double tropoDelayMeters = (m_inputConfig.tropoEnabled != 0) ? atmo.tropoDelayMeters : 0.0;
@@ -425,8 +415,7 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
                 state[i] += deltaX[i];
             }
 
-            const double stepNorm =
-                std::sqrt((deltaX[0] * deltaX[0]) + (deltaX[1] * deltaX[1]) + (deltaX[2] * deltaX[2]));
+            const double stepNorm = std::sqrt((deltaX[0] * deltaX[0]) + (deltaX[1] * deltaX[1]) + (deltaX[2] * deltaX[2]));
             if (stepNorm < 1e-4)
             {
                 double maxAbsResidual = 0.0;
@@ -547,4 +536,3 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
         }
     }
 }
-

@@ -67,8 +67,7 @@ class TestUtils
         }
     }
 
-    static void
-        readFromFileBinaryIQ8(const char *fileName, GPSOpenCl::ComplexFloatVector *inputVec, size_t maxSamples = 0)
+    static void readFromFileBinaryIQ8(const char *fileName, GPSOpenCl::ComplexFloatVector *inputVec, size_t maxSamples = 0)
     {
         std::ifstream file(fileName, std::ios::binary);
         if (!file.is_open()) return;
@@ -95,8 +94,7 @@ class TestUtils
         }
     }
 
-    static void
-        readFromFileBinaryIQ16(const char *fileName, GPSOpenCl::ComplexFloatVector *inputVec, size_t maxSamples = 0)
+    static void readFromFileBinaryIQ16(const char *fileName, GPSOpenCl::ComplexFloatVector *inputVec, size_t maxSamples = 0)
     {
         std::ifstream file(fileName, std::ios::binary);
         if (!file.is_open()) return;
@@ -160,10 +158,7 @@ class TestUtils
         }
     }
 
-    static std::chrono::steady_clock::time_point startElapsedTimeMeasurement()
-    {
-        return std::chrono::steady_clock::now();
-    }
+    static std::chrono::steady_clock::time_point startElapsedTimeMeasurement() { return std::chrono::steady_clock::now(); }
 
     static void measureElapsedTime(std::string functionDescription, std::chrono::steady_clock::time_point timeBegin)
     {
@@ -172,9 +167,7 @@ class TestUtils
         std::cout << "Elapsed time for " << functionDescription << " : " << elapsedTime << "[ns]" << std::endl;
     }
 
-    static void compareComplexResults(const GPSOpenCl::ComplexFloatVector &testOutputVec,
-                                      const GPSOpenCl::ComplexFloatVector &expectedOutputVec,
-                                      double tolerance)
+    static void compareComplexResults(const GPSOpenCl::ComplexFloatVector &testOutputVec, const GPSOpenCl::ComplexFloatVector &expectedOutputVec, double tolerance)
     {
         auto sizeOfOutput = testOutputVec.size();
         auto sizeOfExpectedOutput = expectedOutputVec.size();
@@ -193,9 +186,7 @@ class TestUtils
         }
     }
 
-    static void compareRealResults(const GPSOpenCl::FloatVector &testOutputVec,
-                                   const GPSOpenCl::FloatVector &expectedOutputVec,
-                                   double tolerance)
+    static void compareRealResults(const GPSOpenCl::FloatVector &testOutputVec, const GPSOpenCl::FloatVector &expectedOutputVec, double tolerance)
     {
         auto sizeOfOutput = testOutputVec.size();
         auto sizeOfExpectedOutput = expectedOutputVec.size();

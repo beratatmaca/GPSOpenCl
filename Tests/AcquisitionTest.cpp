@@ -1,10 +1,10 @@
 #include "Acquisition/GPSOpenClAcquisition.hpp"
 #include "Acquisition/GPSOpenClCaCodeGenerator.hpp"
-#include "Tracking/GPSOpenClChannel.hpp"
 #include "Common/GPSOpenClCommon.hpp"
 #include "Common/GPSOpenClSettings.hpp"
-#include "Gpu/GPSOpenClSpectrumEngine.hpp"
 #include "Common/GPSOpenClStructs.hpp"
+#include "Gpu/GPSOpenClSpectrumEngine.hpp"
+#include "Tracking/GPSOpenClChannel.hpp"
 
 #include "gtest/gtest.h"
 
@@ -76,8 +76,7 @@ TEST(AcquisitionTest, CorrelateFindsInjectedDopplerWithMisalignedSpacing)
     {
         const double phase = -2.0 * M_PI * targetBinHz * static_cast<double>(n) / samplingFrequencyHz;
         const float chip = code.upsampledCaCode[sv - 1][static_cast<size_t>(n)];
-        input[static_cast<size_t>(n)] =
-            std::complex<float>(chip * static_cast<float>(std::cos(phase)), chip * static_cast<float>(std::sin(phase)));
+        input[static_cast<size_t>(n)] = std::complex<float>(chip * static_cast<float>(std::cos(phase)), chip * static_cast<float>(std::sin(phase)));
     }
 
     GPSOpenCl::Channel channel;
@@ -92,8 +91,7 @@ TEST(AcquisitionTest, CorrelateFindsInjectedDopplerWithMisalignedSpacing)
     float peakRatio = 0.0f;
     channel.getAcquisitionResults(&peakIndex, &peakValue, &peakFrequencyHz, &meanValue, &cn0, &peakRatio);
 
-    EXPECT_NEAR(peakFrequencyHz, targetBinHz, 1.0f)
-        << "Correlation peak found at " << peakFrequencyHz << " Hz instead of the injected " << targetBinHz << " Hz";
+    EXPECT_NEAR(peakFrequencyHz, targetBinHz, 1.0f) << "Correlation peak found at " << peakFrequencyHz << " Hz instead of the injected " << targetBinHz << " Hz";
     EXPECT_EQ(peakIndex, 0) << "Zero-delay code should peak at code phase index 0";
     EXPECT_GT(cn0, 43.0f) << "Noiseless aligned signal should clear the acquisition C/N0 threshold";
 }

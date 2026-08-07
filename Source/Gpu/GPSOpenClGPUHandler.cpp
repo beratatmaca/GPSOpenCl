@@ -75,8 +75,7 @@ int GpuHandler::createDevice()
 
     if (m_platform == nullptr)
     {
-        std::cout << "[INFO] No OpenCL GPU/CPU device detected on any m_platform. Using C++ CPU software compute mode."
-                  << '\n';
+        std::cout << "[INFO] No OpenCL GPU/CPU device detected on any m_platform. Using C++ CPU software compute mode." << '\n';
         return m_lastError < 0 ? m_lastError : -1;
     }
 
@@ -97,12 +96,8 @@ int GpuHandler::buildProgram()
     for (int i = 0; i < GPSOpenClProgramCount; i++)
     {
         const std::string filename = m_programCharList[i];
-        const std::vector<std::string> candidatePaths = {filename,
-                                                         "../" + filename,
-                                                         "../../" + filename,
-                                                         "Kernels/" + filename,
-                                                         "../Kernels/" + filename,
-                                                         "../../Kernels/" + filename};
+        const std::vector<std::string> candidatePaths = {
+            filename, "../" + filename, "../../" + filename, "Kernels/" + filename, "../Kernels/" + filename, "../../Kernels/" + filename};
 
         std::unique_ptr<FILE, decltype(&fclose)> programHandle(nullptr, &fclose);
         for (const auto &path : candidatePaths)
@@ -150,15 +145,13 @@ int GpuHandler::buildProgram()
             return m_lastError;
         }
 
-        m_lastError =
-            clBuildProgram(programList[i], 0, nullptr, "-cl-mad-enable -cl-denorms-are-zero", nullptr, nullptr);
+        m_lastError = clBuildProgram(programList[i], 0, nullptr, "-cl-mad-enable -cl-denorms-are-zero", nullptr, nullptr);
         if (m_lastError < 0)
         {
 
             clGetProgramBuildInfo(programList[i], device, CL_PROGRAM_BUILD_LOG, 0, nullptr, &logSize);
             std::vector<char> programLog(logSize + 1, '\0');
-            clGetProgramBuildInfo(
-                programList[i], device, CL_PROGRAM_BUILD_LOG, logSize + 1, programLog.data(), nullptr);
+            clGetProgramBuildInfo(programList[i], device, CL_PROGRAM_BUILD_LOG, logSize + 1, programLog.data(), nullptr);
             std::cout << programLog.data() << '\n';
             return m_lastError;
         }

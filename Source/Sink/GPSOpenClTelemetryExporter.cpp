@@ -1,7 +1,7 @@
 #include "Sink/GPSOpenClTelemetryExporter.hpp"
 
-#include "Pvt/GPSOpenClAtmosphericCorrections.hpp"
 #include "Common/GPSOpenClCommon.hpp"
+#include "Pvt/GPSOpenClAtmosphericCorrections.hpp"
 
 #include <cmath>
 #include <fstream>

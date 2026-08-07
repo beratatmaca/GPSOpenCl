@@ -1,14 +1,14 @@
 #include "Acquisition/GPSOpenClAcquisition.hpp"
 #include "Acquisition/GPSOpenClCaCodeGenerator.hpp"
-#include "Tracking/GPSOpenClChannel.hpp"
 #include "Common/GPSOpenClCommon.hpp"
-#include "NavDecode/GPSOpenClNavigationDecoder.hpp"
 #include "Common/GPSOpenClSettings.hpp"
 #include "Gpu/GPSOpenClSpectrumEngine.hpp"
 #include "GroundTruthRecord.hpp"
 #include "GroundTruthTestUtils.hpp"
+#include "NavDecode/GPSOpenClNavigationDecoder.hpp"
 #include "RinexNavParser.hpp"
 #include "TestUtils.hpp"
+#include "Tracking/GPSOpenClChannel.hpp"
 
 #include "gtest/gtest.h"
 
@@ -89,8 +89,7 @@ TEST(SingleChannelGroundTruthTest, AcquisitionAndTrackingConvergeForOneChannel)
 
     std::string iqFile = "single_channel_iq.bin";
     std::string truthFile = "single_channel_truth.bin";
-    std::string cmd = gpsSimBin + " -e " + navFile + " -l 48.1173,11.5167,545.4 -s 4096000 -b 8 -d 2 -o " + iqFile +
-        " -G " + truthFile + " > /dev/null 2>&1";
+    std::string cmd = gpsSimBin + " -e " + navFile + " -l 48.1173,11.5167,545.4 -s 4096000 -b 8 -d 2 -o " + iqFile + " -G " + truthFile + " > /dev/null 2>&1";
     int sysRet = std::system(cmd.c_str());
     ASSERT_EQ(sysRet, 0);
 
@@ -133,8 +132,7 @@ TEST(SingleChannelGroundTruthTest, AcquisitionAndTrackingConvergeForOneChannel)
 
     float dopplerHz = -peakFreq;
     double dopplerDiff = std::fabs(static_cast<double>(dopplerHz) - firstTruth.trueDopplerHz);
-    EXPECT_LT(dopplerDiff, 400.0) << "PRN " << prn << " acquired Doppler " << dopplerHz
-                                  << " Hz too far from true Doppler " << firstTruth.trueDopplerHz << " Hz";
+    EXPECT_LT(dopplerDiff, 400.0) << "PRN " << prn << " acquired Doppler " << dopplerHz << " Hz too far from true Doppler " << firstTruth.trueDopplerHz << " Hz";
 
     float numSamplesFloat = static_cast<float>(codeLength);
     int reflectedPeakIndex = (codeLength - peakIndex) % codeLength;
@@ -149,22 +147,19 @@ TEST(SingleChannelGroundTruthTest, AcquisitionAndTrackingConvergeForOneChannel)
 
     for (int b = 1; b <= blocksToRun; b++)
     {
-        GPSOpenCl::ComplexFloatVector block(inputSignal.begin() + static_cast<long>(b) * codeLength,
-                                            inputSignal.begin() + static_cast<long>(b + 1) * codeLength);
+        GPSOpenCl::ComplexFloatVector block(inputSignal.begin() + static_cast<long>(b) * codeLength, inputSignal.begin() + static_cast<long>(b + 1) * codeLength);
         channel.trackBlock(block);
     }
 
-    EXPECT_EQ(channel.getState(), GPSOpenCl::ChannelState::Tracking)
-        << "Expected the channel to reach confirmed Tracking within " << blocksToRun << " blocks";
+    EXPECT_EQ(channel.getState(), GPSOpenCl::ChannelState::Tracking) << "Expected the channel to reach confirmed Tracking within " << blocksToRun << " blocks";
 
     GPSOpenCl::TrackingOutput lastTracking{};
     ASSERT_TRUE(channel.getTrackingOutput(&lastTracking)) << "Expected tracking state to be available";
     GroundTruthRecord lastTruth = lastRecordForPrn(truth, prn);
     double trackedDopplerDiff = std::fabs(lastTracking.carrierFreqHz - lastTruth.trueDopplerHz);
-    EXPECT_LT(trackedDopplerDiff, 50.0) << "PRN " << prn << " tracked Doppler " << lastTracking.carrierFreqHz
-                                        << " Hz too far from true Doppler " << lastTruth.trueDopplerHz << " Hz";
-    EXPECT_GT(lastTracking.carrierLockIndicator, 0.7)
-        << "Expected carrier lock indicator near 1.0 once tracking is confirmed";
+    EXPECT_LT(trackedDopplerDiff, 50.0) << "PRN " << prn << " tracked Doppler " << lastTracking.carrierFreqHz << " Hz too far from true Doppler " << lastTruth.trueDopplerHz
+                                        << " Hz";
+    EXPECT_GT(lastTracking.carrierLockIndicator, 0.7) << "Expected carrier lock indicator near 1.0 once tracking is confirmed";
 
     std::remove(iqFile.c_str());
     std::remove(truthFile.c_str());
@@ -192,8 +187,7 @@ TEST(SingleChannelGroundTruthTest, FullEphemerisMatchesRinexForOneChannel)
     std::string iqFile = "single_channel_iq_long.bin";
     std::string truthFile = "single_channel_truth_long.bin";
 
-    std::string cmd = gpsSimBin + " -e " + navFile + " -l 48.1173,11.5167,545.4 -s 4096000 -b 8 -d 60 -o " + iqFile +
-        " -G " + truthFile + " > /dev/null 2>&1";
+    std::string cmd = gpsSimBin + " -e " + navFile + " -l 48.1173,11.5167,545.4 -s 4096000 -b 8 -d 60 -o " + iqFile + " -G " + truthFile + " > /dev/null 2>&1";
     int sysRet = std::system(cmd.c_str());
     ASSERT_EQ(sysRet, 0);
 
@@ -243,8 +237,7 @@ TEST(SingleChannelGroundTruthTest, FullEphemerisMatchesRinexForOneChannel)
 
     for (int b = 1; b < totalBlocks; b++)
     {
-        GPSOpenCl::ComplexFloatVector block(inputSignal.begin() + static_cast<long>(b) * codeLength,
-                                            inputSignal.begin() + static_cast<long>(b + 1) * codeLength);
+        GPSOpenCl::ComplexFloatVector block(inputSignal.begin() + static_cast<long>(b) * codeLength, inputSignal.begin() + static_cast<long>(b + 1) * codeLength);
         channel.trackBlock(block);
 
         if (channel.getState() == GPSOpenCl::ChannelState::Tracking)
@@ -253,9 +246,7 @@ TEST(SingleChannelGroundTruthTest, FullEphemerisMatchesRinexForOneChannel)
         }
     }
 
-    ASSERT_TRUE(channel.hasCompleteEphemeris())
-        << "Expected PRN " << prn << " to decode a complete ephemeris (subframes 1-3) within " << totalBlocks
-        << " blocks";
+    ASSERT_TRUE(channel.hasCompleteEphemeris()) << "Expected PRN " << prn << " to decode a complete ephemeris (subframes 1-3) within " << totalBlocks << " blocks";
 
     GPSOpenCl::GpsEphemeris truthEphem{};
     ASSERT_TRUE(RinexNavParser::findEphemeris(navFile, prn, &truthEphem)) << "No matching RINEX record for PRN " << prn;

@@ -6,8 +6,8 @@
  */
 
 #include "Common/GPSOpenClCommon.hpp"
-#include "NavDecode/GPSOpenClNavigationDecoder.hpp"
 #include "Common/GPSOpenClSettings.hpp"
+#include "NavDecode/GPSOpenClNavigationDecoder.hpp"
 #include "Sink/GPSOpenClSink.hpp"
 #include "Tracking/GPSOpenClTracking.hpp"
 
@@ -55,12 +55,7 @@ class Channel
      *  @param meanValue     Mean level (output).
      *  @param cnoDbHz           C/N0 (output).
      *  @param peakRatio     Peak-to-mean ratio (output). */
-    void getAcquisitionResults(int *peakIndex,
-                               float *peakValue,
-                               float *peakFrequencyHz,
-                               float *meanValue,
-                               float *cnoDbHz,
-                               float *peakRatio) const;
+    void getAcquisitionResults(int *peakIndex, float *peakValue, float *peakFrequencyHz, float *meanValue, float *cnoDbHz, float *peakRatio) const;
 
     /** @brief Enable or disable correlator timing samples. Applied when the tracking engine is
      *   created. A disabled profiler costs no clock reads.
@@ -115,10 +110,7 @@ class Channel
 
     /** @brief Check if the tracking loop is running.
      *  @return True if state is Confirming or Tracking. */
-    bool isTrackingLoopActive() const
-    {
-        return m_state == ChannelState::Confirming || m_state == ChannelState::Tracking;
-    }
+    bool isTrackingLoopActive() const { return m_state == ChannelState::Confirming || m_state == ChannelState::Tracking; }
 
     /** @brief Check if channel is eligible for a new acquisition attempt.
      *  @return True if state is Acquiring. */
@@ -188,10 +180,7 @@ class Channel
      *   precision. Indices align one to one with getPromptHistory().
      *  @param sampleIndex Index into the code phase history.
      *  @return Code phase (chips, 0-1023), or 0 if out of range. */
-    float getCodePhaseAtSample(size_t sampleIndex) const
-    {
-        return (sampleIndex < m_codePhaseHistory.size()) ? m_codePhaseHistory[sampleIndex] : 0.0f;
-    }
+    float getCodePhaseAtSample(size_t sampleIndex) const { return (sampleIndex < m_codePhaseHistory.size()) ? m_codePhaseHistory[sampleIndex] : 0.0f; }
 
     /** @brief Get unwrapped cumulative DLL drift at a sample. Relative to tracking start. Built
      *   from a running sum of per-block deltas. Each delta is far too small to wrap. The wrap
@@ -244,25 +233,25 @@ class Channel
     float m_lastRawCodePhaseForDrift{0.0f};              ///< Previous block raw code phase, for the drift delta.
     float m_cumulativeDriftChips{0.0f};                  ///< Running sum backing m_cumulativeDriftChipsHistory.
 
-    int m_bitSyncPhase{-1};    ///< Locked sample-level bit-edge phase, 0-19 (-1 = not yet synced).
-    std::vector<size_t> m_bitSyncSearchPositions;     ///< Per-candidate-phase search cursor while unsynced.
-    size_t m_navBitOffset{0};                         ///< Current nav bit offset.
-    uint8_t m_seenSubframeMask{0};                    ///< Bitmask of decoded subframes.
-    GpsEphemeris m_accumulatedEphemeris;              ///< Accumulated ephemeris data.
-    double m_lastSubframeTow{0.0};                    ///< Last subframe TOW (s).
-    size_t m_lastSubframeStartSample{0};              ///< Last subframe start sample.
+    int m_bitSyncPhase{-1};                              ///< Locked sample-level bit-edge phase, 0-19 (-1 = not yet synced).
+    std::vector<size_t> m_bitSyncSearchPositions;        ///< Per-candidate-phase search cursor while unsynced.
+    size_t m_navBitOffset{0};                            ///< Current nav bit offset.
+    uint8_t m_seenSubframeMask{0};                       ///< Bitmask of decoded subframes.
+    GpsEphemeris m_accumulatedEphemeris;                 ///< Accumulated ephemeris data.
+    double m_lastSubframeTow{0.0};                       ///< Last subframe TOW (s).
+    size_t m_lastSubframeStartSample{0};                 ///< Last subframe start sample.
 
-    ChannelState m_state{ChannelState::Acquiring};    ///< Current lifecycle state.
-    std::string m_pendingStateMessage;                ///< Buffered state-transition console output.
-    int m_confirmProgress{0};                         ///< Leaky-bucket progress toward confirming lock.
-    int m_lossProgress{0};                            ///< Leaky-bucket progress toward declaring lock lost.
-    int m_blocksInConfirming{0};                      ///< Blocks spent in Confirming since last acquisition.
-    bool m_trackingTimingEnabled{true};               ///< Whether the tracking engine takes timing samples.
-    float m_carrierLockThreshold{0.3f};               ///< Min carrier lock indicator to count as locked.
-    float m_codeLockRatioTolerance{0.3f};             ///< Max |codeLockRatio - 1.0| to count as locked.
-    int m_confirmDebounceBlocks{50};                  ///< Good blocks needed to confirm tracking.
-    int m_confirmTimeoutBlocks{200};                  ///< Blocks before abandoning an unconfirmed acquisition.
-    int m_lossDebounceBlocks{200};                    ///< Bad blocks needed to declare lock lost.
+    ChannelState m_state{ChannelState::Acquiring};       ///< Current lifecycle state.
+    std::string m_pendingStateMessage;                   ///< Buffered state-transition console output.
+    int m_confirmProgress{0};                            ///< Leaky-bucket progress toward confirming lock.
+    int m_lossProgress{0};                               ///< Leaky-bucket progress toward declaring lock lost.
+    int m_blocksInConfirming{0};                         ///< Blocks spent in Confirming since last acquisition.
+    bool m_trackingTimingEnabled{true};                  ///< Whether the tracking engine takes timing samples.
+    float m_carrierLockThreshold{0.3f};                  ///< Min carrier lock indicator to count as locked.
+    float m_codeLockRatioTolerance{0.3f};                ///< Max |codeLockRatio - 1.0| to count as locked.
+    int m_confirmDebounceBlocks{50};                     ///< Good blocks needed to confirm tracking.
+    int m_confirmTimeoutBlocks{200};                     ///< Blocks before abandoning an unconfirmed acquisition.
+    int m_lossDebounceBlocks{200};                       ///< Bad blocks needed to declare lock lost.
 };
 }
 

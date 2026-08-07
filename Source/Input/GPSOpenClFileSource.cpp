@@ -21,8 +21,7 @@ bool FileSource::initialize(const SourceInput &input)
     size_t samplesPerBlock = 4096;
     if (input.samplingRateHz > 0.0)
     {
-        samplesPerBlock =
-            static_cast<size_t>(std::round(input.samplingRateHz / (GPS_CA_CODE_FREQUENCY_HZ / GPS_CA_CODE_LENGTH)));
+        samplesPerBlock = static_cast<size_t>(std::round(input.samplingRateHz / (GPS_CA_CODE_FREQUENCY_HZ / GPS_CA_CODE_LENGTH)));
     }
 
     if (filePath.find(".bin") != std::string::npos)
@@ -82,8 +81,7 @@ bool FileSource::loadAllSamples(const std::string &filePath, size_t samplesPerBl
         {
             if (badLineCount == 0)
             {
-                std::cerr << "FileSource: skipping unparseable sample at " << filePath << ":" << fileLine << " ('"
-                          << str << "')" << '\n';
+                std::cerr << "FileSource: skipping unparseable sample at " << filePath << ":" << fileLine << " ('" << str << "')" << '\n';
             }
             badLineCount++;
             continue;

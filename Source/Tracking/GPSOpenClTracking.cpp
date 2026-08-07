@@ -352,8 +352,7 @@ void Tracking::correlator(const ComplexFloatVector &input, int prn)
     m_Il = il;
     m_Ql = ql;
 
-    m_remCodePhase =
-        static_cast<float>(std::fmod(m_remCodePhase + (static_cast<float>(m_totalSamples) * m_codePhaseStep), 1023.0));
+    m_remCodePhase = static_cast<float>(std::fmod(m_remCodePhase + (static_cast<float>(m_totalSamples) * m_codePhaseStep), 1023.0));
 
     const double finalPhase = (phaseStepRad * m_totalSamples) + m_remCarrPhase;
     m_remCarrPhase = static_cast<float>(std::fmod(finalPhase, 2.0 * M_PI));
@@ -421,8 +420,8 @@ void Tracking::freqDiscriminator()
 
     if (m_pllTau1 != 0.0f)
     {
-        m_carrNco = m_carrNcoPrev + (m_pllTau2 / m_pllTau1) * (m_carrErrorCycles - m_carrErrorPrevCycles) +
-            m_carrErrorCycles * static_cast<float>(GPS_CA_CODE_PERIOD_SEC / m_pllTau1);
+        m_carrNco =
+            m_carrNcoPrev + (m_pllTau2 / m_pllTau1) * (m_carrErrorCycles - m_carrErrorPrevCycles) + m_carrErrorCycles * static_cast<float>(GPS_CA_CODE_PERIOD_SEC / m_pllTau1);
     }
 
     m_carrNcoPrev = m_carrNco;
@@ -451,8 +450,8 @@ void Tracking::codeDiscriminator()
 
     if (m_dllTau1 != 0.0f)
     {
-        m_codeNco = m_codeNcoPrev + ((m_dllTau2 / m_dllTau1) * (m_codeErrorChips - m_codeErrorPrevChips)) +
-            (m_codeErrorChips * static_cast<float>(GPS_CA_CODE_PERIOD_SEC / m_dllTau1));
+        m_codeNco =
+            m_codeNcoPrev + ((m_dllTau2 / m_dllTau1) * (m_codeErrorChips - m_codeErrorPrevChips)) + (m_codeErrorChips * static_cast<float>(GPS_CA_CODE_PERIOD_SEC / m_dllTau1));
     }
 
     m_codeNcoPrev = m_codeNco;

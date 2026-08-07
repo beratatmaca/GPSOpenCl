@@ -57,13 +57,9 @@ void FileSink::writerThreadLoop()
 
         record.clear();
         record.reserve(sizeof(nameLen) + nameLen + sizeof(dataLen) + dataLen);
-        record.insert(record.end(),
-                      reinterpret_cast<const char *>(&nameLen),
-                      reinterpret_cast<const char *>(&nameLen) + sizeof(nameLen));
+        record.insert(record.end(), reinterpret_cast<const char *>(&nameLen), reinterpret_cast<const char *>(&nameLen) + sizeof(nameLen));
         record.insert(record.end(), message.identifier, message.identifier + nameLen);
-        record.insert(record.end(),
-                      reinterpret_cast<const char *>(&dataLen),
-                      reinterpret_cast<const char *>(&dataLen) + sizeof(dataLen));
+        record.insert(record.end(), reinterpret_cast<const char *>(&dataLen), reinterpret_cast<const char *>(&dataLen) + sizeof(dataLen));
         record.insert(record.end(), message.data, message.data + dataLen);
 
         m_file.write(record.data(), static_cast<std::streamsize>(record.size()));

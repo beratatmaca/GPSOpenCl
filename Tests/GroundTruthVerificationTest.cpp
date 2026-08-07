@@ -103,13 +103,9 @@ class EphemerisAccumulator
     std::map<int, uint8_t> m_seenMask;
 };
 
-const GroundTruthRecord *
-    findClosestRecord(const std::vector<GroundTruthRecord> &records, double targetTimeSec, double *outDt)
+const GroundTruthRecord *findClosestRecord(const std::vector<GroundTruthRecord> &records, double targetTimeSec, double *outDt)
 {
-    auto lowerBound = std::lower_bound(records.begin(),
-                                       records.end(),
-                                       targetTimeSec,
-                                       [](const GroundTruthRecord &record, double t) { return record.gpsTimeSec < t; });
+    auto lowerBound = std::lower_bound(records.begin(), records.end(), targetTimeSec, [](const GroundTruthRecord &record, double t) { return record.gpsTimeSec < t; });
 
     const GroundTruthRecord *closest = nullptr;
     double closestDt = 1e9;
@@ -148,8 +144,7 @@ TEST(GroundTruthVerificationTest, AcquisitionAndTrackingMatchSimulatorTruth)
     std::string iqFile = "ground_truth_iq.bin";
     std::string truthFile = "ground_truth_records.bin";
 
-    std::string cmd = gpsSimBin + " -e " + navFile + " -l 48.1173,11.5167,545.4 -s 4096000 -b 8 -d 2 -o " + iqFile +
-        " -G " + truthFile + " > /dev/null 2>&1";
+    std::string cmd = gpsSimBin + " -e " + navFile + " -l 48.1173,11.5167,545.4 -s 4096000 -b 8 -d 2 -o " + iqFile + " -G " + truthFile + " > /dev/null 2>&1";
     int sysRet = std::system(cmd.c_str());
     ASSERT_EQ(sysRet, 0);
 
@@ -212,8 +207,7 @@ TEST(GroundTruthVerificationTest, AcquisitionAndTrackingMatchSimulatorTruth)
         ASSERT_NE(it, firstTruthByPrn.end()) << "Acquired PRN " << acq.prn << " has no ground truth record";
 
         double dopplerDiff = std::fabs(acq.peakFrequencyHz - it->second.trueDopplerHz);
-        EXPECT_LT(dopplerDiff, 400.0) << "PRN " << acq.prn << " acquired Doppler " << acq.peakFrequencyHz
-                                      << " Hz too far from true Doppler " << it->second.trueDopplerHz << " Hz";
+        EXPECT_LT(dopplerDiff, 400.0) << "PRN " << acq.prn << " acquired Doppler " << acq.peakFrequencyHz << " Hz too far from true Doppler " << it->second.trueDopplerHz << " Hz";
         acquiredCount++;
     }
     EXPECT_GE(acquiredCount, 10) << "Expected most of the scenario's real satellites to acquire";
@@ -246,8 +240,8 @@ TEST(GroundTruthVerificationTest, AcquisitionAndTrackingMatchSimulatorTruth)
         }
 
         double dopplerDiff = std::fabs(entry.second.carrierFreqHz - it->second.trueDopplerHz);
-        EXPECT_LT(dopplerDiff, 50.0) << "PRN " << entry.first << " tracked Doppler " << entry.second.carrierFreqHz
-                                     << " Hz too far from true Doppler " << it->second.trueDopplerHz << " Hz";
+        EXPECT_LT(dopplerDiff, 50.0) << "PRN " << entry.first << " tracked Doppler " << entry.second.carrierFreqHz << " Hz too far from true Doppler " << it->second.trueDopplerHz
+                                     << " Hz";
         convergedCount++;
     }
     EXPECT_GT(convergedCount, 0) << "Expected at least one channel to reach confirmed Tracking within the test window";
@@ -284,8 +278,7 @@ TEST(GroundTruthVerificationTest, FullEphemerisAndPvtMatchSimulatorTruth)
     // gives them a realistic chance; empirically 45-90s only ever got the single strongest satellite.
     std::string iqFile = "ground_truth_iq_long.bin";
     std::string truthFile = "ground_truth_records_long.bin";
-    std::string cmd = gpsSimBin + " -e " + navFile + " -l 48.1173,11.5167,545.4 -s 4096000 -b 8 -d 180 -o " + iqFile +
-        " -G " + truthFile + " > /dev/null 2>&1";
+    std::string cmd = gpsSimBin + " -e " + navFile + " -l 48.1173,11.5167,545.4 -s 4096000 -b 8 -d 180 -o " + iqFile + " -G " + truthFile + " > /dev/null 2>&1";
     int sysRet = std::system(cmd.c_str());
     ASSERT_EQ(sysRet, 0);
 
@@ -370,8 +363,8 @@ TEST(GroundTruthVerificationTest, FullEphemerisAndPvtMatchSimulatorTruth)
             if (!loggedByPrn[entry.first] || (blockIdx % 20'000) == 0)
             {
                 loggedByPrn[entry.first] = true;
-                std::cerr << "DEBUG prdiff PRN " << entry.first << " blockIdx=" << blockIdx
-                          << " diffMeters=" << entry.second << " relErrMeters=" << (entry.second - meanDiff) << '\n';
+                std::cerr << "DEBUG prdiff PRN " << entry.first << " blockIdx=" << blockIdx << " diffMeters=" << entry.second << " relErrMeters=" << (entry.second - meanDiff)
+                          << '\n';
             }
             maxErrorByPrn[entry.first] = std::max(maxErrorByPrn[entry.first], err);
             sumErrorByPrn[entry.first] += err;
@@ -387,19 +380,14 @@ TEST(GroundTruthVerificationTest, FullEphemerisAndPvtMatchSimulatorTruth)
         const int count = entry.second;
         const double meanErr = sumErrorByPrn[prn] / count;
         const double maxErr = maxErrorByPrn[prn];
-        std::cerr << "DEBUG pseudorange PRN " << prn << " samples=" << count << " meanErrorMeters=" << meanErr
-                  << " maxErrorMeters=" << maxErr << '\n';
+        std::cerr << "DEBUG pseudorange PRN " << prn << " samples=" << count << " meanErrorMeters=" << meanErr << " maxErrorMeters=" << maxErr << '\n';
         pseudorangeVerifiedCount += count;
         maxPseudorangeErrorMeters = std::max(maxPseudorangeErrorMeters, maxErr);
     }
 
-    std::cerr << "DEBUG pseudorangeVerifiedCount=" << pseudorangeVerifiedCount
-              << " maxPseudorangeErrorMeters=" << maxPseudorangeErrorMeters << '\n';
-    ASSERT_GT(pseudorangeVerifiedCount, 0)
-        << "Expected at least one pseudorange sample to cross-check against simulator ground truth";
-    EXPECT_LT(maxPseudorangeErrorMeters, 1000.0)
-        << "Pseudorange reconstruction diverges from simulator ground truth by up to " << maxPseudorangeErrorMeters
-        << " m";
+    std::cerr << "DEBUG pseudorangeVerifiedCount=" << pseudorangeVerifiedCount << " maxPseudorangeErrorMeters=" << maxPseudorangeErrorMeters << '\n';
+    ASSERT_GT(pseudorangeVerifiedCount, 0) << "Expected at least one pseudorange sample to cross-check against simulator ground truth";
+    EXPECT_LT(maxPseudorangeErrorMeters, 1000.0) << "Pseudorange reconstruction diverges from simulator ground truth by up to " << maxPseudorangeErrorMeters << " m";
 
     EphemerisAccumulator accumulator;
     for (const GPSOpenCl::NavDecoderOutput &out : sink->navDecoderOutputs)
@@ -427,8 +415,8 @@ TEST(GroundTruthVerificationTest, FullEphemerisAndPvtMatchSimulatorTruth)
     for (const auto &entry : subframeCountByPrn)
     {
         int mask = subframeMaskByPrn.count(entry.first) ? subframeMaskByPrn[entry.first] : 0;
-        std::cerr << "DEBUG PRN " << entry.first << " valid subframe decodes=" << entry.second << " subframe123Mask=0b"
-                  << ((mask >> 2) & 1) << ((mask >> 1) & 1) << (mask & 1) << std::endl;
+        std::cerr << "DEBUG PRN " << entry.first << " valid subframe decodes=" << entry.second << " subframe123Mask=0b" << ((mask >> 2) & 1) << ((mask >> 1) & 1) << (mask & 1)
+                  << std::endl;
     }
 
     ASSERT_FALSE(completedPrns.empty()) << "Expected at least one satellite to decode a complete ephemeris "
@@ -500,16 +488,14 @@ TEST(GroundTruthVerificationTest, FullEphemerisAndPvtMatchSimulatorTruth)
         EXPECT_LT(distance, 500.0) << "PVT solution " << distance << " m from true receiver position";
         fixDistances.push_back(distance);
     }
-    EXPECT_FALSE(fixDistances.empty()) << "Expected at least one valid PVT solution within " << blocksAvailable
-                                       << " blocks";
+    EXPECT_FALSE(fixDistances.empty()) << "Expected at least one valid PVT solution within " << blocksAvailable << " blocks";
 
     if (!fixDistances.empty())
     {
         std::sort(fixDistances.begin(), fixDistances.end());
         const double median = fixDistances[fixDistances.size() / 2];
         const double p95 = fixDistances[(fixDistances.size() * 95) / 100];
-        std::cerr << "DEBUG pvtfix stats count=" << fixDistances.size() << " median=" << median << " p95=" << p95
-                  << '\n';
+        std::cerr << "DEBUG pvtfix stats count=" << fixDistances.size() << " median=" << median << " p95=" << p95 << '\n';
         EXPECT_LT(median, 15.0) << "Median PVT position error " << median << " m";
         EXPECT_LT(p95, 50.0) << "95th-percentile PVT position error " << p95 << " m";
     }
@@ -538,8 +524,7 @@ TEST(GroundTruthVerificationTest, SubframeStartCodePhaseMatchesSimulatorTruth)
 
     std::string iqFile = "ground_truth_iq_bitsync.bin";
     std::string truthFile = "ground_truth_records_bitsync.bin";
-    std::string cmd = gpsSimBin + " -e " + navFile + " -l 48.1173,11.5167,545.4 -s 4096000 -b 8 -d 40 -o " + iqFile +
-        " -G " + truthFile + " > /dev/null 2>&1";
+    std::string cmd = gpsSimBin + " -e " + navFile + " -l 48.1173,11.5167,545.4 -s 4096000 -b 8 -d 40 -o " + iqFile + " -G " + truthFile + " > /dev/null 2>&1";
     int sysRet = std::system(cmd.c_str());
     ASSERT_EQ(sysRet, 0);
 
@@ -604,21 +589,16 @@ TEST(GroundTruthVerificationTest, SubframeStartCodePhaseMatchesSimulatorTruth)
             const GroundTruthRecord *closestAtStart = findClosest(diag.subframeStartTow);
             if (closestAtStart != nullptr)
             {
-                double chipDiff =
-                    static_cast<double>(diag.codePhaseAtSubframeStart) - closestAtStart->trueCodePhaseChips;
+                double chipDiff = static_cast<double>(diag.codePhaseAtSubframeStart) - closestAtStart->trueCodePhaseChips;
                 chipDiff = std::fmod(chipDiff + 1534.5, 1023.0) - 511.5;
 
-                std::cerr << "DEBUG bitsync PRN " << diag.svId << " bitSyncPhase=" << diag.bitSyncPhase
-                          << " subframeStartTow=" << diag.subframeStartTow
-                          << " subframeStartSample=" << diag.subframeStartSample
-                          << " codePhaseAtSubframeStart=" << diag.codePhaseAtSubframeStart
+                std::cerr << "DEBUG bitsync PRN " << diag.svId << " bitSyncPhase=" << diag.bitSyncPhase << " subframeStartTow=" << diag.subframeStartTow
+                          << " subframeStartSample=" << diag.subframeStartSample << " codePhaseAtSubframeStart=" << diag.codePhaseAtSubframeStart
                           << " truthCodePhase=" << closestAtStart->trueCodePhaseChips << " chipDiffWrapped=" << chipDiff
-                          << " metersEquivalent=" << (chipDiff / GPSOpenCl::GPS_CA_CODE_FREQUENCY_HZ) * 299792458.0
-                          << '\n';
+                          << " metersEquivalent=" << (chipDiff / GPSOpenCl::GPS_CA_CODE_FREQUENCY_HZ) * 299792458.0 << '\n';
 
-                EXPECT_LT(std::fabs(chipDiff), 5.0)
-                    << "PRN " << diag.svId << " code phase at subframe start diverges from truth by " << chipDiff
-                    << " chips (bitSyncPhase=" << diag.bitSyncPhase << ")";
+                EXPECT_LT(std::fabs(chipDiff), 5.0) << "PRN " << diag.svId << " code phase at subframe start diverges from truth by " << chipDiff
+                                                    << " chips (bitSyncPhase=" << diag.bitSyncPhase << ")";
                 checkedCount++;
             }
 
@@ -628,15 +608,12 @@ TEST(GroundTruthVerificationTest, SubframeStartCodePhaseMatchesSimulatorTruth)
                 double chipDiffNow = static_cast<double>(diag.codePhaseNow) - closestNow->trueCodePhaseChips;
                 chipDiffNow = std::fmod(chipDiffNow + 1534.5, 1023.0) - 511.5;
 
-                std::cerr << "DEBUG elapsedcheck PRN " << diag.svId << " elapsedSeconds=" << diag.elapsedSeconds
-                          << " candidateNowTow=" << diag.candidateNowTow << " codePhaseNow=" << diag.codePhaseNow
-                          << " truthCodePhase=" << closestNow->trueCodePhaseChips << " chipDiffWrapped=" << chipDiffNow
-                          << " metersEquivalent=" << (chipDiffNow / GPSOpenCl::GPS_CA_CODE_FREQUENCY_HZ) * 299792458.0
-                          << '\n';
+                std::cerr << "DEBUG elapsedcheck PRN " << diag.svId << " elapsedSeconds=" << diag.elapsedSeconds << " candidateNowTow=" << diag.candidateNowTow
+                          << " codePhaseNow=" << diag.codePhaseNow << " truthCodePhase=" << closestNow->trueCodePhaseChips << " chipDiffWrapped=" << chipDiffNow
+                          << " metersEquivalent=" << (chipDiffNow / GPSOpenCl::GPS_CA_CODE_FREQUENCY_HZ) * 299792458.0 << '\n';
 
-                EXPECT_LT(std::fabs(chipDiffNow), 5.0)
-                    << "PRN " << diag.svId << " code phase 'now' (elapsedSeconds=" << diag.elapsedSeconds
-                    << ") diverges from truth by " << chipDiffNow << " chips";
+                EXPECT_LT(std::fabs(chipDiffNow), 5.0) << "PRN " << diag.svId << " code phase 'now' (elapsedSeconds=" << diag.elapsedSeconds << ") diverges from truth by "
+                                                       << chipDiffNow << " chips";
                 checkedCount++;
             }
         }

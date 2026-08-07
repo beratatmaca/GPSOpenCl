@@ -6,20 +6,20 @@
  */
 
 #include "Acquisition/GPSOpenClAcquisition.hpp"
-#include "Common/GPSOpenClBoundedQueue.hpp"
 #include "Acquisition/GPSOpenClCaCodeGenerator.hpp"
-#include "Tracking/GPSOpenClChannel.hpp"
-#include "Pvt/GPSOpenClMeasurementAssembler.hpp"
-#include "NavDecode/GPSOpenClNavigationDecoder.hpp"
-#include "Sink/GPSOpenClNmeaGenerator.hpp"
-#include "Pvt/GPSOpenClPVTSolver.hpp"
+#include "Common/GPSOpenClBoundedQueue.hpp"
 #include "Common/GPSOpenClProfiler.hpp"
 #include "Common/GPSOpenClSettings.hpp"
-#include "Sink/GPSOpenClSink.hpp"
-#include "Input/GPSOpenClSource.hpp"
-#include "Gpu/GPSOpenClSpectrumEngine.hpp"
 #include "Common/GPSOpenClStructs.hpp"
+#include "Gpu/GPSOpenClSpectrumEngine.hpp"
+#include "Input/GPSOpenClSource.hpp"
+#include "NavDecode/GPSOpenClNavigationDecoder.hpp"
+#include "Pvt/GPSOpenClMeasurementAssembler.hpp"
+#include "Pvt/GPSOpenClPVTSolver.hpp"
+#include "Sink/GPSOpenClNmeaGenerator.hpp"
+#include "Sink/GPSOpenClSink.hpp"
 #include "Sink/GPSOpenClTelemetryExporter.hpp"
+#include "Tracking/GPSOpenClChannel.hpp"
 #include "Tracking/GPSOpenClTracking.hpp"
 #include "Tracking/GPSOpenClTrackingWorkerPool.hpp"
 
@@ -170,35 +170,32 @@ class Application
      *   period bit-edge ambiguity. Repeated pre-fix solve failures are the signature of a wrong
      *   seed, so trust is withdrawn until the first successful fix.
      *  @return True while the seed is presumed good or after any successful fix. */
-    bool isReferencePositionTrusted() const
-    {
-        return m_pvtSolver.hasValidFix() || m_seedSolveFailures < SEED_TRUST_SOLVE_FAILURES;
-    }
+    bool isReferencePositionTrusted() const { return m_pvtSolver.hasValidFix() || m_seedSolveFailures < SEED_TRUST_SOLVE_FAILURES; }
 
-    std::unique_ptr<Acquisition> m_acquisition;                 ///< Acquisition engine.
-    Settings::Configuration m_configuration;                    ///< Application configuration.
+    std::unique_ptr<Acquisition> m_acquisition;                     ///< Acquisition engine.
+    Settings::Configuration m_configuration;                        ///< Application configuration.
 
-    std::unique_ptr<CaCodeGenerator> m_code;                    ///< C/A code generator.
-    std::unique_ptr<SpectrumEngine> m_gpu;                      ///< GPU/CPU compute back-end.
-    static constexpr int SEED_TRUST_SOLVE_FAILURES = 10;        ///< Pre-fix solve failures before the seed is distrusted.
-    PVTSolver m_pvtSolver;                                      ///< Position solver.
-    int m_seedSolveFailures{0};                                 ///< Failed pre-fix solves with a snap-trusted seed.
-    NavigationDecoder m_navDecoder;                             ///< Navigation decoder.
-    NmeaGenerator m_nmeaGenerator;                              ///< NMEA sentence generator.
-    Channel m_channels[GPS_CA_SV_COUNT];                        ///< Per-satellite channels.
-    std::vector<PseudorangeSample> m_lastPseudorangeSamples;    ///< Set by the last computeNavigationSolution() call.
+    std::unique_ptr<CaCodeGenerator> m_code;                        ///< C/A code generator.
+    std::unique_ptr<SpectrumEngine> m_gpu;                          ///< GPU/CPU compute back-end.
+    static constexpr int SEED_TRUST_SOLVE_FAILURES = 10;            ///< Pre-fix solve failures before the seed is distrusted.
+    PVTSolver m_pvtSolver;                                          ///< Position solver.
+    int m_seedSolveFailures{0};                                     ///< Failed pre-fix solves with a snap-trusted seed.
+    NavigationDecoder m_navDecoder;                                 ///< Navigation decoder.
+    NmeaGenerator m_nmeaGenerator;                                  ///< NMEA sentence generator.
+    Channel m_channels[GPS_CA_SV_COUNT];                            ///< Per-satellite channels.
+    std::vector<PseudorangeSample> m_lastPseudorangeSamples;        ///< Set by the last computeNavigationSolution() call.
 
-    std::shared_ptr<Sink> m_sink{nullptr};                      ///< Telemetry sink.
-    Profiler m_profiler;                                        ///< Processing time profiler.
-    uint32_t m_currentBlockIndex{0};                            ///< Block index of the block being processed.
+    std::shared_ptr<Sink> m_sink{nullptr};                          ///< Telemetry sink.
+    Profiler m_profiler;                                            ///< Processing time profiler.
+    uint32_t m_currentBlockIndex{0};                                ///< Block index of the block being processed.
 
-    TrackingWorkerPool m_trackingPool;                          ///< Barrier pool running trackBlock per channel.
-    const ComplexFloatVector *m_currentTrackInput{nullptr};     ///< Block being tracked by the current run.
-    std::vector<int> m_activeChannels;                          ///< Channel indices tracked this block.
+    TrackingWorkerPool m_trackingPool;                              ///< Barrier pool running trackBlock per channel.
+    const ComplexFloatVector *m_currentTrackInput{nullptr};         ///< Block being tracked by the current run.
+    std::vector<int> m_activeChannels;                              ///< Channel indices tracked this block.
 
-    ComplexFloatVector m_acqInputPool;                          ///< Recycled buffer for acquisition job snapshots.
-    std::thread m_acquisitionThread;                            ///< Background acquisition worker thread.
-    BoundedQueue<AcquisitionJob> m_acquisitionJobQueue{1};      ///< Consumer-to-worker job handoff (one in flight).
+    ComplexFloatVector m_acqInputPool;                              ///< Recycled buffer for acquisition job snapshots.
+    std::thread m_acquisitionThread;                                ///< Background acquisition worker thread.
+    BoundedQueue<AcquisitionJob> m_acquisitionJobQueue{1};          ///< Consumer-to-worker job handoff (one in flight).
     BoundedQueue<AcquisitionResult> m_acquisitionResultQueue{4};    ///< Worker-to-consumer result handoff.
     std::atomic<bool> m_acquisitionBusy{false};                     ///< True while a background search is in flight.
     int m_nextAcquisitionChannel{0};                                ///< Cursor for the cold-start sweep.

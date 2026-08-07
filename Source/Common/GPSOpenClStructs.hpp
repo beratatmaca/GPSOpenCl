@@ -261,8 +261,8 @@ struct ProfilerOutput
     double totalTimeMs{0.0};                     ///< Total block time (ms).
     double earlyLatePromptGenTimeMs{0.0};        ///< Aggregate earlyLatePromptGen time across active channels (ms).
     double numericOscillatorTimeMs{0.0};         ///< Aggregate numericOscillator time across active channels (ms).
-    double accumulatorTimeMs{0.0};          ///< Aggregate correlator-accumulation time across active channels (ms).
-    double trackingMaxWorkerTimeMs{0.0};    ///< Slowest tracking worker wall-clock time this block (ms).
+    double accumulatorTimeMs{0.0};               ///< Aggregate correlator-accumulation time across active channels (ms).
+    double trackingMaxWorkerTimeMs{0.0};         ///< Slowest tracking worker wall-clock time this block (ms).
 };
 
 #pragma pack(pop)

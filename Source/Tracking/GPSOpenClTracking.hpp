@@ -137,53 +137,53 @@ class Tracking
     /** @brief Update smoothed carrier and code lock indicators. */
     void updateLockIndicators();
 
-    TrackingInput m_inputConfig;                ///< Tracking parameters.
+    TrackingInput m_inputConfig;        ///< Tracking parameters.
 
-    int m_totalSamples;                         ///< Samples per code period.
+    int m_totalSamples;                 ///< Samples per code period.
 
-    float m_pllTau1;                            ///< PLL loop filter tau1 (s).
-    float m_pllTau2;                            ///< PLL loop filter tau2 (s).
-    float m_carrFreqBasisHz;                    ///< Nominal carrier frequency (Hz).
-    float m_carrFreqHz;                         ///< Current carrier frequency (Hz).
-    float m_remCarrPhase;                       ///< Residual carrier phase (rad).
-    float m_carrNco;                            ///< Carrier NCO output (Hz).
-    float m_carrNcoPrev;                        ///< Previous carrier NCO output (Hz).
-    float m_carrErrorCycles;                    ///< PLL phase error (cycles).
-    float m_carrErrorPrevCycles;                ///< Previous PLL phase error (cycles).
+    float m_pllTau1;                    ///< PLL loop filter tau1 (s).
+    float m_pllTau2;                    ///< PLL loop filter tau2 (s).
+    float m_carrFreqBasisHz;            ///< Nominal carrier frequency (Hz).
+    float m_carrFreqHz;                 ///< Current carrier frequency (Hz).
+    float m_remCarrPhase;               ///< Residual carrier phase (rad).
+    float m_carrNco;                    ///< Carrier NCO output (Hz).
+    float m_carrNcoPrev;                ///< Previous carrier NCO output (Hz).
+    float m_carrErrorCycles;            ///< PLL phase error (cycles).
+    float m_carrErrorPrevCycles;        ///< Previous PLL phase error (cycles).
 
-    float m_fllGain;                            ///< FLL 1st-order loop filter gain (per block).
-    float m_rateAidGain;                        ///< Continuous Doppler-rate-aiding gain (per block).
-    float m_fllNco;                             ///< FLL NCO output (Hz).
-    float m_ipPrev;                             ///< Previous block In-phase Prompt sum.
-    float m_qpPrev;                             ///< Previous block Quadrature Prompt sum.
-    float m_promptMagnitudeEma;     ///< Running average prompt correlator magnitude, for bit-transition gating.
-    int m_blocksSinceInit;          ///< Blocks processed since last initTrackingState().
-    int m_fllPullInBlocks;          ///< Blocks of FLL pull-in before PLL takes over.
+    float m_fllGain;                    ///< FLL 1st-order loop filter gain (per block).
+    float m_rateAidGain;                ///< Continuous Doppler-rate-aiding gain (per block).
+    float m_fllNco;                     ///< FLL NCO output (Hz).
+    float m_ipPrev;                     ///< Previous block In-phase Prompt sum.
+    float m_qpPrev;                     ///< Previous block Quadrature Prompt sum.
+    float m_promptMagnitudeEma;         ///< Running average prompt correlator magnitude, for bit-transition gating.
+    int m_blocksSinceInit;              ///< Blocks processed since last initTrackingState().
+    int m_fllPullInBlocks;              ///< Blocks of FLL pull-in before PLL takes over.
 
-    float m_dllTau1;                ///< DLL loop filter tau1 (s).
-    float m_dllTau2;                ///< DLL loop filter tau2 (s).
-    float m_codeFreqBasisHz;        ///< Nominal code frequency (Hz).
-    float m_codeFreqHz;             ///< Current code frequency (Hz).
-    float m_codePhaseStep;          ///< Code phase step per sample.
-    float m_remCodePhase;           ///< Residual code phase (chips).
-    float m_codeNco;                ///< Code NCO output (Hz).
-    float m_codeNcoPrev;            ///< Previous code NCO output (Hz).
-    float m_codeErrorChips;         ///< DLL code error (chips).
-    float m_codeErrorPrevChips;     ///< Previous DLL code error (chips).
+    float m_dllTau1;                    ///< DLL loop filter tau1 (s).
+    float m_dllTau2;                    ///< DLL loop filter tau2 (s).
+    float m_codeFreqBasisHz;            ///< Nominal code frequency (Hz).
+    float m_codeFreqHz;                 ///< Current code frequency (Hz).
+    float m_codePhaseStep;              ///< Code phase step per sample.
+    float m_remCodePhase;               ///< Residual code phase (chips).
+    float m_codeNco;                    ///< Code NCO output (Hz).
+    float m_codeNcoPrev;                ///< Previous code NCO output (Hz).
+    float m_codeErrorChips;             ///< DLL code error (chips).
+    float m_codeErrorPrevChips;         ///< Previous DLL code error (chips).
 
-    float m_Ie;                     ///< In-phase Early accumulation.
-    float m_Ip;                     ///< In-phase Prompt accumulation.
-    float m_Il;                     ///< In-phase Late accumulation.
-    float m_Qe;                     ///< Quadrature Early accumulation.
-    float m_Qp;                     ///< Quadrature Prompt accumulation.
-    float m_Ql;                     ///< Quadrature Late accumulation.
+    float m_Ie;                         ///< In-phase Early accumulation.
+    float m_Ip;                         ///< In-phase Prompt accumulation.
+    float m_Il;                         ///< In-phase Late accumulation.
+    float m_Qe;                         ///< Quadrature Early accumulation.
+    float m_Qp;                         ///< Quadrature Prompt accumulation.
+    float m_Ql;                         ///< Quadrature Late accumulation.
 
-    float m_carrierLockEma;         ///< Smoothed carrier lock indicator.
-    float m_codeLockEma;            ///< Smoothed code lock ratio.
-    uint32_t m_lastChannelState;    ///< Owning channel state, for telemetry.
+    float m_carrierLockEma;             ///< Smoothed carrier lock indicator.
+    float m_codeLockEma;                ///< Smoothed code lock ratio.
+    uint32_t m_lastChannelState;        ///< Owning channel state, for telemetry.
 
-    bool m_timingEnabled{true};     ///< True to take correlator timing samples in doWork().
-    float m_accumulatorTimeMs{0.0f};           ///< Last doWork() accumulator duration (ms).
+    bool m_timingEnabled{true};         ///< True to take correlator timing samples in doWork().
+    float m_accumulatorTimeMs{0.0f};    ///< Last doWork() accumulator duration (ms).
 };
 }
 #endif

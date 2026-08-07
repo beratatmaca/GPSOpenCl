@@ -1,10 +1,10 @@
 #include "Application/GPSOpenClApplication.hpp"
 #include "Common/GPSOpenClBoundedQueue.hpp"
 #include "Common/GPSOpenClCommon.hpp"
-#include "Sink/GPSOpenClFileSink.hpp"
+#include "Common/GPSOpenClSettings.hpp"
 #include "Input/GPSOpenClFileSource.hpp"
 #include "Input/GPSOpenClGpsSdrSimSource.hpp"
-#include "Common/GPSOpenClSettings.hpp"
+#include "Sink/GPSOpenClFileSink.hpp"
 #include "Sink/GPSOpenClZmqSink.hpp"
 
 #include <exception>
@@ -26,8 +26,7 @@ int main(int argc, char **argv)
     }
     else
     {
-        const std::vector<std::string> candidateBinPaths = {
-            "build/live_stream.bin", "../build/live_stream.bin", "live_stream.bin"};
+        const std::vector<std::string> candidateBinPaths = {"build/live_stream.bin", "../build/live_stream.bin", "live_stream.bin"};
         for (const auto &path : candidateBinPaths)
         {
             const std::ifstream f(path);
@@ -41,11 +40,8 @@ int main(int argc, char **argv)
 
     if (signalPath.empty())
     {
-        const std::vector<std::string> candidatePaths = {"Tests/Scripts/inputSignal.txt",
-                                                         "../Tests/Scripts/inputSignal.txt",
-                                                         "../../Tests/Scripts/inputSignal.txt",
-                                                         "Scripts/inputSignal.txt",
-                                                         "inputSignal.txt"};
+        const std::vector<std::string> candidatePaths = {
+            "Tests/Scripts/inputSignal.txt", "../Tests/Scripts/inputSignal.txt", "../../Tests/Scripts/inputSignal.txt", "Scripts/inputSignal.txt", "inputSignal.txt"};
 
         for (const auto &path : candidatePaths)
         {
@@ -86,8 +82,7 @@ int main(int argc, char **argv)
 
     if (!sourceInitialized)
     {
-        std::cerr << "Failed to initialize signal source (path: '" << signalPath << "'). Nothing to process, aborting."
-                  << '\n';
+        std::cerr << "Failed to initialize signal source (path: '" << signalPath << "'). Nothing to process, aborting." << '\n';
         return 1;
     }
 

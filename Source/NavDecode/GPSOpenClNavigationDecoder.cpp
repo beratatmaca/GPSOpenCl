@@ -147,35 +147,24 @@ bool NavigationDecoder::checkParity(uint32_t word30bit, bool prevD29, bool prevD
         d[i] = ((word30bit >> (30 - i)) & 1) != 0;
     }
 
-    const bool D25 =
-        ((prevD29 ^ d[1] ^ static_cast<int>(d[2]) ^ static_cast<int>(d[3]) ^ static_cast<int>(d[5]) ^
-          static_cast<int>(d[6]) ^ static_cast<int>(d[10]) ^ static_cast<int>(d[11]) ^ static_cast<int>(d[12]) ^
-          static_cast<int>(d[13]) ^ static_cast<int>(d[14]) ^ static_cast<int>(d[17]) ^ static_cast<int>(d[18]) ^
-          static_cast<int>(d[20]) ^ static_cast<int>(d[23])) != 0);
-    const bool D26 =
-        ((prevD30 ^ d[2] ^ static_cast<int>(d[3]) ^ static_cast<int>(d[4]) ^ static_cast<int>(d[6]) ^
-          static_cast<int>(d[7]) ^ static_cast<int>(d[11]) ^ static_cast<int>(d[12]) ^ static_cast<int>(d[13]) ^
-          static_cast<int>(d[14]) ^ static_cast<int>(d[15]) ^ static_cast<int>(d[18]) ^ static_cast<int>(d[19]) ^
-          static_cast<int>(d[21]) ^ static_cast<int>(d[24])) != 0);
-    const bool D27 =
-        ((prevD29 ^ d[1] ^ static_cast<int>(d[3]) ^ static_cast<int>(d[4]) ^ static_cast<int>(d[5]) ^
-          static_cast<int>(d[7]) ^ static_cast<int>(d[8]) ^ static_cast<int>(d[12]) ^ static_cast<int>(d[13]) ^
-          static_cast<int>(d[14]) ^ static_cast<int>(d[15]) ^ static_cast<int>(d[16]) ^ static_cast<int>(d[19]) ^
-          static_cast<int>(d[20]) ^ static_cast<int>(d[22])) != 0);
-    const bool D28 =
-        ((prevD30 ^ d[2] ^ static_cast<int>(d[4]) ^ static_cast<int>(d[5]) ^ static_cast<int>(d[6]) ^
-          static_cast<int>(d[8]) ^ static_cast<int>(d[9]) ^ static_cast<int>(d[13]) ^ static_cast<int>(d[14]) ^
-          static_cast<int>(d[15]) ^ static_cast<int>(d[16]) ^ static_cast<int>(d[17]) ^ static_cast<int>(d[20]) ^
-          static_cast<int>(d[21]) ^ static_cast<int>(d[23])) != 0);
-    const bool D29 =
-        ((prevD30 ^ d[1] ^ static_cast<int>(d[3]) ^ static_cast<int>(d[5]) ^ static_cast<int>(d[6]) ^
-          static_cast<int>(d[7]) ^ static_cast<int>(d[9]) ^ static_cast<int>(d[10]) ^ static_cast<int>(d[14]) ^
-          static_cast<int>(d[15]) ^ static_cast<int>(d[16]) ^ static_cast<int>(d[17]) ^ static_cast<int>(d[18]) ^
-          static_cast<int>(d[21]) ^ static_cast<int>(d[22]) ^ static_cast<int>(d[24])) != 0);
-    const bool D30 = ((prevD29 ^ d[3] ^ static_cast<int>(d[5]) ^ static_cast<int>(d[6]) ^ static_cast<int>(d[8]) ^
-                       static_cast<int>(d[9]) ^ static_cast<int>(d[10]) ^ static_cast<int>(d[11]) ^
-                       static_cast<int>(d[13]) ^ static_cast<int>(d[15]) ^ static_cast<int>(d[19]) ^
-                       static_cast<int>(d[22]) ^ static_cast<int>(d[23]) ^ static_cast<int>(d[24])) != 0);
+    const bool D25 = ((prevD29 ^ d[1] ^ static_cast<int>(d[2]) ^ static_cast<int>(d[3]) ^ static_cast<int>(d[5]) ^ static_cast<int>(d[6]) ^ static_cast<int>(d[10]) ^
+                       static_cast<int>(d[11]) ^ static_cast<int>(d[12]) ^ static_cast<int>(d[13]) ^ static_cast<int>(d[14]) ^ static_cast<int>(d[17]) ^ static_cast<int>(d[18]) ^
+                       static_cast<int>(d[20]) ^ static_cast<int>(d[23])) != 0);
+    const bool D26 = ((prevD30 ^ d[2] ^ static_cast<int>(d[3]) ^ static_cast<int>(d[4]) ^ static_cast<int>(d[6]) ^ static_cast<int>(d[7]) ^ static_cast<int>(d[11]) ^
+                       static_cast<int>(d[12]) ^ static_cast<int>(d[13]) ^ static_cast<int>(d[14]) ^ static_cast<int>(d[15]) ^ static_cast<int>(d[18]) ^ static_cast<int>(d[19]) ^
+                       static_cast<int>(d[21]) ^ static_cast<int>(d[24])) != 0);
+    const bool D27 = ((prevD29 ^ d[1] ^ static_cast<int>(d[3]) ^ static_cast<int>(d[4]) ^ static_cast<int>(d[5]) ^ static_cast<int>(d[7]) ^ static_cast<int>(d[8]) ^
+                       static_cast<int>(d[12]) ^ static_cast<int>(d[13]) ^ static_cast<int>(d[14]) ^ static_cast<int>(d[15]) ^ static_cast<int>(d[16]) ^ static_cast<int>(d[19]) ^
+                       static_cast<int>(d[20]) ^ static_cast<int>(d[22])) != 0);
+    const bool D28 = ((prevD30 ^ d[2] ^ static_cast<int>(d[4]) ^ static_cast<int>(d[5]) ^ static_cast<int>(d[6]) ^ static_cast<int>(d[8]) ^ static_cast<int>(d[9]) ^
+                       static_cast<int>(d[13]) ^ static_cast<int>(d[14]) ^ static_cast<int>(d[15]) ^ static_cast<int>(d[16]) ^ static_cast<int>(d[17]) ^ static_cast<int>(d[20]) ^
+                       static_cast<int>(d[21]) ^ static_cast<int>(d[23])) != 0);
+    const bool D29 = ((prevD30 ^ d[1] ^ static_cast<int>(d[3]) ^ static_cast<int>(d[5]) ^ static_cast<int>(d[6]) ^ static_cast<int>(d[7]) ^ static_cast<int>(d[9]) ^
+                       static_cast<int>(d[10]) ^ static_cast<int>(d[14]) ^ static_cast<int>(d[15]) ^ static_cast<int>(d[16]) ^ static_cast<int>(d[17]) ^ static_cast<int>(d[18]) ^
+                       static_cast<int>(d[21]) ^ static_cast<int>(d[22]) ^ static_cast<int>(d[24])) != 0);
+    const bool D30 =
+        ((prevD29 ^ d[3] ^ static_cast<int>(d[5]) ^ static_cast<int>(d[6]) ^ static_cast<int>(d[8]) ^ static_cast<int>(d[9]) ^ static_cast<int>(d[10]) ^ static_cast<int>(d[11]) ^
+          static_cast<int>(d[13]) ^ static_cast<int>(d[15]) ^ static_cast<int>(d[19]) ^ static_cast<int>(d[22]) ^ static_cast<int>(d[23]) ^ static_cast<int>(d[24])) != 0);
 
     const bool p25 = ((word30bit >> 5) & 1) != 0;
     const bool p26 = ((word30bit >> 4) & 1) != 0;
@@ -216,8 +205,7 @@ bool NavigationDecoder::decodeSubframe(const std::vector<uint32_t> &words30bit, 
     ephem.subframeId = static_cast<int>(extractUnsignedBits(howWord, 20, 3));
     ephem.tow = towCount * GPS_NAV_SUBFRAME_DURATION_SEC;
 
-    if (ephem.subframeId < 1 || ephem.subframeId > 5 ||
-        (((m_inputConfig.subframeSearchMask >> (ephem.subframeId - 1)) & 0x1u) == 0u))
+    if (ephem.subframeId < 1 || ephem.subframeId > 5 || (((m_inputConfig.subframeSearchMask >> (ephem.subframeId - 1)) & 0x1u) == 0u))
     {
 
         ephem.isValid = false;
@@ -250,8 +238,7 @@ bool NavigationDecoder::decodeSubframe(const std::vector<uint32_t> &words30bit, 
 
         ephem.Crs = extractSignedBits(w3, 9, 16) * std::pow(2.0, -5);
         ephem.deltaN = extractSignedBits(w4, 1, 16) * std::pow(2.0, -43) * M_PI;
-        const uint32_t m0RawU =
-            (static_cast<uint32_t>(extractSignedBits(w4, 17, 8)) << 24) | extractUnsignedBits(w5, 1, 24);
+        const uint32_t m0RawU = (static_cast<uint32_t>(extractSignedBits(w4, 17, 8)) << 24) | extractUnsignedBits(w5, 1, 24);
         auto m0Raw = static_cast<int32_t>(m0RawU);
         ephem.M0 = m0Raw * std::pow(2.0, -31) * M_PI;
         ephem.Cuc = extractSignedBits(w6, 1, 16) * std::pow(2.0, -29);
@@ -268,18 +255,15 @@ bool NavigationDecoder::decodeSubframe(const std::vector<uint32_t> &words30bit, 
     {
 
         ephem.Cic = extractSignedBits(w3, 1, 16) * std::pow(2.0, -29);
-        const uint32_t omega0RawU =
-            (static_cast<uint32_t>(extractSignedBits(w3, 17, 8)) << 24) | extractUnsignedBits(w4, 1, 24);
+        const uint32_t omega0RawU = (static_cast<uint32_t>(extractSignedBits(w3, 17, 8)) << 24) | extractUnsignedBits(w4, 1, 24);
         auto omega0Raw = static_cast<int32_t>(omega0RawU);
         ephem.omega0 = omega0Raw * std::pow(2.0, -31) * M_PI;
         ephem.Cis = extractSignedBits(w5, 1, 16) * std::pow(2.0, -29);
-        const uint32_t i0RawU =
-            (static_cast<uint32_t>(extractSignedBits(w5, 17, 8)) << 24) | extractUnsignedBits(w6, 1, 24);
+        const uint32_t i0RawU = (static_cast<uint32_t>(extractSignedBits(w5, 17, 8)) << 24) | extractUnsignedBits(w6, 1, 24);
         auto i0Raw = static_cast<int32_t>(i0RawU);
         ephem.i0 = i0Raw * std::pow(2.0, -31) * M_PI;
         ephem.Crc = extractSignedBits(w7, 1, 16) * std::pow(2.0, -5);
-        const uint32_t omegaRawU =
-            (static_cast<uint32_t>(extractSignedBits(w7, 17, 8)) << 24) | extractUnsignedBits(w8, 1, 24);
+        const uint32_t omegaRawU = (static_cast<uint32_t>(extractSignedBits(w7, 17, 8)) << 24) | extractUnsignedBits(w8, 1, 24);
         auto omegaRaw = static_cast<int32_t>(omegaRawU);
         ephem.omega = omegaRaw * std::pow(2.0, -31) * M_PI;
         ephem.omegaDot = extractSignedBits(w9, 1, 24) * std::pow(2.0, -43) * M_PI;
@@ -334,8 +318,7 @@ bool NavigationDecoder::decodeAtPhaseOffset(int svId,
                                             const FloatVector *codePhaseHistory)
 {
     bool hadEnoughData = false;
-    const bool decoded = tryDecodeAtBitPosition(
-        svId, promptHistory, phase, bitOffset, hadEnoughData, ephem, subframeStartSample, codePhaseHistory);
+    const bool decoded = tryDecodeAtBitPosition(svId, promptHistory, phase, bitOffset, hadEnoughData, ephem, subframeStartSample, codePhaseHistory);
 
     if (decoded)
     {
@@ -367,8 +350,7 @@ bool NavigationDecoder::tryDecodeAtBitPosition(int svId,
     }
 
     const size_t startSample = phaseBase + (bitPosition * GPS_NAV_CODE_PERIODS_PER_BIT);
-    if (startSample + static_cast<size_t>(GPS_NAV_BITS_PER_SUBFRAME * GPS_NAV_CODE_PERIODS_PER_BIT) >
-        promptHistory.size())
+    if (startSample + static_cast<size_t>(GPS_NAV_BITS_PER_SUBFRAME * GPS_NAV_CODE_PERIODS_PER_BIT) > promptHistory.size())
     {
         return false;
     }
@@ -490,8 +472,7 @@ bool NavigationDecoder::tryDecodeAtBitPosition(int svId,
             continue;
         }
         const size_t candidateStart = startSample + candidate;
-        if (candidateStart + static_cast<size_t>(GPS_NAV_BITS_PER_SUBFRAME * GPS_NAV_CODE_PERIODS_PER_BIT) >
-            promptHistory.size())
+        if (candidateStart + static_cast<size_t>(GPS_NAV_BITS_PER_SUBFRAME * GPS_NAV_CODE_PERIODS_PER_BIT) > promptHistory.size())
         {
             continue;
         }
@@ -546,8 +527,7 @@ bool NavigationDecoder::processPromptSignal(int svId,
 
     if (bitSyncPhase >= 0)
     {
-        decoded = decodeAtPhaseOffset(
-            svId, promptHistory, bitSyncPhase, bitOffset, ephem, subframeStartSample, codePhaseHistory);
+        decoded = decodeAtPhaseOffset(svId, promptHistory, bitSyncPhase, bitOffset, ephem, subframeStartSample, codePhaseHistory);
     }
     else
     {
@@ -559,14 +539,7 @@ bool NavigationDecoder::processPromptSignal(int svId,
         for (int phase = 0; phase < GPS_NAV_CODE_PERIODS_PER_BIT && !decoded; phase++)
         {
             bool hadEnoughData = false;
-            decoded = tryDecodeAtBitPosition(svId,
-                                             promptHistory,
-                                             phase,
-                                             searchPositions[static_cast<size_t>(phase)],
-                                             hadEnoughData,
-                                             ephem,
-                                             subframeStartSample,
-                                             codePhaseHistory);
+            decoded = tryDecodeAtBitPosition(svId, promptHistory, phase, searchPositions[static_cast<size_t>(phase)], hadEnoughData, ephem, subframeStartSample, codePhaseHistory);
             if (decoded)
             {
                 bitSyncPhase = phase;
@@ -585,4 +558,3 @@ bool NavigationDecoder::processPromptSignal(int svId,
     }
     return decoded;
 }
-

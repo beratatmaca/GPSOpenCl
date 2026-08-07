@@ -8,9 +8,7 @@
 
 using namespace GPSOpenCl;
 
-bool MeasurementAssembler::computeElapsedSecondsSincePromptStart(size_t promptCount,
-                                                                 size_t startSample,
-                                                                 double &elapsedSecondsOut)
+bool MeasurementAssembler::computeElapsedSecondsSincePromptStart(size_t promptCount, size_t startSample, double &elapsedSecondsOut)
 {
     if (promptCount < startSample)
     {
@@ -20,17 +18,13 @@ bool MeasurementAssembler::computeElapsedSecondsSincePromptStart(size_t promptCo
     return true;
 }
 
-double MeasurementAssembler::computeTransmitTime(double subframeStartTow,
-                                                 double elapsedSeconds,
-                                                 double driftChips,
-                                                 double anchorChipsRaw)
+double MeasurementAssembler::computeTransmitTime(double subframeStartTow, double elapsedSeconds, double driftChips, double anchorChipsRaw)
 {
     const double anchorChips = anchorChipsRaw - GPS_CA_CODE_LENGTH;
     return subframeStartTow + elapsedSeconds + ((driftChips + anchorChips) / GPS_CA_CODE_FREQUENCY_HZ);
 }
 
-void MeasurementAssembler::snapTransmitTimesToMedianArrival(std::vector<double> &transmitTimes,
-                                                            const std::vector<double> &impliedArrivals)
+void MeasurementAssembler::snapTransmitTimesToMedianArrival(std::vector<double> &transmitTimes, const std::vector<double> &impliedArrivals)
 {
     if (transmitTimes.empty() || transmitTimes.size() != impliedArrivals.size())
     {
@@ -53,11 +47,7 @@ void MeasurementAssembler::snapTransmitTimesToMedianArrival(std::vector<double> 
     }
 }
 
-bool MeasurementAssembler::assemble(const Channel *channels,
-                                    int channelCount,
-                                    const EcefPosition &referenceEcef,
-                                    bool referenceTrusted,
-                                    Measurements &out)
+bool MeasurementAssembler::assemble(const Channel *channels, int channelCount, const EcefPosition &referenceEcef, bool referenceTrusted, Measurements &out)
 {
     out.ephemerides.clear();
     out.transmitTimesSec.clear();
@@ -89,14 +79,13 @@ bool MeasurementAssembler::assemble(const Channel *channels,
 
         const double subframeStartTow = channel.getLastSubframeTow() - GPS_NAV_SUBFRAME_DURATION_SEC;
 
-        const double driftChips = static_cast<double>(channel.getCumulativeDriftChipsAtSample(promptCount - 1)) -
-            static_cast<double>(channel.getCumulativeDriftChipsAtSample(subframeStartSample));
+        const double driftChips =
+            static_cast<double>(channel.getCumulativeDriftChipsAtSample(promptCount - 1)) - static_cast<double>(channel.getCumulativeDriftChipsAtSample(subframeStartSample));
 
         const auto anchorChipsRaw = static_cast<double>(channel.getCodePhaseAtSample(subframeStartSample));
 
         out.ephemerides.push_back(channel.getAccumulatedEphemeris());
-        out.transmitTimesSec.push_back(
-            computeTransmitTime(subframeStartTow, elapsedSeconds, driftChips, anchorChipsRaw));
+        out.transmitTimesSec.push_back(computeTransmitTime(subframeStartTow, elapsedSeconds, driftChips, anchorChipsRaw));
         out.prns.push_back(channel.svId);
     }
 
@@ -114,8 +103,7 @@ bool MeasurementAssembler::assemble(const Channel *channels,
             const double dx = orbit.position.x - referenceEcef.x;
             const double dy = orbit.position.y - referenceEcef.y;
             const double dz = orbit.position.z - referenceEcef.z;
-            impliedArrivals[i] = out.transmitTimesSec[i] - orbit.clockBias +
-                (std::sqrt((dx * dx) + (dy * dy) + (dz * dz)) / SPEED_OF_LIGHT_M_S);
+            impliedArrivals[i] = out.transmitTimesSec[i] - orbit.clockBias + (std::sqrt((dx * dx) + (dy * dy) + (dz * dz)) / SPEED_OF_LIGHT_M_S);
         }
 
         snapTransmitTimesToMedianArrival(out.transmitTimesSec, impliedArrivals);

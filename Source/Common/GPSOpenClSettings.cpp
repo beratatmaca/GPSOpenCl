@@ -94,10 +94,7 @@ void Settings::updateConfigurationStruct()
 {
     if (!m_configurationMap["DataSource"].empty())
     {
-        snprintf(configuration.sourceInput.fifoPath,
-                 sizeof(configuration.sourceInput.fifoPath),
-                 "%s",
-                 m_configurationMap["DataSource"].c_str());
+        snprintf(configuration.sourceInput.fifoPath, sizeof(configuration.sourceInput.fifoPath), "%s", m_configurationMap["DataSource"].c_str());
     }
 
     if (!m_configurationMap["SamplingFrequency"].empty())
@@ -105,10 +102,8 @@ void Settings::updateConfigurationStruct()
         try
         {
             const float samplingFrequencyHz = std::stof(m_configurationMap["SamplingFrequency"]);
-            const double samplesPerCodeReal =
-                std::round(static_cast<double>(samplingFrequencyHz) / (GPS_CA_CODE_FREQUENCY_HZ / GPS_CA_CODE_LENGTH));
-            if (!std::isfinite(samplingFrequencyHz) || samplingFrequencyHz <= 0.0f || samplesPerCodeReal < 1.0 ||
-                samplesPerCodeReal > 16777216.0)
+            const double samplesPerCodeReal = std::round(static_cast<double>(samplingFrequencyHz) / (GPS_CA_CODE_FREQUENCY_HZ / GPS_CA_CODE_LENGTH));
+            if (!std::isfinite(samplingFrequencyHz) || samplingFrequencyHz <= 0.0f || samplesPerCodeReal < 1.0 || samplesPerCodeReal > 16777216.0)
             {
                 throw std::invalid_argument("SamplingFrequency out of range");
             }
@@ -123,8 +118,8 @@ void Settings::updateConfigurationStruct()
             const bool isPowerOfTwo = samplesPerCode > 0 && (samplesPerCode & (samplesPerCode - 1)) == 0;
             if (!isPowerOfTwo)
             {
-                std::cerr << "Warning: SamplingFrequency=" << configuration.acquisitionInput.samplingFrequencyHz
-                          << " yields " << samplesPerCode << " samples per code period, which is not a power of "
+                std::cerr << "Warning: SamplingFrequency=" << configuration.acquisitionInput.samplingFrequencyHz << " yields " << samplesPerCode
+                          << " samples per code period, which is not a power of "
                           << "two. The FFT-based acquisition/lookup-table path requires a power-of-two length and "
                           << "will fail for this configuration." << '\n';
             }
@@ -139,8 +134,7 @@ void Settings::updateConfigurationStruct()
     {
         try
         {
-            configuration.acquisitionInput.acquisitionDopplerMinimum =
-                std::stoi(m_configurationMap["AcquisitionMinimumDoppler"]);
+            configuration.acquisitionInput.acquisitionDopplerMinimum = std::stoi(m_configurationMap["AcquisitionMinimumDoppler"]);
         }
         catch (const std::exception &)
         {
@@ -152,8 +146,7 @@ void Settings::updateConfigurationStruct()
     {
         try
         {
-            configuration.acquisitionInput.acquisitionDopplerMaximum =
-                std::stoi(m_configurationMap["AcquisitionMaximumDoppler"]);
+            configuration.acquisitionInput.acquisitionDopplerMaximum = std::stoi(m_configurationMap["AcquisitionMaximumDoppler"]);
         }
         catch (const std::exception &)
         {
@@ -165,8 +158,7 @@ void Settings::updateConfigurationStruct()
     {
         try
         {
-            configuration.acquisitionInput.acquisitionDopplerSearchRange =
-                std::stoi(m_configurationMap["AcquisitionDopplerSearchRange"]);
+            configuration.acquisitionInput.acquisitionDopplerSearchRange = std::stoi(m_configurationMap["AcquisitionDopplerSearchRange"]);
         }
         catch (const std::exception &)
         {
@@ -175,8 +167,7 @@ void Settings::updateConfigurationStruct()
     }
 
     if (configuration.acquisitionInput.acquisitionDopplerSearchRange <= 0 ||
-        configuration.acquisitionInput.acquisitionDopplerMinimum >=
-            configuration.acquisitionInput.acquisitionDopplerMaximum)
+        configuration.acquisitionInput.acquisitionDopplerMinimum >= configuration.acquisitionInput.acquisitionDopplerMaximum)
     {
         std::cerr << "Invalid Doppler search configuration (range must be positive and minimum below maximum), "
                      "using defaults."
@@ -297,8 +288,7 @@ void Settings::updateConfigurationStruct()
     {
         try
         {
-            configuration.pvtSolverInput.fixOutputIntervalBlocks =
-                std::stoi(m_configurationMap["FixOutputIntervalBlocks"]);
+            configuration.pvtSolverInput.fixOutputIntervalBlocks = std::stoi(m_configurationMap["FixOutputIntervalBlocks"]);
         }
         catch (const std::exception &)
         {

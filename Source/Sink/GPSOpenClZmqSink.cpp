@@ -40,8 +40,7 @@ ZmqSink::ZmqSink(std::string endpoint) : m_endpoint(std::move(endpoint)), m_queu
             zmq_setsockopt(m_publisher, ZMQ_LINGER, &lingerMs, sizeof(lingerMs));
             if (zmq_bind(m_publisher, m_endpoint.c_str()) != 0)
             {
-                std::cerr << "ZmqSink: bind to " << m_endpoint << " failed: " << zmq_strerror(zmq_errno())
-                          << " -- telemetry will not be published" << '\n';
+                std::cerr << "ZmqSink: bind to " << m_endpoint << " failed: " << zmq_strerror(zmq_errno()) << " -- telemetry will not be published" << '\n';
                 zmq_close(m_publisher);
                 m_publisher = nullptr;
             }

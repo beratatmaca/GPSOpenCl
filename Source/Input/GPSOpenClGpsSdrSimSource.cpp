@@ -5,10 +5,10 @@
 #include <cmath>
 #include <cstring>
 #include <fcntl.h>
-#include <thread>
 #include <poll.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <thread>
 #include <unistd.h>
 #include <vector>
 
@@ -44,8 +44,7 @@ bool GpsSdrSimSource::initialize(const SourceInput &input)
     m_samplesPerBlock = 4096;
     if (m_inputConfig.samplingRateHz > 0.0)
     {
-        m_samplesPerBlock = static_cast<size_t>(
-            std::round(m_inputConfig.samplingRateHz / (GPS_CA_CODE_FREQUENCY_HZ / GPS_CA_CODE_LENGTH)));
+        m_samplesPerBlock = static_cast<size_t>(std::round(m_inputConfig.samplingRateHz / (GPS_CA_CODE_FREQUENCY_HZ / GPS_CA_CODE_LENGTH)));
     }
     m_byteBuffer.resize(m_samplesPerBlock * 2 * sizeof(int8_t));
 
