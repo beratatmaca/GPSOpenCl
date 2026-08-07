@@ -1,4 +1,4 @@
-#include "GPSOpenClAtmosphericCorrections.h"
+#include "Pvt/GPSOpenClAtmosphericCorrections.hpp"
 
 #include "gtest/gtest.h"
 #include <cmath>

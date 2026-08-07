@@ -4,13 +4,13 @@
 #include <fstream>
 #include <thread>
 
-#include "GPSOpenClFileSink.h"
-#include "GPSOpenClFileSource.h"
-#include "GPSOpenClGpsSdrSimSource.h"
-#include "GPSOpenClProfiler.h"
-#include "GPSOpenClSink.h"
-#include "GPSOpenClStructs.h"
-#include "GPSOpenClZmqSink.h"
+#include "Sink/GPSOpenClFileSink.hpp"
+#include "Input/GPSOpenClFileSource.hpp"
+#include "Input/GPSOpenClGpsSdrSimSource.hpp"
+#include "Common/GPSOpenClProfiler.hpp"
+#include "Sink/GPSOpenClSink.hpp"
+#include "Common/GPSOpenClStructs.hpp"
+#include "Sink/GPSOpenClZmqSink.hpp"
 
 using namespace GPSOpenCl;
 

@@ -1,7 +1,7 @@
-#include "GPSOpenClTracking.h"
+#include "Tracking/GPSOpenClTracking.hpp"
 
-#include "GPSOpenClCaCodeGenerator.h"
-#include "GPSOpenClSettings.h"
+#include "Acquisition/GPSOpenClCaCodeGenerator.hpp"
+#include "Common/GPSOpenClSettings.hpp"
 
 #include "gtest/gtest.h"
 

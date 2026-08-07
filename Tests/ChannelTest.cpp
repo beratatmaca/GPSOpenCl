@@ -1,5 +1,5 @@
-#include "GPSOpenClChannel.h"
-#include "GPSOpenClSettings.h"
+#include "Tracking/GPSOpenClChannel.hpp"
+#include "Common/GPSOpenClSettings.hpp"
 
 #include "gtest/gtest.h"
 

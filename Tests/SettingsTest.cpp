@@ -1,6 +1,6 @@
-#include "../Source/GPSOpenClSettings.h"
+#include "Common/GPSOpenClSettings.hpp"
 
-#include "TestUtils.h"
+#include "TestUtils.hpp"
 
 #include <cstdio>
 #include <fstream>

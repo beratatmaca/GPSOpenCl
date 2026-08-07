@@ -22,30 +22,30 @@ endif()
 
 include(GoogleTest)
 
+# Reuse the Source/ subdirectories' source lists for the test binary, out of the
+# main GPSOpenCl target's binary tree so target names never collide.
+add_subdirectory(${CMAKE_SOURCE_DIR}/Source/Application ${CMAKE_CURRENT_BINARY_DIR}/Source/Application)
+add_subdirectory(${CMAKE_SOURCE_DIR}/Source/Common ${CMAKE_CURRENT_BINARY_DIR}/Source/Common)
+add_subdirectory(${CMAKE_SOURCE_DIR}/Source/Gpu ${CMAKE_CURRENT_BINARY_DIR}/Source/Gpu)
+add_subdirectory(${CMAKE_SOURCE_DIR}/Source/Input ${CMAKE_CURRENT_BINARY_DIR}/Source/Input)
+add_subdirectory(${CMAKE_SOURCE_DIR}/Source/Acquisition ${CMAKE_CURRENT_BINARY_DIR}/Source/Acquisition)
+add_subdirectory(${CMAKE_SOURCE_DIR}/Source/Tracking ${CMAKE_CURRENT_BINARY_DIR}/Source/Tracking)
+add_subdirectory(${CMAKE_SOURCE_DIR}/Source/NavDecode ${CMAKE_CURRENT_BINARY_DIR}/Source/NavDecode)
+add_subdirectory(${CMAKE_SOURCE_DIR}/Source/Pvt ${CMAKE_CURRENT_BINARY_DIR}/Source/Pvt)
+add_subdirectory(${CMAKE_SOURCE_DIR}/Source/Sink ${CMAKE_CURRENT_BINARY_DIR}/Source/Sink)
+
 add_executable(
     GPSOpenClTest
     Main.cpp
-    ${CMAKE_SOURCE_DIR}/Source/GPSOpenClGPUHandler.cpp
-    ${CMAKE_SOURCE_DIR}/Source/GPSOpenClSpectrumEngine.cpp
-    ${CMAKE_SOURCE_DIR}/Source/GPSOpenClCaCodeGenerator.cpp
-    ${CMAKE_SOURCE_DIR}/Source/GPSOpenClSettings.cpp
-    ${CMAKE_SOURCE_DIR}/Source/GPSOpenClAcquisition.cpp
-    ${CMAKE_SOURCE_DIR}/Source/GPSOpenClTracking.cpp
-    ${CMAKE_SOURCE_DIR}/Source/GPSOpenClLockDetector.cpp
-    ${CMAKE_SOURCE_DIR}/Source/GPSOpenClChannel.cpp
-    ${CMAKE_SOURCE_DIR}/Source/GPSOpenClApplication.cpp
-    ${CMAKE_SOURCE_DIR}/Source/GPSOpenClNavigationDecoder.cpp
-    ${CMAKE_SOURCE_DIR}/Source/GPSOpenClPVTSolver.cpp
-    ${CMAKE_SOURCE_DIR}/Source/GPSOpenClNmeaGenerator.cpp
-    ${CMAKE_SOURCE_DIR}/Source/GPSOpenClAtmosphericCorrections.cpp
-    ${CMAKE_SOURCE_DIR}/Source/GPSOpenClFileSource.cpp
-    ${CMAKE_SOURCE_DIR}/Source/GPSOpenClGpsSdrSimSource.cpp
-    ${CMAKE_SOURCE_DIR}/Source/GPSOpenClFileSink.cpp
-    ${CMAKE_SOURCE_DIR}/Source/GPSOpenClZmqSink.cpp
-    ${CMAKE_SOURCE_DIR}/Source/GPSOpenClProfiler.cpp
-    ${CMAKE_SOURCE_DIR}/Source/GPSOpenClMeasurementAssembler.cpp
-    ${CMAKE_SOURCE_DIR}/Source/GPSOpenClTelemetryExporter.cpp
-    ${CMAKE_SOURCE_DIR}/Source/GPSOpenClTrackingWorkerPool.cpp
+    ${GPSOPENCL_APPLICATION_SOURCES}
+    ${GPSOPENCL_COMMON_SOURCES}
+    ${GPSOPENCL_GPU_SOURCES}
+    ${GPSOPENCL_INPUT_SOURCES}
+    ${GPSOPENCL_ACQUISITION_SOURCES}
+    ${GPSOPENCL_TRACKING_SOURCES}
+    ${GPSOPENCL_NAVDECODE_SOURCES}
+    ${GPSOPENCL_PVT_SOURCES}
+    ${GPSOPENCL_SINK_SOURCES}
     GPUTest.cpp
     AcquisitionTest.cpp
     CaCodeTest.cpp

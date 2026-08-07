@@ -32,7 +32,7 @@ Checks: >
   -readability-uppercase-literal-suffix
 
 WarningsAsErrors: ""
-HeaderFilterRegex: '^.*/Source/.*\.h$'
+HeaderFilterRegex: '^.*/Source/.*\.hpp$'
 FormatStyle: file
 UseColor: true
 

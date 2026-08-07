@@ -1,4 +1,4 @@
-#include "GPSOpenClTrackingWorkerPool.h"
+#include "Tracking/GPSOpenClTrackingWorkerPool.hpp"
 
 #include <gtest/gtest.h>
 

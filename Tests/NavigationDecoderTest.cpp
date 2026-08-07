@@ -1,4 +1,4 @@
-#include "GPSOpenClNavigationDecoder.h"
+#include "NavDecode/GPSOpenClNavigationDecoder.hpp"
 
 #include "gtest/gtest.h"
 #include <cmath>

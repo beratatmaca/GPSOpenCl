@@ -1,9 +1,9 @@
 # First-party C++ sources/headers; excludes Tools/gps-sdr-sim and fetched content.
-file(GLOB GPSOPENCL_FORMAT_SOURCES
+file(GLOB_RECURSE GPSOPENCL_FORMAT_SOURCES
     ${CMAKE_SOURCE_DIR}/Source/*.cpp
-    ${CMAKE_SOURCE_DIR}/Source/*.h
+    ${CMAKE_SOURCE_DIR}/Source/*.hpp
     ${CMAKE_SOURCE_DIR}/Tests/*.cpp
-    ${CMAKE_SOURCE_DIR}/Tests/*.h
+    ${CMAKE_SOURCE_DIR}/Tests/*.hpp
 )
 
 # clang-format: apply or verify project style on Source/ and Tests/.
@@ -32,7 +32,7 @@ endif()
 # Prefer the newest installed LLVM release; unversioned name is the fallback.
 find_program(CLANG_TIDY_EXE NAMES clang-tidy-20 clang-tidy-19 clang-tidy-18 clang-tidy)
 if(CLANG_TIDY_EXE)
-    file(GLOB GPSOPENCL_TIDY_SOURCES ${CMAKE_SOURCE_DIR}/Source/*.cpp)
+    file(GLOB_RECURSE GPSOPENCL_TIDY_SOURCES ${CMAKE_SOURCE_DIR}/Source/*.cpp)
     add_custom_target(tidy
         COMMENT "Running clang-tidy over Source/"
     )

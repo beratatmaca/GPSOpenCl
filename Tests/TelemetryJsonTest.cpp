@@ -1,4 +1,4 @@
-#include "GPSOpenClTelemetryExporter.h"
+#include "Sink/GPSOpenClTelemetryExporter.hpp"
 
 #include "gtest/gtest.h"
 #include <cmath>

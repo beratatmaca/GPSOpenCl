@@ -13,29 +13,31 @@ OpenCL-accelerated GPS L1 C/A software receiver.
 
 Pipeline: compute -> acquisition -> tracking -> nav decode -> measurement assembly -> PVT -> NMEA.
 
-- `Source/GPSOpenClGPUHandler.*`: OpenCL context, device, kernels.
-- `Source/GPSOpenClSpectrumEngine.*`: FFT, mixing, GPU/CPU dispatch.
-- `Source/GPSOpenClCaCodeGenerator.*`: GPS C/A code generation.
-- `Source/GPSOpenClAcquisition.*`: Doppler search, FFT correlation.
-- `Source/GPSOpenClTracking.*`: PLL/DLL loops, E/P/L correlators.
-- `Source/GPSOpenClLockDetector.*`: Carrier and code lock indicators.
-- `Source/GPSOpenClTrackingWorkerPool.*`: Per-block worker pool running channel tracking.
-- `Source/GPSOpenClChannel.*`: Per-satellite acquisition and tracking state.
-- `Source/GPSOpenClNavigationDecoder.*`: Preamble search, parity, subframe parsing.
-- `Source/GPSOpenClMeasurementAssembler.*`: Pseudorange and transmit-time assembly for the PVT solver.
-- `Source/GPSOpenClPVTSolver.*`: Satellite orbit calc, WLS position, DOP.
-- `Source/GPSOpenClAtmosphericCorrections.*`: Klobuchar and Saastamoinen delay models.
-- `Source/GPSOpenClNmeaGenerator.*`: NMEA-0183 sentence output.
-- `Source/GPSOpenClSettings.*`: INI config parsing.
-- `Source/GPSOpenClApplication.*`: Wires all modules together.
-- `Source/GPSOpenClTelemetryExporter.*`: Background console and JSON telemetry export.
-- `Source/GPSOpenClCommon.h`: Shared types and GPS constants.
-- `Source/GPSOpenClStructs.h`: Shared wire structs, single source of truth.
-- `Source/GPSOpenClSource.h`, `GPSOpenClFileSource.*`, `GPSOpenClGpsSdrSimSource.*`: Abstract `Source`, plus file and gps-sdr-sim FIFO implementations.
-- `Source/GPSOpenClSink.h`, `GPSOpenClFileSink.*`, `GPSOpenClZmqSink.*`: Abstract `Sink`, plus `NullSink`/`CompositeSink`, file, and ZMQ publisher implementations.
-- `Source/GPSOpenClProfiler.*`: Per-block, per-stage timing, published through the Sink.
-- `Source/GPSOpenClBoundedQueue.h`: Bounded blocking queue between producer and consumer threads.
+- `Source/Gpu/GPSOpenClGPUHandler.*`: OpenCL context, device, kernels.
+- `Source/Gpu/GPSOpenClSpectrumEngine.*`: FFT, mixing, GPU/CPU dispatch.
+- `Source/Acquisition/GPSOpenClCaCodeGenerator.*`: GPS C/A code generation.
+- `Source/Acquisition/GPSOpenClAcquisition.*`: Doppler search, FFT correlation.
+- `Source/Tracking/GPSOpenClTracking.*`: PLL/DLL loops, E/P/L correlators.
+- `Source/Tracking/GPSOpenClLockDetector.*`: Carrier and code lock indicators.
+- `Source/Tracking/GPSOpenClTrackingWorkerPool.*`: Per-block worker pool running channel tracking.
+- `Source/Tracking/GPSOpenClChannel.*`: Per-satellite acquisition and tracking state.
+- `Source/NavDecode/GPSOpenClNavigationDecoder.*`: Preamble search, parity, subframe parsing.
+- `Source/Pvt/GPSOpenClMeasurementAssembler.*`: Pseudorange and transmit-time assembly for the PVT solver.
+- `Source/Pvt/GPSOpenClPVTSolver.*`: Satellite orbit calc, WLS position, DOP.
+- `Source/Pvt/GPSOpenClAtmosphericCorrections.*`: Klobuchar and Saastamoinen delay models.
+- `Source/Sink/GPSOpenClNmeaGenerator.*`: NMEA-0183 sentence output.
+- `Source/Common/GPSOpenClSettings.*`: INI config parsing.
+- `Source/Application/GPSOpenClApplication.*`: Wires all modules together.
+- `Source/Sink/GPSOpenClTelemetryExporter.*`: Background console and JSON telemetry export.
+- `Source/Common/GPSOpenClCommon.hpp`: Shared types and GPS constants.
+- `Source/Common/GPSOpenClStructs.hpp`: Shared wire structs, single source of truth.
+- `Source/Input/GPSOpenClSource.hpp`, `GPSOpenClFileSource.*`, `GPSOpenClGpsSdrSimSource.*`: Abstract `Source`, plus file and gps-sdr-sim FIFO implementations.
+- `Source/Sink/GPSOpenClSink.hpp`, `GPSOpenClFileSink.*`, `GPSOpenClZmqSink.*`: Abstract `Sink`, plus `NullSink`/`CompositeSink`, file, and ZMQ publisher implementations.
+- `Source/Common/GPSOpenClProfiler.*`: Per-block, per-stage timing, published through the Sink.
+- `Source/Common/GPSOpenClBoundedQueue.hpp`: Bounded blocking queue between producer and consumer threads.
 - `Kernels/*.cl`: OpenCL FFT, complex multiply, and magnitude kernels.
+
+Folder layout under `Source/`: `Application/`, `Common/`, `Gpu/`, `Input/`, `Acquisition/`, `Tracking/`, `NavDecode/`, `Pvt/`, `Sink/`, each with its own `CMakeLists.txt` pulled in via `add_subdirectory`. `Application/Main.cpp` is the entry point; `Application/GPSOpenClApplication.*` does the top-level wiring.
 
 Data flow:
 
@@ -66,7 +68,7 @@ Design direction, not yet fully built.
 ### Module output contract
 
 - Every module: one input struct (config), one output struct (telemetry).
-- All structs in `Source/GPSOpenClStructs.h`. Single source of truth.
+- All structs in `Source/Common/GPSOpenClStructs.hpp`. Single source of truth.
 - Never mix config into telemetry or vice versa.
 
 ### Struct wire format
@@ -150,11 +152,11 @@ Builds, streams signal over FIFO, launches Dash dashboard on `localhost:8050`.
 - `.clang-format` before committing.
 - 4-space indent, Allman braces, 120 columns.
 - Namespace: `GPSOpenCl`.
-- File naming: `GPSOpenCl<ModuleName>.h` / `.cpp`.
+- File naming: `GPSOpenCl<ModuleName>.hpp` / `.cpp`.
 
 ## Commenting Rules
 
-- **C++ headers (`.h`):** Doxygen only. `/** */` for classes, structs, functions. `///<` for fields. No `//` or `/* */`.
+- **C++ headers (`.hpp`):** Doxygen only. `/** */` for classes, structs, functions. `///<` for fields. No `//` or `/* */`.
 - **C++ sources (`.cpp`):** Zero comments. NOLINT pragma comments allowed.
 - **Tests (`Tests/*.cpp`):** Brief rationale comments allowed. `//` on the preceding line.
 - **Python (`.py`):** One `#` comment on the preceding line. No docstrings, no inline comments.

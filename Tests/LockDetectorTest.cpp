@@ -1,4 +1,4 @@
-#include "GPSOpenClLockDetector.h"
+#include "Tracking/GPSOpenClLockDetector.hpp"
 
 #include "gtest/gtest.h"
 

@@ -1,10 +1,10 @@
-#include "GPSOpenClApplication.h"
-#include "GPSOpenClCommon.h"
-#include "GPSOpenClSettings.h"
-#include "GPSOpenClStructs.h"
-#include "GroundTruthRecord.h"
-#include "GroundTruthTestUtils.h"
-#include "TestUtils.h"
+#include "Application/GPSOpenClApplication.hpp"
+#include "Common/GPSOpenClCommon.hpp"
+#include "Common/GPSOpenClSettings.hpp"
+#include "Common/GPSOpenClStructs.hpp"
+#include "GroundTruthRecord.hpp"
+#include "GroundTruthTestUtils.hpp"
+#include "TestUtils.hpp"
 
 #include "gtest/gtest.h"
 

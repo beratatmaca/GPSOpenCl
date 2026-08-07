@@ -1,4 +1,4 @@
-#include "GPSOpenClNmeaGenerator.h"
+#include "Sink/GPSOpenClNmeaGenerator.hpp"
 
 #include "gtest/gtest.h"
 #include <cstdio>

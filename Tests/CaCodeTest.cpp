@@ -1,8 +1,8 @@
-#include "../Source/GPSOpenClCaCodeGenerator.h"
-#include "../Source/GPSOpenClCommon.h"
-#include "../Source/GPSOpenClSettings.h"
+#include "Acquisition/GPSOpenClCaCodeGenerator.hpp"
+#include "Common/GPSOpenClCommon.hpp"
+#include "Common/GPSOpenClSettings.hpp"
 
-#include "TestUtils.h"
+#include "TestUtils.hpp"
 
 namespace GPSOpenClTest
 {

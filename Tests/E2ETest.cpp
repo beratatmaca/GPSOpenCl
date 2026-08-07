@@ -1,7 +1,7 @@
-#include "GPSOpenClApplication.h"
-#include "GPSOpenClCommon.h"
-#include "GPSOpenClSettings.h"
-#include "TestUtils.h"
+#include "Application/GPSOpenClApplication.hpp"
+#include "Common/GPSOpenClCommon.hpp"
+#include "Common/GPSOpenClSettings.hpp"
+#include "TestUtils.hpp"
 
 #include <algorithm>
 #include <cstddef>

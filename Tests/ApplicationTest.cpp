@@ -1,5 +1,5 @@
-#include "GPSOpenClCommon.h"
-#include "GPSOpenClMeasurementAssembler.h"
+#include "Common/GPSOpenClCommon.hpp"
+#include "Pvt/GPSOpenClMeasurementAssembler.hpp"
 
 #include "gtest/gtest.h"
 #include <vector>

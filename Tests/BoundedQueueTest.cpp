@@ -1,4 +1,4 @@
-#include "GPSOpenClBoundedQueue.h"
+#include "Common/GPSOpenClBoundedQueue.hpp"
 
 #include "gtest/gtest.h"
 #include <atomic>

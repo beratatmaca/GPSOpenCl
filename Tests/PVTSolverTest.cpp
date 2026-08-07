@@ -1,5 +1,5 @@
-#include "GPSOpenClAtmosphericCorrections.h"
-#include "GPSOpenClPVTSolver.h"
+#include "Pvt/GPSOpenClAtmosphericCorrections.hpp"
+#include "Pvt/GPSOpenClPVTSolver.hpp"
 
 #include "gtest/gtest.h"
 #include <cmath>

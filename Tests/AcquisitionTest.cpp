@@ -1,10 +1,10 @@
-#include "../Source/GPSOpenClAcquisition.h"
-#include "../Source/GPSOpenClCaCodeGenerator.h"
-#include "../Source/GPSOpenClChannel.h"
-#include "../Source/GPSOpenClCommon.h"
-#include "../Source/GPSOpenClSettings.h"
-#include "../Source/GPSOpenClSpectrumEngine.h"
-#include "../Source/GPSOpenClStructs.h"
+#include "Acquisition/GPSOpenClAcquisition.hpp"
+#include "Acquisition/GPSOpenClCaCodeGenerator.hpp"
+#include "Tracking/GPSOpenClChannel.hpp"
+#include "Common/GPSOpenClCommon.hpp"
+#include "Common/GPSOpenClSettings.hpp"
+#include "Gpu/GPSOpenClSpectrumEngine.hpp"
+#include "Common/GPSOpenClStructs.hpp"
 
 #include "gtest/gtest.h"
 

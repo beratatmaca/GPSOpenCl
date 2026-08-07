@@ -148,7 +148,7 @@ The first argument is the path to the input signal. A path containing `.fifo` se
 
 #### Configuration
 
-At startup the receiver loads `DefaultConf.ini`, searched in the working directory, `build/Source/`, and `Tests/Scripts/ConfigurationFile/`. If no file is found, built-in defaults apply. Recognized keys (see `Source/GPSOpenClSettings.cpp`):
+At startup the receiver loads `DefaultConf.ini`, searched in the working directory, `build/Source/`, and `Tests/Scripts/ConfigurationFile/`. If no file is found, built-in defaults apply. Recognized keys (see `Source/Common/GPSOpenClSettings.cpp`):
 
 | Key | Default | Unit / Meaning |
 | --- | --- | --- |
@@ -197,4 +197,4 @@ To enable hardware GPU acceleration, install the appropriate OpenCL driver for y
 
 ## License
 
-This project is licensed under the terms of the GPL-3.0 License.
+This project is licensed under the terms of the MIT License.

@@ -1,6 +1,6 @@
-#include "../Source/GPSOpenClSpectrumEngine.h"
+#include "Gpu/GPSOpenClSpectrumEngine.hpp"
 
-#include "TestUtils.h"
+#include "TestUtils.hpp"
 
 #define FFT_TOLERANCE            0.3f
 #define MULTIPLICATION_TOLERANCE 0.01f

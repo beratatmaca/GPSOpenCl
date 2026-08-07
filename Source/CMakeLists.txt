@@ -1,32 +1,30 @@
+add_subdirectory(Application)
+add_subdirectory(Common)
+add_subdirectory(Gpu)
+add_subdirectory(Input)
+add_subdirectory(Acquisition)
+add_subdirectory(Tracking)
+add_subdirectory(NavDecode)
+add_subdirectory(Pvt)
+add_subdirectory(Sink)
+
 add_executable(
     GPSOpenCl
-    Main.cpp
-    GPSOpenClGPUHandler.cpp
-    GPSOpenClSpectrumEngine.cpp
-    GPSOpenClCaCodeGenerator.cpp
-    GPSOpenClSettings.cpp
-    GPSOpenClChannel.cpp
-    GPSOpenClAcquisition.cpp
-    GPSOpenClTracking.cpp
-    GPSOpenClLockDetector.cpp
-    GPSOpenClApplication.cpp
-    GPSOpenClNavigationDecoder.cpp
-    GPSOpenClPVTSolver.cpp
-    GPSOpenClNmeaGenerator.cpp
-    GPSOpenClAtmosphericCorrections.cpp
-    GPSOpenClFileSource.cpp
-    GPSOpenClGpsSdrSimSource.cpp
-    GPSOpenClFileSink.cpp
-    GPSOpenClZmqSink.cpp
-    GPSOpenClProfiler.cpp
-    GPSOpenClMeasurementAssembler.cpp
-    GPSOpenClTelemetryExporter.cpp
-    GPSOpenClTrackingWorkerPool.cpp
+    Application/Main.cpp
+    ${GPSOPENCL_APPLICATION_SOURCES}
+    ${GPSOPENCL_COMMON_SOURCES}
+    ${GPSOPENCL_GPU_SOURCES}
+    ${GPSOPENCL_INPUT_SOURCES}
+    ${GPSOPENCL_ACQUISITION_SOURCES}
+    ${GPSOPENCL_TRACKING_SOURCES}
+    ${GPSOPENCL_NAVDECODE_SOURCES}
+    ${GPSOPENCL_PVT_SOURCES}
+    ${GPSOPENCL_SINK_SOURCES}
 )
 
 target_include_directories(
-    GPSOpenCl 
-    PRIVATE 
+    GPSOpenCl
+    PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/Source
 )
@@ -45,9 +43,9 @@ if(GPSOPENCL_ENABLE_ZMQ)
 endif()
 
 file(
-  COPY 
+  COPY
   ${CMAKE_CURRENT_SOURCE_DIR}/../Tests/Scripts/ConfigurationFile/DefaultConf.ini
-  DESTINATION 
+  DESTINATION
   ${CMAKE_CURRENT_BINARY_DIR}
 )
 
