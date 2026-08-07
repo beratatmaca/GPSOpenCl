@@ -6,7 +6,6 @@
 #include <cstring>
 #include <fcntl.h>
 #include <thread>
-#include <iostream>
 #include <poll.h>
 #include <sys/stat.h>
 #include <sys/types.h>

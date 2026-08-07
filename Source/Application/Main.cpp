@@ -4,12 +4,9 @@
 #include "Sink/GPSOpenClFileSink.hpp"
 #include "Input/GPSOpenClFileSource.hpp"
 #include "Input/GPSOpenClGpsSdrSimSource.hpp"
-#include "Sink/GPSOpenClNmeaGenerator.hpp"
-#include "Pvt/GPSOpenClPVTSolver.hpp"
 #include "Common/GPSOpenClSettings.hpp"
 #include "Sink/GPSOpenClZmqSink.hpp"
 
-#include <chrono>
 #include <exception>
 #include <fstream>
 #include <iostream>
