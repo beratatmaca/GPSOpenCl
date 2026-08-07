@@ -5,10 +5,7 @@
  *  @brief PLL/DLL satellite tracking with Early/Prompt/Late correlators.
  */
 
-#include <memory>
-#include <utility>
-
-#include "GPSOpenClCode.h"
+#include "GPSOpenClCommon.h"
 #include "GPSOpenClSettings.h"
 #include "GPSOpenClStructs.h"
 
@@ -49,13 +46,9 @@ class Tracking
      *  @return Tracking output struct. */
     TrackingOutput getTrackingOutput(int prn) const;
 
-    /** @brief Get the latest doWork() sub-stage timings (ms). Values reflect only the last call.
-     *   The correlator pass is fully fused. Its whole duration reports through accumulatorMs. The
-     *   first two outputs are always zero.
-     *  @param earlyLatePromptGenMs Output, always zero, stage is fused.
-     *  @param numericOscillatorMs  Output, always zero, stage is fused.
-     *  @param accumulatorMs        Output, fused correlator pass duration (ms). */
-    void getSubStageTimings(float *earlyLatePromptGenMs, float *numericOscillatorMs, float *accumulatorMs) const;
+    /** @brief Get the fused correlator pass duration of the last doWork() call.
+     *  @return Correlator duration (ms), zero when timing is disabled. */
+    float getCorrelatorTimeMs() const { return m_accumulatorTimeMs; }
 
     /** @brief Enable or disable timing samples in doWork(). A disabled profiler adds no clock
      *   overhead.
@@ -107,8 +100,8 @@ class Tracking
     void correlator(const ComplexFloatVector &input, int prn);
 
     /** @brief Compute the Costas phase discriminator from Prompt sums. It is insensitive to data
-     *   bit sign. Uses the double angle atan2(2*Ip*Qp, Ip^2-Qp^2)/2 form. A nav bit flip changes
-     *   only the Ip and Qp signs. A plain atan2(Qp,Ip) form would misread it.
+     *   bit sign. Uses the double angle atan2(2*Ip*Qp, Ip^2-Qp^2)/(4*pi) form, in cycles. A nav bit
+     *   flip changes only the Ip and Qp signs. A plain atan2(Qp,Ip) form would misread it.
      *  @return Phase error estimate (cycles, range (-0.25, 0.25]). */
     float computeCostasPhaseError() const;
 
@@ -144,8 +137,6 @@ class Tracking
     /** @brief Update smoothed carrier and code lock indicators. */
     void updateLockIndicators();
 
-    Code m_code;                                ///< C/A code generator.
-    Settings::Configuration m_configuration;    ///< Application configuration.
     TrackingInput m_inputConfig;                ///< Tracking parameters.
 
     int m_totalSamples;                         ///< Samples per code period.
@@ -157,8 +148,8 @@ class Tracking
     float m_remCarrPhase;                       ///< Residual carrier phase (rad).
     float m_carrNco;                            ///< Carrier NCO output (Hz).
     float m_carrNcoPrev;                        ///< Previous carrier NCO output (Hz).
-    float m_carrErrorCycles;                    ///< PLL phase error (rad).
-    float m_carrErrorPrevCycles;                ///< Previous PLL phase error (rad).
+    float m_carrErrorCycles;                    ///< PLL phase error (cycles).
+    float m_carrErrorPrevCycles;                ///< Previous PLL phase error (cycles).
 
     float m_fllGain;                            ///< FLL 1st-order loop filter gain (per block).
     float m_rateAidGain;                        ///< Continuous Doppler-rate-aiding gain (per block).
@@ -192,8 +183,6 @@ class Tracking
     uint32_t m_lastChannelState;    ///< Owning channel state, for telemetry.
 
     bool m_timingEnabled{true};     ///< True to take correlator timing samples in doWork().
-    float m_earlyLatePromptGenTimeMs{0.0f};    ///< Last doWork() earlyLatePromptGen duration (ms).
-    float m_numericOscillatorTimeMs{0.0f};     ///< Last doWork() numericOscillator duration (ms).
     float m_accumulatorTimeMs{0.0f};           ///< Last doWork() accumulator duration (ms).
 };
 }

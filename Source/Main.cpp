@@ -98,7 +98,6 @@ int main(int argc, char **argv)
 
     GPSOpenCl::Application app(settings.configuration);
     app.setSink(sink);
-    app.setSource(source);
 
     struct SignalBlock
     {

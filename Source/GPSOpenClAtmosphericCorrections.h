@@ -24,17 +24,7 @@ struct KlobucharParams
 class AtmosphericCorrections
 {
   public:
-    AtmosphericCorrections();
-
-    /** @brief Construct from atmospheric parameters.
-     *  @param input Klobuchar alpha/beta coefficients. */
-    AtmosphericCorrections(const AtmosphericInput &input);
-
-    ~AtmosphericCorrections() = default;
-    AtmosphericCorrections(const AtmosphericCorrections &) = delete;
-    AtmosphericCorrections &operator=(const AtmosphericCorrections &) = delete;
-    AtmosphericCorrections(AtmosphericCorrections &&) = delete;
-    AtmosphericCorrections &operator=(AtmosphericCorrections &&) = delete;
+    AtmosphericCorrections() = delete;
 
     /** @brief Compute Klobuchar ionospheric delay.
      *  @param rxPos        Receiver geodetic position.
@@ -94,21 +84,6 @@ class AtmosphericCorrections
                                                 double gpsTimeSec,
                                                 const AtmosphericInput &input);
 
-    /** @brief Compute corrections using instance Klobuchar parameters.
-     *  @param svId       Satellite vehicle ID.
-     *  @param rxPos      Receiver geodetic position.
-     *  @param rxEcef     Receiver ECEF position.
-     *  @param satEcef    Satellite ECEF position.
-     *  @param gpsTimeSec GPS time of week (s).
-     *  @return Atmospheric correction output. */
-    AtmosphericOutput computeCorrections(int svId,
-                                         const GeodeticPosition &rxPos,
-                                         const EcefPosition &rxEcef,
-                                         const EcefPosition &satEcef,
-                                         double gpsTimeSec) const;
-
-  private:
-    AtmosphericInput m_inputConfig;    ///< Klobuchar coefficients.
 };
 }
 

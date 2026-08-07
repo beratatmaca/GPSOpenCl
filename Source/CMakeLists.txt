@@ -2,8 +2,8 @@ add_executable(
     GPSOpenCl
     Main.cpp
     GPSOpenClGPUHandler.cpp
-    GPSOpenClGPUCompute.cpp
-    GPSOpenClCode.cpp
+    GPSOpenClSpectrumEngine.cpp
+    GPSOpenClCaCodeGenerator.cpp
     GPSOpenClSettings.cpp
     GPSOpenClChannel.cpp
     GPSOpenClAcquisition.cpp
@@ -19,6 +19,9 @@ add_executable(
     GPSOpenClFileSink.cpp
     GPSOpenClZmqSink.cpp
     GPSOpenClProfiler.cpp
+    GPSOpenClMeasurementAssembler.cpp
+    GPSOpenClTelemetryExporter.cpp
+    GPSOpenClTrackingWorkerPool.cpp
 )
 
 target_include_directories(

@@ -42,7 +42,7 @@ TEST(NmeaGeneratorTest, GenerateGgga)
     sol.geodeticPosition.altitudeMeters = 545.4;
     sol.dopHDOP = 0.9;
 
-    std::string ggga = GPSOpenCl::NmeaGenerator::generateGgga(sol, 8, 45319.0);
+    std::string ggga = GPSOpenCl::NmeaGenerator::generateGgga(sol, 8, 45319.0, 2190);
 
     EXPECT_EQ(ggga.substr(0, 7), "$GPGGA,");
     EXPECT_TRUE(ggga.find(",4807.0380,N,01131.0020,E,1,08,0.9,545.4,M,0.0,M,,*") != std::string::npos);
@@ -56,17 +56,12 @@ TEST(NmeaGeneratorTest, GenerateGprmc)
     sol.geodeticPosition.latitudeDeg = 48.1173;
     sol.geodeticPosition.longitudeDeg = 11.5167;
 
-    std::string gprmc = GPSOpenCl::NmeaGenerator::generateGprmc(sol, 45319.0);
-
-    time_t now = std::time(nullptr);
-    struct tm utcTm{};
-    gmtime_r(&now, &utcTm);
-    char expectedDate[8];
-    std::snprintf(
-        expectedDate, sizeof(expectedDate), "%02d%02d%02d", utcTm.tm_mday, utcTm.tm_mon + 1, utcTm.tm_year % 100);
+    // GPS week 2190 starts 2021-12-26; TOW 45319 s minus 18 leap seconds is 12:35:01 UTC that day
+    std::string gprmc = GPSOpenCl::NmeaGenerator::generateGprmc(sol, 45319.0, 2190);
 
     EXPECT_EQ(gprmc.substr(0, 7), "$GPRMC,");
-    std::string expectedFragment = std::string(",A,4807.0380,N,01131.0020,E,0.0,0.0,") + expectedDate + ",,,A*";
+    EXPECT_TRUE(gprmc.find("$GPRMC,123501.00,A,") != std::string::npos) << "gprmc was: " << gprmc;
+    std::string expectedFragment = ",A,4807.0380,N,01131.0020,E,0.0,0.0,261221,,,A*";
     EXPECT_TRUE(gprmc.find(expectedFragment) != std::string::npos) << "gprmc was: " << gprmc;
 }
 

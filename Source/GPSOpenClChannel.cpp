@@ -161,20 +161,9 @@ void Channel::trackBlock(const ComplexFloatVector &input)
     }
 }
 
-void Channel::getTrackingSubStageTimings(float *earlyLatePromptGenMs,
-                                         float *numericOscillatorMs,
-                                         float *accumulatorMs) const
+float Channel::getTrackingCorrelatorTimeMs() const
 {
-    if (m_tracking != nullptr)
-    {
-        m_tracking->getSubStageTimings(earlyLatePromptGenMs, numericOscillatorMs, accumulatorMs);
-    }
-    else
-    {
-        *earlyLatePromptGenMs = 0.0f;
-        *numericOscillatorMs = 0.0f;
-        *accumulatorMs = 0.0f;
-    }
+    return (m_tracking != nullptr) ? m_tracking->getCorrelatorTimeMs() : 0.0f;
 }
 
 ChannelState Channel::computeNextState(ChannelState current,

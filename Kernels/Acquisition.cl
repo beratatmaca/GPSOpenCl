@@ -285,34 +285,4 @@ __kernel void absolute(__global float2 *a, __global float *c,
   }
 }
 
-/**
- * @brief Workgroup parallel tree reduction sum.
- */
-__kernel void sum(__global float *input, __global float *sumValue,
-                  __local float *localMemory1) {
-
-  const size_t globalId = get_global_id(0);
-  const size_t localId = get_local_id(0);
-
-  localMemory1[localId] = input[globalId];
-
-  barrier(CLK_LOCAL_MEM_FENCE);
-  size_t blockSize = get_local_size(0);
-  size_t halfBlockSize = blockSize / 2;
-  while (halfBlockSize > 0) {
-    if (localId < halfBlockSize) {
-      localMemory1[localId] += localMemory1[localId + halfBlockSize];
-      if ((halfBlockSize * 2) < blockSize) {
-        if (localId == 0) {
-          localMemory1[localId] += localMemory1[localId + (blockSize - 1)];
-        }
-      }
-    }
-    barrier(CLK_LOCAL_MEM_FENCE);
-    blockSize = halfBlockSize;
-    halfBlockSize = blockSize / 2;
-  }
-  if (localId == 0) {
-    sumValue[get_group_id(0)] = localMemory1[0];
-  }
 }

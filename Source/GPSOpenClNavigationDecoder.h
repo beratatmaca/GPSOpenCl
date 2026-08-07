@@ -113,12 +113,6 @@ class NavigationDecoder
      *  @return True if subframe decoded (any subframe ID with valid preamble, parity, and mask). */
     bool decodeSubframe(const std::vector<uint32_t> &words30bit, GpsEphemeris &ephem);
 
-    /** @brief Decode one navigation subframe into output struct.
-     *  @param words30bit Vector of 10 parity-checked 30-bit words.
-     *  @param output     Output struct.
-     *  @return True if subframe decoded. */
-    bool decodeSubframe(const std::vector<uint32_t> &words30bit, NavDecoderOutput &output);
-
     /** @brief Convert Prompt correlator history to navigation bits.
      *  @param promptHistory Accumulated Prompt I samples.
      *  @return Demodulated bit array. */
@@ -144,27 +138,6 @@ class NavigationDecoder
                              std::vector<size_t> &searchPositions,
                              size_t &bitOffset,
                              GpsEphemeris &ephem,
-                             size_t &subframeStartSample,
-                             const FloatVector *codePhaseHistory = nullptr);
-
-    /** @brief Process prompt signal and decode subframe into output struct.
-     *  @param svId                Satellite vehicle ID.
-     *  @param promptHistory       Accumulated Prompt I samples.
-     *  @param bitSyncPhase        Locked sample-level bit-edge phase, 0-19 (in/out, -1 = not yet synced).
-     *  @param searchPositions     Per candidate phase search cursor, size 20 (in/out). See other
-     *                             overload.
-     *  @param bitOffset           Current bit offset within the phase-aligned bit stream (in/out).
-     *  @param output              Output struct.
-     *  @param subframeStartSample Subframe start sample index (output).
-     *  @param codePhaseHistory    Optional DLL code phase, one per prompt sample. See other
-     *                             overload.
-     *  @return True if subframe decoded. */
-    bool processPromptSignal(int svId,
-                             const ComplexFloatVector &promptHistory,
-                             int &bitSyncPhase,
-                             std::vector<size_t> &searchPositions,
-                             size_t &bitOffset,
-                             NavDecoderOutput &output,
                              size_t &subframeStartSample,
                              const FloatVector *codePhaseHistory = nullptr);
 
@@ -209,7 +182,9 @@ class NavigationDecoder
      *   Total bit sync search cost stays linear. On success a matched filter refines the start
      *   block. The first parity passing phase can be one block off. That shifts every derived
      *   transmit time. The filter models each bit first block as mixed. The split position comes
-     *   from the DLL code phase.
+     *   from the DLL code phase. When the subframe starts within the first two bits of history the
+     *   previous word's D29star/D30star parity feedback is unknown and assumed zero. A wrong
+     *   assumption fails parity and the subframe is simply retried on the next pass.
      *  @param svId                Satellite vehicle ID.
      *  @param promptHistory       Accumulated Prompt I samples.
      *  @param phase               Candidate sample-level bit-edge phase, 0-19.

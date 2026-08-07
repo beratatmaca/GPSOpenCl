@@ -1,9 +1,9 @@
 #include "../Source/GPSOpenClAcquisition.h"
+#include "../Source/GPSOpenClCaCodeGenerator.h"
 #include "../Source/GPSOpenClChannel.h"
-#include "../Source/GPSOpenClCode.h"
 #include "../Source/GPSOpenClCommon.h"
-#include "../Source/GPSOpenClGPUCompute.h"
 #include "../Source/GPSOpenClSettings.h"
+#include "../Source/GPSOpenClSpectrumEngine.h"
 #include "../Source/GPSOpenClStructs.h"
 
 #include "gtest/gtest.h"
@@ -58,8 +58,8 @@ TEST(AcquisitionTest, CorrelateFindsInjectedDopplerWithMisalignedSpacing)
     settings.configuration.acquisitionInput.acquisitionDopplerMaximum = 3500;
     settings.configuration.acquisitionInput.acquisitionDopplerSearchRange = 700;
 
-    GPSOpenCl::Compute gpu;
-    GPSOpenCl::Code code(settings.configuration);
+    GPSOpenCl::SpectrumEngine gpu;
+    GPSOpenCl::CaCodeGenerator code(settings.configuration);
     code.createLookupTable(&gpu);
     ASSERT_FALSE(code.upsampledCaCode.empty());
 

@@ -6,11 +6,10 @@
  */
 
 #include "GPSOpenClAcquisition.h"
-#include "GPSOpenClAtmosphericCorrections.h"
 #include "GPSOpenClBoundedQueue.h"
+#include "GPSOpenClCaCodeGenerator.h"
 #include "GPSOpenClChannel.h"
-#include "GPSOpenClCode.h"
-#include "GPSOpenClGPUCompute.h"
+#include "GPSOpenClMeasurementAssembler.h"
 #include "GPSOpenClNavigationDecoder.h"
 #include "GPSOpenClNmeaGenerator.h"
 #include "GPSOpenClPVTSolver.h"
@@ -18,8 +17,11 @@
 #include "GPSOpenClSettings.h"
 #include "GPSOpenClSink.h"
 #include "GPSOpenClSource.h"
+#include "GPSOpenClSpectrumEngine.h"
 #include "GPSOpenClStructs.h"
+#include "GPSOpenClTelemetryExporter.h"
 #include "GPSOpenClTracking.h"
+#include "GPSOpenClTrackingWorkerPool.h"
 
 #include <atomic>
 #include <condition_variable>
@@ -57,25 +59,6 @@ class Application
      *  @param solution Output position solution.
      *  @return True if valid solution. */
     bool computeNavigationSolution(ReceiverPvtSolution &solution);
-
-    /** @brief Compute transmit time from the subframe anchor. Adds a sub-millisecond code-phase
-     *   term. The subframe bit edge lands mid-block. Without it transmit times quantize to 1 ms.
-     *   That is up to 300 km of error.
-     *  @param subframeStartTow TOW at the subframe leading bit edge (s).
-     *  @param elapsedSeconds   Whole code periods since the anchor block (s).
-     *  @param driftChips       Accumulated code drift since the anchor block (chips).
-     *  @param anchorChipsRaw   DLL code phase at the anchor block (chips, 0-1023).
-     *  @return Satellite transmit time (s of week). */
-    static double
-        computeTransmitTime(double subframeStartTow, double elapsedSeconds, double driftChips, double anchorChipsRaw);
-
-    /** @brief Resolve the C/A millisecond ambiguity. Transmit plus travel time must agree across
-     *   satellites. A one-block decoder error shifts a whole millisecond. Snap such outliers onto
-     *   the median cluster. The gate is 0.25 ms. Common shifts are absorbed by clock bias.
-     *  @param transmitTimes   Per-satellite transmit times (s), corrected in place.
-     *  @param impliedArrivals Per-satellite modeled arrival instants (s), same order. */
-    static void snapTransmitTimesToMedianArrival(std::vector<double> &transmitTimes,
-                                                 const std::vector<double> &impliedArrivals);
 
     /** @brief Reconstructed transmit time and pseudorange for one satellite. Captured by
      *   computeNavigationSolution(). For diagnostics and ground-truth checks. */
@@ -128,45 +111,10 @@ class Application
      *  @param sink Sink implementation. */
     void setSink(const std::shared_ptr<Sink> &sink);
 
-    /** @brief Set sample source.
-     *  @param source Source implementation. */
-    void setSource(std::shared_ptr<Source> source);
-
     /** @brief Process one block through the full pipeline.
      *  @param input      IQ samples.
      *  @param blockIndex Current block index. */
     void processBlock(const ComplexFloatVector &input, uint32_t blockIndex);
-
-    /** @brief Per-satellite state captured for deferred telemetry JSON formatting. */
-    struct SatelliteTelemetry
-    {
-        int prn{0};                  ///< Satellite PRN.
-        bool acquired{false};        ///< True if the channel is acquired.
-        float cn0{0.0f};             ///< Acquisition C/N0 estimate (dB-Hz).
-        float doppler{0.0f};         ///< Acquired Doppler (Hz).
-        bool computeOrbit{false};    ///< True if ephemeris and transmitTime are valid for az/el.
-        GpsEphemeris ephemeris{};    ///< Decoded ephemeris for orbit computation.
-        double transmitTime{0.0};    ///< Transmit time for orbit computation (s).
-    };
-
-    /** @brief Everything the telemetry JSON needs. Captured cheaply on the consumer thread. Orbit
-     *   math and formatting run on the writer thread. */
-    struct TelemetrySnapshot
-    {
-        ReceiverPvtSolution solution{};                ///< PVT solution.
-        double utcTimeSec{0.0};                        ///< Receiver GPS time of week (s).
-        std::vector<int> activePrns;                   ///< PRNs of acquired channels.
-        std::vector<SatelliteTelemetry> satellites;    ///< Per-satellite state.
-        std::string ggaSentence;                       ///< Pre-generated GGA sentence.
-        std::string rmcSentence;                       ///< Pre-generated RMC sentence.
-        std::string gsaSentence;                       ///< Pre-generated GSA sentence.
-    };
-
-    /** @brief Format a telemetry snapshot as JSON. Runs on the writer thread. Computes
-     *   per-satellite orbits and azimuth elevation.
-     *  @param snapshot Captured telemetry state.
-     *  @return JSON document text. */
-    static std::string formatTelemetryJson(const TelemetrySnapshot &snapshot);
 
   private:
     /** @brief One pending background acquisition search. Holds a sample snapshot and the channel to
@@ -186,16 +134,6 @@ class Application
         ComplexFloatVector recycledInput;    ///< Job sample buffer, returned for allocation reuse.
     };
 
-    /** @brief One pending asynchronous text write. Either a file overwrite or a console print. The
-     *   consumer thread never blocks on I/O. Telemetry JSON is formatted on the writer thread. */
-    struct AsyncOutputJob
-    {
-        bool isConsole{false};                           ///< True writes to stdout, false overwrites filePath.
-        std::string filePath;                            ///< Target file path (unused if isConsole).
-        std::string content;                             ///< Text to write.
-        std::unique_ptr<TelemetrySnapshot> telemetry;    ///< Deferred telemetry snapshot, or null.
-    };
-
     /** @brief Initialize all 32 satellite channels. */
     void initializeChannels();
 
@@ -204,6 +142,10 @@ class Application
      *  @param input        IQ samples for one code period.
      *  @param channelIndex Channel index (0-based, PRN - 1). */
     void searchOneChannel(const ComplexFloatVector &input, int channelIndex);
+
+    /** @brief Track one active channel slot. Worker pool callback.
+     *  @param slot Index into m_activeChannels. */
+    void trackOneActiveChannel(int slot);
 
     /** @brief Apply finished acquisition search results. Checks C/N0, starts tracking, publishes
      *   telemetry. Must run on the consumer thread only. It mutates shared channel lifecycle state.
@@ -215,10 +157,6 @@ class Application
      *   it. */
     void acquisitionWorkerLoop();
 
-    /** @brief Persistent background writer thread body. Drains m_outputQueue and writes. Slow I/O
-     *   never stalls the consumer thread. */
-    void outputWriterLoop();
-
     /** @brief Decode navigation bits for confirmed channels. Must run every block. Decode consumes
      *   new Prompt samples continuously. */
     void updateChannelNavigation();
@@ -227,62 +165,46 @@ class Application
      *   Publish cost never extends the barrier. */
     void publishTrackingOutputs();
 
-    /** @brief Pull channel indices from the shared cursor. Track each until the list is exhausted.
-     *   This load balances across workers.
-     *  @param input IQ samples. */
-    void trackFromCursor(const ComplexFloatVector &input);
-
-    /** @brief Persistent worker thread body. Waits for a dispatch, tracks, reports completion.
-     *   Avoids spawning threads per block.
-     *  @param workerIndex Index of this worker, used for its duration telemetry slot. */
-    void workerLoop(int workerIndex);
-
-    /** @brief Start the persistent tracking thread pool. */
-    void startWorkerPool();
-
-    /** @brief Signal and join all worker threads. */
-    void stopWorkerPool();
+    /** @brief Whether the solver reference position can steer millisecond snapping. The compiled-in
+     *   seed is trusted optimistically so a cold start near it resolves the systematic one-code-
+     *   period bit-edge ambiguity. Repeated pre-fix solve failures are the signature of a wrong
+     *   seed, so trust is withdrawn until the first successful fix.
+     *  @return True while the seed is presumed good or after any successful fix. */
+    bool isReferencePositionTrusted() const
+    {
+        return m_pvtSolver.hasValidFix() || m_seedSolveFailures < SEED_TRUST_SOLVE_FAILURES;
+    }
 
     std::unique_ptr<Acquisition> m_acquisition;                 ///< Acquisition engine.
-    Tracking *m_tracking{nullptr};                              ///< Tracking engine.
     Settings::Configuration m_configuration;                    ///< Application configuration.
 
-    std::unique_ptr<Code> m_code;                               ///< C/A code generator.
-    std::unique_ptr<Compute> m_gpu;                             ///< GPU/CPU compute back-end.
+    std::unique_ptr<CaCodeGenerator> m_code;                    ///< C/A code generator.
+    std::unique_ptr<SpectrumEngine> m_gpu;                      ///< GPU/CPU compute back-end.
+    static constexpr int SEED_TRUST_SOLVE_FAILURES = 10;        ///< Pre-fix solve failures before the seed is distrusted.
     PVTSolver m_pvtSolver;                                      ///< Position solver.
+    int m_seedSolveFailures{0};                                 ///< Failed pre-fix solves with a snap-trusted seed.
     NavigationDecoder m_navDecoder;                             ///< Navigation decoder.
     NmeaGenerator m_nmeaGenerator;                              ///< NMEA sentence generator.
     Channel m_channels[GPS_CA_SV_COUNT];                        ///< Per-satellite channels.
     std::vector<PseudorangeSample> m_lastPseudorangeSamples;    ///< Set by the last computeNavigationSolution() call.
 
     std::shared_ptr<Sink> m_sink{nullptr};                      ///< Telemetry sink.
-    std::shared_ptr<Source> m_source{nullptr};                  ///< Sample source.
     Profiler m_profiler;                                        ///< Processing time profiler.
     uint32_t m_currentBlockIndex{0};                            ///< Block index of the block being processed.
 
-    std::vector<std::thread> m_workers;                         ///< Persistent tracking worker threads.
-    std::mutex m_poolMutex;                                     ///< Guards the pool dispatch state below.
-    std::condition_variable m_startCv;                          ///< Signals workers that a new range is ready.
-    std::condition_variable m_doneCv;                           ///< Signals the dispatcher that all workers finished.
-    const ComplexFloatVector *m_currentTrackInput{nullptr};     ///< Block being tracked by the current dispatch.
-    std::vector<int> m_activeChannels;                          ///< Channel indices to track this dispatch.
-    std::atomic<int> m_channelCursor{0};                        ///< Next m_activeChannels slot a worker should take.
-    std::vector<double> m_workerDurationMs;    ///< Per-worker tracking time this block (ms), own index only.
-    uint64_t m_generation{0};                  ///< Dispatch counter, workers compare their last seen value.
-    int m_pendingWorkers{0};                   ///< Workers still processing the current dispatch.
-    bool m_shutdownWorkers{false};             ///< Set to stop all workers during destruction.
-    int m_numWorkers{0};                       ///< Active worker count (0 or 1 disables the pool).
+    TrackingWorkerPool m_trackingPool;                          ///< Barrier pool running trackBlock per channel.
+    const ComplexFloatVector *m_currentTrackInput{nullptr};     ///< Block being tracked by the current run.
+    std::vector<int> m_activeChannels;                          ///< Channel indices tracked this block.
 
-    ComplexFloatVector m_acqInputPool;         ///< Recycled buffer for acquisition job snapshots.
-    std::thread m_acquisitionThread;           ///< Background acquisition worker thread.
-    BoundedQueue<AcquisitionJob> m_acquisitionJobQueue{1};          ///< Consumer-to-worker job handoff (one in flight).
+    ComplexFloatVector m_acqInputPool;                          ///< Recycled buffer for acquisition job snapshots.
+    std::thread m_acquisitionThread;                            ///< Background acquisition worker thread.
+    BoundedQueue<AcquisitionJob> m_acquisitionJobQueue{1};      ///< Consumer-to-worker job handoff (one in flight).
     BoundedQueue<AcquisitionResult> m_acquisitionResultQueue{4};    ///< Worker-to-consumer result handoff.
     std::atomic<bool> m_acquisitionBusy{false};                     ///< True while a background search is in flight.
     int m_nextAcquisitionChannel{0};                                ///< Cursor for the cold-start sweep.
     bool m_coldStartSweepDone{false};                               ///< True once every channel has been searched once.
 
-    std::thread m_outputWriterThread;                  ///< Background telemetry JSON/console writer thread.
-    BoundedQueue<AsyncOutputJob> m_outputQueue{32};    ///< Handoff queue for async file/console writes.
+    TelemetryExporter m_telemetryExporter;                          ///< Background console and JSON writer.
 };
 }
 

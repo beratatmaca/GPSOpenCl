@@ -1,10 +1,10 @@
 #include "GPSOpenClAcquisition.h"
+#include "GPSOpenClCaCodeGenerator.h"
 #include "GPSOpenClChannel.h"
-#include "GPSOpenClCode.h"
 #include "GPSOpenClCommon.h"
-#include "GPSOpenClGPUCompute.h"
 #include "GPSOpenClNavigationDecoder.h"
 #include "GPSOpenClSettings.h"
+#include "GPSOpenClSpectrumEngine.h"
 #include "GroundTruthRecord.h"
 #include "GroundTruthTestUtils.h"
 #include "RinexNavParser.h"
@@ -109,8 +109,8 @@ TEST(SingleChannelGroundTruthTest, AcquisitionAndTrackingConvergeForOneChannel)
     GPSOpenCl::Settings settings;
     settings.captureSettings();
 
-    GPSOpenCl::Compute gpu;
-    GPSOpenCl::Code code(settings.configuration);
+    GPSOpenCl::SpectrumEngine gpu;
+    GPSOpenCl::CaCodeGenerator code(settings.configuration);
     code.createLookupTable(&gpu);
 
     GPSOpenCl::Acquisition acquisition(settings.configuration);
@@ -211,8 +211,8 @@ TEST(SingleChannelGroundTruthTest, FullEphemerisMatchesRinexForOneChannel)
     GPSOpenCl::Settings settings;
     settings.captureSettings();
 
-    GPSOpenCl::Compute gpu;
-    GPSOpenCl::Code code(settings.configuration);
+    GPSOpenCl::SpectrumEngine gpu;
+    GPSOpenCl::CaCodeGenerator code(settings.configuration);
     code.createLookupTable(&gpu);
 
     GPSOpenCl::Acquisition acquisition(settings.configuration);

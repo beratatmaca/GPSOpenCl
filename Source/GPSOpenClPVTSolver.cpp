@@ -104,33 +104,6 @@ PvtSolverOutput PVTSolver::solutionToOutput(const ReceiverPvtSolution &sol)
     return out;
 }
 
-ReceiverPvtSolution PVTSolver::outputToSolution(const PvtSolverOutput &out)
-{
-    ReceiverPvtSolution sol{};
-    sol.ecefPosition.x = out.ecefXMeters;
-    sol.ecefPosition.y = out.ecefYMeters;
-    sol.ecefPosition.z = out.ecefZMeters;
-    sol.geodeticPosition.latitudeDeg = out.latitudeDeg;
-    sol.geodeticPosition.longitudeDeg = out.longitudeDeg;
-    sol.geodeticPosition.altitudeMeters = out.altitudeMeters;
-    sol.clockBiasMeters = out.clockBiasMeters;
-    sol.clockBiasSeconds = out.clockBiasSeconds;
-    sol.dopGDOP = out.dopGDOP;
-    sol.dopPDOP = out.dopPDOP;
-    sol.dopHDOP = out.dopHDOP;
-    sol.dopVDOP = out.dopVDOP;
-    sol.isValid = (out.isValid != 0);
-    sol.satellitesUsed = out.satellitesUsed;
-    sol.maxResidualMeters = out.maxResidualMeters;
-    return sol;
-}
-
-SatelliteOrbit PVTSolver::computeSatelliteOrbit(const NavDecoderOutput &navOut, double t)
-{
-    const GpsEphemeris ephem = NavigationDecoder::outputToEphemeris(navOut);
-    return computeSatelliteOrbit(ephem, t);
-}
-
 SatelliteOrbit PVTSolver::computeSatelliteOrbit(const GpsEphemeris &ephem, double t)
 {
     SatelliteOrbit orbit{};
@@ -499,10 +472,11 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
                 double invHtH[4][4] = {{0}};
                 if (!invert4x4(HtHUnweighted, invHtH))
                 {
-                    solution.dopGDOP = 0.0;
-                    solution.dopPDOP = 0.0;
-                    solution.dopHDOP = 0.0;
-                    solution.dopVDOP = 0.0;
+                    constexpr double unavailableDop = 99.9;
+                    solution.dopGDOP = unavailableDop;
+                    solution.dopPDOP = unavailableDop;
+                    solution.dopHDOP = unavailableDop;
+                    solution.dopVDOP = unavailableDop;
                     solution.isValid = true;
                     m_referenceEcef = solution.ecefPosition;
                     m_hasValidFix = true;
@@ -575,21 +549,3 @@ bool PVTSolver::solvePosition(const std::vector<GpsEphemeris> &ephemerides,
     }
 }
 
-bool PVTSolver::solvePosition(const std::vector<NavDecoderOutput> &outputs,
-                              const std::vector<double> &measuredPseudoranges,
-                              const std::vector<double> &transmitTimesSeconds,
-                              PvtSolverOutput &outputSolution)
-{
-    std::vector<GpsEphemeris> ephemerides;
-    ephemerides.reserve(outputs.size());
-    for (const auto &out : outputs)
-    {
-        ephemerides.push_back(NavigationDecoder::outputToEphemeris(out));
-    }
-
-    ReceiverPvtSolution sol{};
-    const bool res = solvePosition(ephemerides, measuredPseudoranges, transmitTimesSeconds, sol);
-
-    outputSolution = solutionToOutput(sol);
-    return res;
-}

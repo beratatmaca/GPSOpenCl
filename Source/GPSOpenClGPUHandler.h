@@ -39,7 +39,6 @@ class GpuHandler
         FFTScale,                  ///< FFT IFFT scaling kernel.
         ComplexMultiplier,         ///< Complex multiplication kernel.
         Absolute,                  ///< Magnitude squared kernel.
-        Sum,                       ///< Reduction sum kernel.
         ComplexMultiplierBatch,    ///< Batched per-Doppler-bin complex multiplication kernel.
         AcquisitionKernelCount     ///< Total acquisition kernel count.
     };
@@ -79,7 +78,6 @@ class GpuHandler
                                                                     "fft_scale",
                                                                     "complexMultiplier",
                                                                     "absolute",
-                                                                    "sum",
                                                                     "complexMultiplierBatch"};
 };
 }

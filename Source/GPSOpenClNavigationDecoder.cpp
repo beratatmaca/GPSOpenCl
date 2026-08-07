@@ -81,17 +81,6 @@ GpsEphemeris NavigationDecoder::outputToEphemeris(const NavDecoderOutput &out)
     return ephem;
 }
 
-bool NavigationDecoder::decodeSubframe(const std::vector<uint32_t> &words30bit, NavDecoderOutput &output)
-{
-    GpsEphemeris ephem{};
-    const bool res = decodeSubframe(words30bit, ephem);
-    if (res)
-    {
-        output = ephemerisToOutput(ephem);
-    }
-    return res;
-}
-
 bool NavigationDecoder::findPreamble(const std::vector<bool> &bits, size_t &preambleIndex, bool &inverted)
 {
 
@@ -597,21 +586,3 @@ bool NavigationDecoder::processPromptSignal(int svId,
     return decoded;
 }
 
-bool NavigationDecoder::processPromptSignal(int svId,
-                                            const ComplexFloatVector &promptHistory,
-                                            int &bitSyncPhase,
-                                            std::vector<size_t> &searchPositions,
-                                            size_t &bitOffset,
-                                            NavDecoderOutput &output,
-                                            size_t &subframeStartSample,
-                                            const FloatVector *codePhaseHistory)
-{
-    GpsEphemeris ephem{};
-    const bool res = processPromptSignal(
-        svId, promptHistory, bitSyncPhase, searchPositions, bitOffset, ephem, subframeStartSample, codePhaseHistory);
-    if (res)
-    {
-        output = ephemerisToOutput(ephem);
-    }
-    return res;
-}

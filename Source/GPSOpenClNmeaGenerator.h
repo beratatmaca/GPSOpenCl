@@ -8,6 +8,7 @@
 #include "GPSOpenClChannel.h"
 #include "GPSOpenClPVTSolver.h"
 
+#include <ctime>
 #include <string>
 #include <vector>
 
@@ -47,18 +48,35 @@ class NmeaGenerator
      *  @return True if enabled. */
     bool isGsvEnabled() const { return m_inputConfig.enableGsv != 0; }
 
-    /** @brief Generate GGA sentence string.
+    /** @brief GPS to UTC leap second offset (s), 2017-01-01 value. The receiver does not decode
+     *   the UTC parameters from subframe 4 page 18, so the current constant is compiled in. */
+    static constexpr int GPS_UTC_LEAP_SECONDS = 18;
+
+    /** @brief Convert GPS time to Unix UTC time. The 10-bit broadcast week number resolves into
+     *   the rollover era starting 2019-11-17 (week 2048), valid until 2039.
+     *  @param gpsWeekNumber Broadcast GPS week number (10-bit).
+     *  @param gpsTowSec     GPS time of week (s).
+     *  @return Unix UTC time (s). */
+    static time_t gpsToUnixTime(int gpsWeekNumber, double gpsTowSec);
+
+    /** @brief Generate GGA sentence string. UTC time of day derives from GPS time including the
+     *   leap second offset.
      *  @param solution      PVT solution.
      *  @param numSatellites Number of satellites used.
-     *  @param utcTimeSec    UTC time (s).
+     *  @param gpsTowSec     GPS time of week (s).
+     *  @param gpsWeekNumber Broadcast GPS week number (10-bit).
      *  @return GGA sentence. */
-    static std::string generateGgga(const ReceiverPvtSolution &solution, int numSatellites, double utcTimeSec);
+    static std::string
+        generateGgga(const ReceiverPvtSolution &solution, int numSatellites, double gpsTowSec, int gpsWeekNumber);
 
-    /** @brief Generate RMC sentence string.
-     *  @param solution   PVT solution.
-     *  @param utcTimeSec UTC time (s).
+    /** @brief Generate RMC sentence string. UTC time and date derive from GPS time including the
+     *   leap second offset. No wall clock is read, so recorded or simulated data keeps a
+     *   consistent time and date.
+     *  @param solution      PVT solution.
+     *  @param gpsTowSec     GPS time of week (s).
+     *  @param gpsWeekNumber Broadcast GPS week number (10-bit).
      *  @return RMC sentence. */
-    static std::string generateGprmc(const ReceiverPvtSolution &solution, double utcTimeSec);
+    static std::string generateGprmc(const ReceiverPvtSolution &solution, double gpsTowSec, int gpsWeekNumber);
 
     /** @brief Generate GSA sentence string.
      *  @param solution   PVT solution.
@@ -84,33 +102,10 @@ class NmeaGenerator
                                                            const EcefPosition &rxEcef,
                                                            bool rxPositionValid);
 
-    /** @brief Generate GGA as output struct.
-     *  @param solution      PVT solution.
-     *  @param numSatellites Number of satellites used.
-     *  @param utcTimeSec    UTC time (s).
+    /** @brief Wrap an already generated sentence into the wire output struct.
+     *  @param sentence Complete NMEA sentence.
      *  @return NMEA output struct. */
-    static NmeaGeneratorOutput
-        generateGggaOutput(const ReceiverPvtSolution &solution, int numSatellites, double utcTimeSec);
-
-    /** @brief Generate RMC as output struct.
-     *  @param solution   PVT solution.
-     *  @param utcTimeSec UTC time (s).
-     *  @return NMEA output struct. */
-    static NmeaGeneratorOutput generateGprmcOutput(const ReceiverPvtSolution &solution, double utcTimeSec);
-
-    /** @brief Generate GGA as output struct from PvtSolverOutput.
-     *  @param pvtOutput     PVT output struct.
-     *  @param numSatellites Number of satellites used.
-     *  @param utcTimeSec    UTC time (s).
-     *  @return NMEA output struct. */
-    static NmeaGeneratorOutput
-        generateGggaOutput(const PvtSolverOutput &pvtOutput, int numSatellites, double utcTimeSec);
-
-    /** @brief Generate RMC as output struct from PvtSolverOutput.
-     *  @param pvtOutput  PVT output struct.
-     *  @param utcTimeSec UTC time (s).
-     *  @return NMEA output struct. */
-    static NmeaGeneratorOutput generateGprmcOutput(const PvtSolverOutput &pvtOutput, double utcTimeSec);
+    static NmeaGeneratorOutput outputFromSentence(const std::string &sentence);
 
     /** @brief Generate GSA as output struct.
      *  @param solution   PVT solution.

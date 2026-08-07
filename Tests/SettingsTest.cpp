@@ -90,10 +90,11 @@ TEST_F(SettingsValidationTest, RejectsNegativeSamplingFrequency)
 
 TEST_F(SettingsValidationTest, CommentAndSectionLinesAreIgnored)
 {
-    writeConf("# AcquisitionDopplerSearchRange = 9\n"
-              "; SamplingFrequency = 1\n"
-              "[Acquisition]\n"
-              "AcquisitionDopplerSearchRange = 250\n");
+    writeConf(
+        "# AcquisitionDopplerSearchRange = 9\n"
+        "; SamplingFrequency = 1\n"
+        "[Acquisition]\n"
+        "AcquisitionDopplerSearchRange = 250\n");
 
     GPSOpenCl::Settings settings;
     settings.captureSettings();

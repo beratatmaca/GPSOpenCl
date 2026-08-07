@@ -53,15 +53,11 @@ class Profiler
      *  @param timeMs Stage duration (ms). */
     void recordStageTimeMs(Stage stage, double timeMs);
 
-    /** @brief Record tracking sub-stage timings for this block.
-     *  @param earlyLatePromptGenMs Aggregate earlyLatePromptGen time across active channels (ms).
-     *  @param numericOscillatorMs  Aggregate numericOscillator time across active channels (ms).
-     *  @param accumulatorMs        Aggregate correlator-accumulation time across active channels (ms).
-     *  @param maxWorkerMs          Slowest tracking worker wall-clock time this block (ms). */
-    void recordTrackingSubStageTimings(double earlyLatePromptGenMs,
-                                       double numericOscillatorMs,
-                                       double accumulatorMs,
-                                       double maxWorkerMs);
+    /** @brief Record tracking correlator timings for this block. The fused correlator pass is the
+     *   only timed sub-stage; the wire fields for the removed replica and NCO sub-stages stay zero.
+     *  @param correlatorMs Aggregate fused-correlator time across active channels (ms).
+     *  @param maxWorkerMs  Slowest tracking worker wall-clock time this block (ms). */
+    void recordTrackingSubStageTimings(double correlatorMs, double maxWorkerMs);
 
     /** @brief Finish block and return output.
      *  @return Profiler output struct. */

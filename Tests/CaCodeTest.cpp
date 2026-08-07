@@ -1,4 +1,4 @@
-#include "../Source/GPSOpenClCode.h"
+#include "../Source/GPSOpenClCaCodeGenerator.h"
 #include "../Source/GPSOpenClCommon.h"
 #include "../Source/GPSOpenClSettings.h"
 
@@ -9,7 +9,7 @@ namespace GPSOpenClTest
 class CaCodeTest : public testing::Test
 {
   public:
-    GPSOpenCl::Compute m_gpuCompute;
+    GPSOpenCl::SpectrumEngine m_gpuCompute;
 
   protected:
     void SetUp() override {}
@@ -23,7 +23,7 @@ TEST_F(CaCodeTest, Test1)
     m_settings.configuration.acquisitionInput.samplingFrequencyHz = 2048000.0;
     m_settings.configuration.acquisitionInput.numberOfSamplesPerCode = 2048;
 
-    GPSOpenCl::Code m_code = GPSOpenCl::Code(m_settings.configuration);
+    GPSOpenCl::CaCodeGenerator m_code = GPSOpenCl::CaCodeGenerator(m_settings.configuration);
     m_code.createLookupTable(&m_gpuCompute);
     GPSOpenCl::FloatVector testInputVec;
 
@@ -49,7 +49,7 @@ TEST_F(CaCodeTest, Test2)
     m_settings.configuration.acquisitionInput.samplingFrequencyHz = 4096000.0;
     m_settings.configuration.acquisitionInput.numberOfSamplesPerCode = 4096;
 
-    GPSOpenCl::Code m_code = GPSOpenCl::Code(m_settings.configuration);
+    GPSOpenCl::CaCodeGenerator m_code = GPSOpenCl::CaCodeGenerator(m_settings.configuration);
     m_code.createLookupTable(&m_gpuCompute);
     GPSOpenCl::FloatVector testInputVec;
 
@@ -75,7 +75,7 @@ TEST_F(CaCodeTest, Test3)
     m_settings.configuration.acquisitionInput.samplingFrequencyHz = 8192000.0;
     m_settings.configuration.acquisitionInput.numberOfSamplesPerCode = 8192;
 
-    GPSOpenCl::Code m_code = GPSOpenCl::Code(m_settings.configuration);
+    GPSOpenCl::CaCodeGenerator m_code = GPSOpenCl::CaCodeGenerator(m_settings.configuration);
     m_code.createLookupTable(&m_gpuCompute);
     GPSOpenCl::FloatVector testInputVec;
 
@@ -101,7 +101,7 @@ TEST_F(CaCodeTest, Test4)
     m_settings.configuration.acquisitionInput.samplingFrequencyHz = 16384000.0;
     m_settings.configuration.acquisitionInput.numberOfSamplesPerCode = 16'384;
 
-    GPSOpenCl::Code m_code = GPSOpenCl::Code(m_settings.configuration);
+    GPSOpenCl::CaCodeGenerator m_code = GPSOpenCl::CaCodeGenerator(m_settings.configuration);
     m_code.createLookupTable(&m_gpuCompute);
     GPSOpenCl::FloatVector testInputVec;
 

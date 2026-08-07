@@ -11,26 +11,31 @@ OpenCL-accelerated GPS L1 C/A software receiver.
 
 ## Current Architecture
 
-Pipeline: compute -> acquisition -> tracking -> nav decode -> PVT -> NMEA.
+Pipeline: compute -> acquisition -> tracking -> nav decode -> measurement assembly -> PVT -> NMEA.
 
 - `Source/GPSOpenClGPUHandler.*`: OpenCL context, device, kernels.
-- `Source/GPSOpenClGPUCompute.*`: FFT, mixing, GPU/CPU dispatch.
-- `Source/GPSOpenClCode.*`: GPS C/A code generation.
+- `Source/GPSOpenClSpectrumEngine.*`: FFT, mixing, GPU/CPU dispatch.
+- `Source/GPSOpenClCaCodeGenerator.*`: GPS C/A code generation.
 - `Source/GPSOpenClAcquisition.*`: Doppler search, FFT correlation.
 - `Source/GPSOpenClTracking.*`: PLL/DLL loops, E/P/L correlators.
+- `Source/GPSOpenClLockDetector.*`: Carrier and code lock indicators.
+- `Source/GPSOpenClTrackingWorkerPool.*`: Per-block worker pool running channel tracking.
 - `Source/GPSOpenClChannel.*`: Per-satellite acquisition and tracking state.
 - `Source/GPSOpenClNavigationDecoder.*`: Preamble search, parity, subframe parsing.
+- `Source/GPSOpenClMeasurementAssembler.*`: Pseudorange and transmit-time assembly for the PVT solver.
 - `Source/GPSOpenClPVTSolver.*`: Satellite orbit calc, WLS position, DOP.
 - `Source/GPSOpenClAtmosphericCorrections.*`: Klobuchar and Saastamoinen delay models.
 - `Source/GPSOpenClNmeaGenerator.*`: NMEA-0183 sentence output.
 - `Source/GPSOpenClSettings.*`: INI config parsing.
 - `Source/GPSOpenClApplication.*`: Wires all modules together.
+- `Source/GPSOpenClTelemetryExporter.*`: Background console and JSON telemetry export.
+- `Source/GPSOpenClCommon.h`: Shared types and GPS constants.
 - `Source/GPSOpenClStructs.h`: Shared wire structs, single source of truth.
 - `Source/GPSOpenClSource.h`, `GPSOpenClFileSource.*`, `GPSOpenClGpsSdrSimSource.*`: Abstract `Source`, plus file and gps-sdr-sim FIFO implementations.
 - `Source/GPSOpenClSink.h`, `GPSOpenClFileSink.*`, `GPSOpenClZmqSink.*`: Abstract `Sink`, plus `NullSink`/`CompositeSink`, file, and ZMQ publisher implementations.
 - `Source/GPSOpenClProfiler.*`: Per-block, per-stage timing, published through the Sink.
 - `Source/GPSOpenClBoundedQueue.h`: Bounded blocking queue between producer and consumer threads.
-- `Kernels/*.cl`: OpenCL kernels for FFT and NCO.
+- `Kernels/*.cl`: OpenCL FFT, complex multiply, and magnitude kernels.
 
 Data flow:
 
@@ -39,7 +44,7 @@ Data flow:
 - ZMQ publisher gated behind `GPSOPENCL_ENABLE_ZMQ`. FileSink and NullSink also exist.
 - Profiler publishes per-block timing through Sink.
 - Falls back to CPU if no OpenCL device.
-- Struct-based wiring is incomplete. Verify call sites before assuming end-to-end connectivity.
+- Every module has Input/Output structs. Sink publish methods are typed with static_assert size guards. `Tests/StructsSourceSinkTest.cpp` exercises the wire format.
 
 ## Target Architecture
 
@@ -122,7 +127,7 @@ CMake 3.14+, C++17. OpenCL headers and GoogleTest auto-fetched.
 ctest --test-dir build --output-on-failure
 ```
 
-33 GoogleTest cases. Every new algorithm needs a test.
+118 GoogleTest cases. Every new algorithm needs a test.
 
 ## Benchmarking
 
@@ -150,7 +155,8 @@ Builds, streams signal over FIFO, launches Dash dashboard on `localhost:8050`.
 ## Commenting Rules
 
 - **C++ headers (`.h`):** Doxygen only. `/** */` for classes, structs, functions. `///<` for fields. No `//` or `/* */`.
-- **C++ sources (`.cpp`):** Zero comments.
+- **C++ sources (`.cpp`):** Zero comments. NOLINT pragma comments allowed.
+- **Tests (`Tests/*.cpp`):** Brief rationale comments allowed. `//` on the preceding line.
 - **Python (`.py`):** One `#` comment on the preceding line. No docstrings, no inline comments.
 - **CMake (`CMakeLists.txt`):** One `#` comment on the preceding line.
 - **OpenCL (`.cl`):** Doxygen `/** */` blocks on every kernel.
@@ -162,5 +168,5 @@ Builds, streams signal over FIFO, launches Dash dashboard on `localhost:8050`.
 - Verify PLL/DLL and PVT math against references.
 - Prefer measured profiling over assumed performance.
 - Ask before adding a new dependency.
-- GPU and CPU compute paths must be identical.
+- GPU and CPU compute paths must be algorithmically identical and agree within a small numeric tolerance. Acquisition decisions must not depend on backend beyond that tolerance.
 - New modules must fit the Source/struct/Sink contract.

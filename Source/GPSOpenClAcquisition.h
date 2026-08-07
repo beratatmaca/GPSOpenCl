@@ -5,14 +5,14 @@
  *  @brief FFT-based GPS satellite acquisition engine.
  */
 
-#include <algorithm>
+#include <utility>
 #include <vector>
 
+#include "GPSOpenClCaCodeGenerator.h"
 #include "GPSOpenClChannel.h"
-#include "GPSOpenClCode.h"
 #include "GPSOpenClCommon.h"
-#include "GPSOpenClGPUCompute.h"
 #include "GPSOpenClSettings.h"
+#include "GPSOpenClSpectrumEngine.h"
 #include "GPSOpenClStructs.h"
 
 namespace GPSOpenCl
@@ -43,7 +43,7 @@ class Acquisition
      *  @param gpu        Compute back-end (GPU or CPU).
      *  @param code       C/A code lookup table.
      *  @param acqChannel Target channel for results. */
-    void correlate(const ComplexFloatVector &input, Compute *gpu, Code *code, Channel *acqChannel);
+    void correlate(const ComplexFloatVector &input, SpectrumEngine *gpu, CaCodeGenerator *code, Channel *acqChannel);
 
     /** @brief Get the reference spectrum count per correlate() call. Equals the bin resolution over
      *   search spacing ratio. Requires exact divisibility. Otherwise one spectrum per Doppler bin.
@@ -51,7 +51,15 @@ class Acquisition
     int getReuseFactor() const { return m_reuseFactor; }
 
   private:
-    /** @brief Build the Doppler frequency search table. */
+    /** @brief Count Doppler bins covering the configured search span. Rounds up so the top of the
+     *   range is still searched when the span is not a whole multiple of the step. A non-positive
+     *   step or span degenerates to a single bin.
+     *  @param input Acquisition settings.
+     *  @return Number of Doppler bins, >= 1. */
+    static int computeNumberOfFrequencyBins(const AcquisitionInput &input);
+
+    /** @brief Build the Doppler replica table. Only one replica per residue class is needed;
+     *   correlate() derives the remaining bins by circular spectrum shift. */
     void createDopplerSearchTable();
 
     /** @brief Generate complex exponential (carrier replica).
@@ -72,6 +80,8 @@ class Acquisition
 
     AcquisitionInput m_inputConfig;                     ///< Input parameters.
     std::vector<ComplexFloatVector> m_dopplerSearch;    ///< Pre-computed Doppler replicas.
+    std::vector<std::pair<int, int>> m_binSlotShift;    ///< Per-bin (slot, shift) pairs, fixed per config.
+    FloatVector m_batchAbs;                             ///< Reused batch-correlation magnitude buffer.
     int m_numberOfFreqencyBins;                         ///< Number of Doppler bins.
     float m_initialFrequencyHz;                         ///< First Doppler bin frequency (Hz).
     float m_freqSpacingHz;                              ///< Doppler bin spacing (Hz).

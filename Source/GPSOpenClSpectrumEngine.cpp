@@ -1,4 +1,4 @@
-#include "GPSOpenClGPUCompute.h"
+#include "GPSOpenClSpectrumEngine.h"
 
 #include <algorithm>
 #include <cmath>
@@ -8,7 +8,7 @@
 
 using namespace GPSOpenCl;
 
-unsigned int Compute::roundDownToPowerOfTwo(unsigned int value)
+unsigned int SpectrumEngine::roundDownToPowerOfTwo(unsigned int value)
 {
     if (value == 0)
     {
@@ -17,15 +17,25 @@ unsigned int Compute::roundDownToPowerOfTwo(unsigned int value)
     return static_cast<unsigned int>(pow(2, trunc(log2(static_cast<double>(value)))));
 }
 
-unsigned int Compute::clampPointsPerGroup(unsigned int pointsPerGroup, unsigned int length)
+unsigned int SpectrumEngine::usableLocalMemoryPoints(unsigned long long localMemoryBytes)
+{
+    constexpr unsigned long long reserveBytes = 1024;
+    if (localMemoryBytes <= reserveBytes)
+    {
+        return 0;
+    }
+    return static_cast<unsigned int>((localMemoryBytes - reserveBytes) / (2 * sizeof(float)));
+}
+
+unsigned int SpectrumEngine::clampPointsPerGroup(unsigned int pointsPerGroup, unsigned int length)
 {
     pointsPerGroup = std::max(roundDownToPowerOfTwo(pointsPerGroup), 1u);
     return std::min(pointsPerGroup, length);
 }
 
-unsigned int Compute::clampLocalSizeForMinPointsPerItem(unsigned int localSize,
-                                                        unsigned int pointsPerGroup,
-                                                        unsigned int minPointsPerItem)
+unsigned int SpectrumEngine::clampLocalSizeForMinPointsPerItem(unsigned int localSize,
+                                                               unsigned int pointsPerGroup,
+                                                               unsigned int minPointsPerItem)
 {
     while (localSize > pointsPerGroup / minPointsPerItem && localSize > 1)
     {
@@ -49,7 +59,7 @@ bool deviceSupportsOpenCl2(cl_device_id device)
 }
 }
 
-Compute::Compute()
+SpectrumEngine::SpectrumEngine()
 {
     if (m_gpu.createDevice() >= 0)
     {
@@ -57,11 +67,13 @@ Compute::Compute()
         {
             m_gpu.initKernels();
         }
+#ifdef CL_VERSION_2_0
         if (deviceSupportsOpenCl2(m_gpu.device))
         {
             m_queue = clCreateCommandQueueWithProperties(m_gpu.context, m_gpu.device, nullptr, &m_error);
         }
         else
+#endif
         {
 #ifdef __GNUC__
 #pragma GCC diagnostic push
@@ -80,7 +92,7 @@ Compute::Compute()
     }
 }
 
-Compute::~Compute()
+SpectrumEngine::~SpectrumEngine()
 {
     if (m_queue != nullptr)
     {
@@ -102,8 +114,6 @@ Compute::~Compute()
     releaseIfSet(m_cmBufferC);
     releaseIfSet(m_absBufferA);
     releaseIfSet(m_absBufferC);
-    releaseIfSet(m_sumBufferInput);
-    releaseIfSet(m_sumBufferOutput);
     releaseIfSet(m_slotPoolBuffer);
     releaseIfSet(m_batchWorkBuffer);
     releaseIfSet(m_batchAbsBuffer);
@@ -116,7 +126,7 @@ Compute::~Compute()
     }
 }
 
-void Compute::cacheDeviceInfo()
+void SpectrumEngine::cacheDeviceInfo()
 {
     if (m_deviceInfoCached || (m_queue == nullptr))
     {
@@ -150,15 +160,11 @@ void Compute::cacheDeviceInfo()
     {
         m_absoluteLocalSize = queryLocalSize(m_gpu.acquisitionKernelList[GpuHandler::Absolute]);
     }
-    if (m_gpu.acquisitionKernelList.size() > GpuHandler::Sum)
-    {
-        m_sumLocalSize = queryLocalSize(m_gpu.acquisitionKernelList[GpuHandler::Sum]);
-    }
 
     m_deviceInfoCached = true;
 }
 
-cl_mem Compute::ensureBuffer(cl_mem &buffer, size_t &capacityFloats, size_t neededFloats)
+cl_mem SpectrumEngine::ensureBuffer(cl_mem &buffer, size_t &capacityFloats, size_t neededFloats)
 {
     if ((buffer != nullptr) && capacityFloats >= neededFloats)
     {
@@ -186,7 +192,7 @@ cl_mem Compute::ensureBuffer(cl_mem &buffer, size_t &capacityFloats, size_t need
     return buffer;
 }
 
-int Compute::fftDeviceInPlace(cl_mem buffer, unsigned int length, FFTDirectionType direction)
+int SpectrumEngine::fftDeviceInPlace(cl_mem buffer, unsigned int length, FFTDirectionType direction)
 {
     if ((m_queue == nullptr) || m_gpu.acquisitionKernelList.size() <= GpuHandler::FFTScale)
     {
@@ -205,8 +211,7 @@ int Compute::fftDeviceInPlace(cl_mem buffer, unsigned int length, FFTDirectionTy
 
     int dir = static_cast<int>(direction);
     size_t localSize = m_fftLocalSize;
-    const cl_ulong localMemorySize = m_localMemorySize;
-    unsigned int pointsPerGroup = localMemorySize / (2 * sizeof(float));
+    unsigned int pointsPerGroup = usableLocalMemoryPoints(m_localMemorySize);
 
     pointsPerGroup = clampPointsPerGroup(pointsPerGroup, length);
 
@@ -256,7 +261,10 @@ int Compute::fftDeviceInPlace(cl_mem buffer, unsigned int length, FFTDirectionTy
     return (m_error == CL_SUCCESS) ? 0 : -1;
 }
 
-int Compute::fftDeviceInPlaceBatch(cl_mem buffer, unsigned int length, unsigned int count, FFTDirectionType direction)
+int SpectrumEngine::fftDeviceInPlaceBatch(cl_mem buffer,
+                                          unsigned int length,
+                                          unsigned int count,
+                                          FFTDirectionType direction)
 {
     if ((m_queue == nullptr) || m_gpu.acquisitionKernelList.size() <= GpuHandler::FFTScale)
     {
@@ -274,8 +282,7 @@ int Compute::fftDeviceInPlaceBatch(cl_mem buffer, unsigned int length, unsigned 
 
     int dir = static_cast<int>(direction);
     size_t localSize = m_fftLocalSize;
-    const cl_ulong localMemorySize = m_localMemorySize;
-    unsigned int pointsPerGroup = localMemorySize / (2 * sizeof(float));
+    unsigned int pointsPerGroup = usableLocalMemoryPoints(m_localMemorySize);
 
     pointsPerGroup = clampPointsPerGroup(pointsPerGroup, length);
     if (pointsPerGroup != length || localSize == 0)
@@ -314,7 +321,7 @@ int Compute::fftDeviceInPlaceBatch(cl_mem buffer, unsigned int length, unsigned 
     return (m_error == CL_SUCCESS) ? 0 : -1;
 }
 
-int Compute::fft(const ComplexFloatVector &input, ComplexFloatVector *output, FFTDirectionType direction)
+int SpectrumEngine::fft(const ComplexFloatVector &input, ComplexFloatVector *output, FFTDirectionType direction)
 {
     if ((m_queue != nullptr) && m_gpu.acquisitionKernelList.size() > GpuHandler::FFTScale)
     {
@@ -351,7 +358,8 @@ int Compute::fft(const ComplexFloatVector &input, ComplexFloatVector *output, FF
                 if (m_error == CL_SUCCESS)
                 {
                     output->resize(length);
-                    std::memcpy(output->data(), m_allocatedMemory.data(), 2UL * length * sizeof(float));
+                    std::memcpy(
+                        static_cast<void *>(output->data()), m_allocatedMemory.data(), 2UL * length * sizeof(float));
 
                     return 0;
                 }
@@ -367,7 +375,7 @@ int Compute::fft(const ComplexFloatVector &input, ComplexFloatVector *output, FF
     return fftCpu(input, output, direction);
 }
 
-int Compute::fftCpu(const ComplexFloatVector &input, ComplexFloatVector *output, FFTDirectionType direction)
+int SpectrumEngine::fftCpu(const ComplexFloatVector &input, ComplexFloatVector *output, FFTDirectionType direction)
 {
     output->clear();
     const size_t N = input.size();
@@ -398,21 +406,35 @@ int Compute::fftCpu(const ComplexFloatVector &input, ComplexFloatVector *output,
         revIndex ^= bit;
     }
 
-    const float dirSign = (direction == FFTInverse) ? 1.0f : -1.0f;
+    static thread_local std::vector<std::complex<float>> twiddleTable;
+    static thread_local size_t twiddleTableN = 0;
+    if (twiddleTableN != N)
+    {
+        twiddleTable.resize(N / 2);
+        for (size_t k = 0; k < N / 2; k++)
+        {
+            const float ang = -2.0f * static_cast<float>(M_PI) * static_cast<float>(k) / static_cast<float>(N);
+            twiddleTable[k] = std::complex<float>(std::cos(ang), std::sin(ang));
+        }
+        twiddleTableN = N;
+    }
+    const std::complex<float> *twiddles = twiddleTable.data();
+
+    const bool inverse = (direction == FFTInverse);
     for (size_t len = 2; len <= N; len <<= 1)
     {
-        const float ang = 2.0f * static_cast<float>(M_PI) / static_cast<float>(len) * dirSign;
-        const std::complex<float> wlen(std::cos(ang), std::sin(ang));
+        const size_t stride = N / len;
+        const size_t half = len / 2;
         for (size_t i = 0; i < N; i += len)
         {
-            std::complex<float> w(1.0f, 0.0f);
-            for (size_t k = 0; k < len / 2; k++)
+            for (size_t k = 0; k < half; k++)
             {
+                const std::complex<float> tw = twiddles[k * stride];
+                const std::complex<float> w = inverse ? std::conj(tw) : tw;
                 const std::complex<float> u = data[i + k];
-                const std::complex<float> v = data[i + k + (len / 2)] * w;
+                const std::complex<float> v = data[i + k + half] * w;
                 data[i + k] = u + v;
-                data[i + k + (len / 2)] = u - v;
-                w *= wlen;
+                data[i + k + half] = u - v;
             }
         }
     }
@@ -428,7 +450,7 @@ int Compute::fftCpu(const ComplexFloatVector &input, ComplexFloatVector *output,
     return 0;
 }
 
-void Compute::packToStaging(const ComplexFloatVector &input, unsigned int length, size_t floatOffset)
+void SpectrumEngine::packToStaging(const ComplexFloatVector &input, unsigned int length, size_t floatOffset)
 {
     if (m_allocatedMemory.size() < floatOffset + (2UL * length))
     {
@@ -438,11 +460,11 @@ void Compute::packToStaging(const ComplexFloatVector &input, unsigned int length
     std::memcpy(&m_allocatedMemory[floatOffset], input.data(), 2UL * length * sizeof(float));
 }
 
-cl_mem Compute::enqueueComplexMultiplier(cl_mem inputA,
-                                         cl_mem inputB,
-                                         unsigned int length,
-                                         unsigned int offset,
-                                         unsigned int inputBBase)
+cl_mem SpectrumEngine::enqueueComplexMultiplier(cl_mem inputA,
+                                                cl_mem inputB,
+                                                unsigned int length,
+                                                unsigned int offset,
+                                                unsigned int inputBBase)
 {
     cl_kernel complexMultiplierKernel = m_gpu.acquisitionKernelList[GpuHandler::ComplexMultiplier];
     cl_mem dC = ensureBuffer(m_cmBufferC, m_cmBufferCapacityC, 2UL * length);
@@ -476,9 +498,9 @@ cl_mem Compute::enqueueComplexMultiplier(cl_mem inputA,
     return (m_error == CL_SUCCESS) ? dC : nullptr;
 }
 
-cl_mem Compute::complexMultiplierDevice(const ComplexFloatVector &input1,
-                                        const ComplexFloatVector &input2,
-                                        unsigned int length)
+cl_mem SpectrumEngine::complexMultiplierDevice(const ComplexFloatVector &input1,
+                                               const ComplexFloatVector &input2,
+                                               unsigned int length)
 {
     cacheDeviceInfo();
 
@@ -521,7 +543,7 @@ cl_mem Compute::complexMultiplierDevice(const ComplexFloatVector &input1,
     return enqueueComplexMultiplier(dA, dB, length, 0, 0);
 }
 
-cl_mem Compute::ensureResidentInput1(const ComplexFloatVector &input1, unsigned int length)
+cl_mem SpectrumEngine::ensureResidentInput1(const ComplexFloatVector &input1, unsigned int length)
 {
     const size_t capacityBefore = m_cmBufferCapacityA;
     cl_mem dA = ensureBuffer(m_cmBufferA, m_cmBufferCapacityA, 2UL * length);
@@ -549,10 +571,10 @@ cl_mem Compute::ensureResidentInput1(const ComplexFloatVector &input1, unsigned 
     return dA;
 }
 
-cl_mem Compute::complexMultiplierResidentDevice(const ComplexFloatVector &input1,
-                                                cl_mem input2,
-                                                unsigned int length,
-                                                unsigned int offset)
+cl_mem SpectrumEngine::complexMultiplierResidentDevice(const ComplexFloatVector &input1,
+                                                       cl_mem input2,
+                                                       unsigned int length,
+                                                       unsigned int offset)
 {
     cacheDeviceInfo();
 
@@ -565,7 +587,7 @@ cl_mem Compute::complexMultiplierResidentDevice(const ComplexFloatVector &input1
     return enqueueComplexMultiplier(dA, input2, length, offset, 0);
 }
 
-cl_mem Compute::ensureSlotPool(int slot, size_t floatsPerSlot)
+cl_mem SpectrumEngine::ensureSlotPool(int slot, size_t floatsPerSlot)
 {
     const size_t minimumSlots = 32;
     const size_t neededSlots = ((static_cast<size_t>(slot) / minimumSlots) + 1) * minimumSlots;
@@ -585,9 +607,9 @@ cl_mem Compute::ensureSlotPool(int slot, size_t floatsPerSlot)
     return pool;
 }
 
-int Compute::complexMultiplier(const ComplexFloatVector &input1,
-                               const ComplexFloatVector &input2,
-                               ComplexFloatVector *output)
+int SpectrumEngine::complexMultiplier(const ComplexFloatVector &input1,
+                                      const ComplexFloatVector &input2,
+                                      ComplexFloatVector *output)
 {
     if ((m_queue != nullptr) && m_gpu.acquisitionKernelList.size() > GpuHandler::ComplexMultiplier)
     {
@@ -602,7 +624,8 @@ int Compute::complexMultiplier(const ComplexFloatVector &input1,
             if (m_error == CL_SUCCESS)
             {
                 output->resize(length);
-                std::memcpy(output->data(), m_allocatedMemory.data(), 2UL * length * sizeof(float));
+                std::memcpy(
+                    static_cast<void *>(output->data()), m_allocatedMemory.data(), 2UL * length * sizeof(float));
 
                 return 0;
             }
@@ -618,7 +641,7 @@ int Compute::complexMultiplier(const ComplexFloatVector &input1,
     return 0;
 }
 
-int Compute::absoluteDeviceToHost(cl_mem inputBuffer, unsigned int length, FloatVector *output)
+int SpectrumEngine::absoluteDeviceToHost(cl_mem inputBuffer, unsigned int length, FloatVector *output)
 {
     if ((m_queue == nullptr) || m_gpu.acquisitionKernelList.size() <= GpuHandler::Absolute)
     {
@@ -665,7 +688,7 @@ int Compute::absoluteDeviceToHost(cl_mem inputBuffer, unsigned int length, Float
     return -1;
 }
 
-int Compute::absolute(const ComplexFloatVector &input1, FloatVector *output)
+int SpectrumEngine::absolute(const ComplexFloatVector &input1, FloatVector *output)
 {
     if ((m_queue != nullptr) && m_gpu.acquisitionKernelList.size() > GpuHandler::Absolute)
     {
@@ -700,105 +723,10 @@ int Compute::absolute(const ComplexFloatVector &input1, FloatVector *output)
     return 0;
 }
 
-int Compute::sum(const FloatVector &input, float *sumValue)
-{
-    if ((m_queue != nullptr) && m_gpu.acquisitionKernelList.size() > GpuHandler::Sum && !input.empty())
-    {
-        auto length = static_cast<unsigned int>(input.size());
-
-        cl_kernel sumKernel = m_gpu.acquisitionKernelList[GpuHandler::Sum];
-
-        cacheDeviceInfo();
-        const size_t localSize = m_sumLocalSize;
-
-        if (localSize > 0)
-        {
-            const size_t paddedLength = ((static_cast<size_t>(length) + localSize - 1) / localSize) * localSize;
-            const size_t numGroups = paddedLength / localSize;
-
-            if (m_allocatedMemory.size() < paddedLength)
-            {
-                m_allocatedMemory.resize(paddedLength);
-            }
-
-            for (unsigned int j = 0; j < length; j++)
-            {
-                m_allocatedMemory[j] = input.at(j);
-            }
-            for (size_t j = length; j < paddedLength; j++)
-            {
-                m_allocatedMemory[j] = 0.0f;
-            }
-
-            cl_mem dInput = ensureBuffer(m_sumBufferInput, m_sumBufferInputCapacity, paddedLength);
-            cl_mem dSumValue = ((dInput != nullptr) && m_error == CL_SUCCESS)
-                ? ensureBuffer(m_sumBufferOutput, m_sumBufferOutputCapacity, numGroups)
-                : nullptr;
-
-            if ((dInput != nullptr) && (dSumValue != nullptr) && m_error == CL_SUCCESS)
-            {
-                m_error = clEnqueueWriteBuffer(m_queue,
-                                               dInput,
-                                               CL_FALSE,
-                                               0,
-                                               paddedLength * sizeof(float),
-                                               m_allocatedMemory.data(),
-                                               0,
-                                               nullptr,
-                                               nullptr);
-
-                clSetKernelArg(sumKernel, 0, sizeof(cl_mem), reinterpret_cast<const void *>(&dInput));
-                clSetKernelArg(sumKernel, 1, sizeof(cl_mem), reinterpret_cast<const void *>(&dSumValue));
-                clSetKernelArg(sumKernel, 2, sizeof(float) * localSize, nullptr);
-
-                const size_t globalSize = paddedLength;
-                m_error = clEnqueueNDRangeKernel(
-                    m_queue, sumKernel, 1, nullptr, &globalSize, &localSize, 0, nullptr, nullptr);
-
-                if (m_error == CL_SUCCESS)
-                {
-                    if (m_partialSums.size() < numGroups)
-                    {
-                        m_partialSums.resize(numGroups);
-                    }
-                    m_error = clEnqueueReadBuffer(m_queue,
-                                                  dSumValue,
-                                                  CL_TRUE,
-                                                  0,
-                                                  numGroups * sizeof(float),
-                                                  m_partialSums.data(),
-                                                  0,
-                                                  nullptr,
-                                                  nullptr);
-                }
-
-                if (m_error == CL_SUCCESS)
-                {
-                    float total = 0.0f;
-                    for (size_t g = 0; g < numGroups; g++)
-                    {
-                        total += m_partialSums[g];
-                    }
-                    *sumValue += total;
-                    return 0;
-                }
-            }
-        }
-    }
-
-    float total = 0.0f;
-    for (const float val : input)
-    {
-        total += val;
-    }
-    *sumValue += total;
-    return 0;
-}
-
-int Compute::complexMultiplyThenFftToSlot(const ComplexFloatVector &input1,
-                                          const ComplexFloatVector &input2,
-                                          FFTDirectionType direction,
-                                          int slot)
+int SpectrumEngine::complexMultiplyThenFftToSlot(const ComplexFloatVector &input1,
+                                                 const ComplexFloatVector &input2,
+                                                 FFTDirectionType direction,
+                                                 int slot)
 {
     if (slot < 0)
     {
@@ -870,11 +798,11 @@ int Compute::complexMultiplyThenFftToSlot(const ComplexFloatVector &input1,
     return 0;
 }
 
-int Compute::complexMultiplyResidentThenFftThenAbsolute(const ComplexFloatVector &input1,
-                                                        int slot,
-                                                        int shiftBins,
-                                                        FFTDirectionType direction,
-                                                        FloatVector *output)
+int SpectrumEngine::complexMultiplyResidentThenFftThenAbsolute(const ComplexFloatVector &input1,
+                                                               int slot,
+                                                               int shiftBins,
+                                                               FFTDirectionType direction,
+                                                               FloatVector *output)
 {
     const auto slotIndex = static_cast<size_t>(slot);
     if (slot < 0 || m_slotStates.size() <= slotIndex || m_slotStates[slotIndex] == SlotInvalid)
@@ -931,10 +859,11 @@ int Compute::complexMultiplyResidentThenFftThenAbsolute(const ComplexFloatVector
     return absolute(m_hostFftScratch, output);
 }
 
-int Compute::complexMultiplyResidentThenFftThenAbsoluteBatch(const ComplexFloatVector &input1,
-                                                             const std::vector<std::pair<int, int>> &slotAndShift,
-                                                             FFTDirectionType direction,
-                                                             FloatVector *output)
+int SpectrumEngine::complexMultiplyResidentThenFftThenAbsoluteBatch(
+    const ComplexFloatVector &input1,
+    const std::vector<std::pair<int, int>> &slotAndShift,
+    FFTDirectionType direction,
+    FloatVector *output)
 {
     const auto bins = static_cast<unsigned int>(slotAndShift.size());
     const auto length = static_cast<unsigned int>(input1.size());
@@ -943,7 +872,8 @@ int Compute::complexMultiplyResidentThenFftThenAbsoluteBatch(const ComplexFloatV
         return -1;
     }
 
-    if ((m_queue == nullptr) || m_gpu.acquisitionKernelList.size() <= GpuHandler::ComplexMultiplierBatch)
+    if (m_batchPathUnavailable || (m_queue == nullptr) ||
+        m_gpu.acquisitionKernelList.size() <= GpuHandler::ComplexMultiplierBatch)
     {
         return -1;
     }
@@ -965,9 +895,10 @@ int Compute::complexMultiplyResidentThenFftThenAbsoluteBatch(const ComplexFloatV
 
     cacheDeviceInfo();
 
-    const auto maxPointsPerGroup = static_cast<unsigned int>(m_localMemorySize / (2 * sizeof(float)));
+    const unsigned int maxPointsPerGroup = usableLocalMemoryPoints(m_localMemorySize);
     if (clampPointsPerGroup(maxPointsPerGroup, length) != length || m_complexMultiplierLocalSize == 0)
     {
+        m_batchPathUnavailable = true;
         return -1;
     }
 
@@ -1028,7 +959,7 @@ int Compute::complexMultiplyResidentThenFftThenAbsoluteBatch(const ComplexFloatV
         return -1;
     }
 
-    size_t multiplyLocalSize = std::min(m_complexMultiplierLocalSize, static_cast<size_t>(length));
+    const size_t multiplyLocalSize = std::min(m_complexMultiplierLocalSize, static_cast<size_t>(length));
     const size_t totalElements = static_cast<size_t>(bins) * length;
     m_error = clEnqueueNDRangeKernel(
         m_queue, batchKernel, 1, nullptr, &totalElements, &multiplyLocalSize, 0, nullptr, nullptr);

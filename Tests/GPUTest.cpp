@@ -1,4 +1,4 @@
-#include "../Source/GPSOpenClGPUCompute.h"
+#include "../Source/GPSOpenClSpectrumEngine.h"
 
 #include "TestUtils.h"
 
@@ -10,7 +10,7 @@ namespace GPSOpenClTest
 class GPUTest : public testing::Test
 {
   public:
-    GPSOpenCl::Compute m_gpuCompute;
+    GPSOpenCl::SpectrumEngine m_gpuCompute;
 
   protected:
     void SetUp() override {}
@@ -29,7 +29,7 @@ TEST_F(GPUTest, FFTTest1)
 
     auto timeBegin = TestUtils::startElapsedTimeMeasurement();
 
-    m_gpuCompute.fft(testInputVec, &testOutputVec, GPSOpenCl::Compute::FFTForward);
+    m_gpuCompute.fft(testInputVec, &testOutputVec, GPSOpenCl::SpectrumEngine::FFTForward);
 
     TestUtils::measureElapsedTime("FFT function for 2048 points", timeBegin);
 
@@ -47,7 +47,7 @@ TEST_F(GPUTest, FFTTest2)
 
     auto timeBegin = TestUtils::startElapsedTimeMeasurement();
 
-    m_gpuCompute.fft(testInputVec, &testOutputVec, GPSOpenCl::Compute::FFTForward);
+    m_gpuCompute.fft(testInputVec, &testOutputVec, GPSOpenCl::SpectrumEngine::FFTForward);
 
     TestUtils::measureElapsedTime("FFT function for 4096 points", timeBegin);
 
@@ -65,7 +65,7 @@ TEST_F(GPUTest, FFTTest3)
 
     auto timeBegin = TestUtils::startElapsedTimeMeasurement();
 
-    m_gpuCompute.fft(testInputVec, &testOutputVec, GPSOpenCl::Compute::FFTForward);
+    m_gpuCompute.fft(testInputVec, &testOutputVec, GPSOpenCl::SpectrumEngine::FFTForward);
 
     TestUtils::measureElapsedTime("FFT function for 8192 points", timeBegin);
 
@@ -83,7 +83,7 @@ TEST_F(GPUTest, FFTTest4)
 
     auto timeBegin = TestUtils::startElapsedTimeMeasurement();
 
-    m_gpuCompute.fft(testInputVec, &testOutputVec, GPSOpenCl::Compute::FFTForward);
+    m_gpuCompute.fft(testInputVec, &testOutputVec, GPSOpenCl::SpectrumEngine::FFTForward);
 
     TestUtils::measureElapsedTime("FFT function for 16384 points", timeBegin);
 
@@ -101,7 +101,7 @@ TEST_F(GPUTest, IFFTTest1)
 
     auto timeBegin = TestUtils::startElapsedTimeMeasurement();
 
-    m_gpuCompute.fft(testInputVec, &testOutputVec, GPSOpenCl::Compute::FFTInverse);
+    m_gpuCompute.fft(testInputVec, &testOutputVec, GPSOpenCl::SpectrumEngine::FFTInverse);
 
     TestUtils::measureElapsedTime("IFFT function for 2048 points", timeBegin);
 
@@ -119,7 +119,7 @@ TEST_F(GPUTest, IFFTTest2)
 
     auto timeBegin = TestUtils::startElapsedTimeMeasurement();
 
-    m_gpuCompute.fft(testInputVec, &testOutputVec, GPSOpenCl::Compute::FFTInverse);
+    m_gpuCompute.fft(testInputVec, &testOutputVec, GPSOpenCl::SpectrumEngine::FFTInverse);
 
     TestUtils::measureElapsedTime("IFFT function for 4096 points", timeBegin);
 
@@ -137,7 +137,7 @@ TEST_F(GPUTest, IFFTTest3)
 
     auto timeBegin = TestUtils::startElapsedTimeMeasurement();
 
-    m_gpuCompute.fft(testInputVec, &testOutputVec, GPSOpenCl::Compute::FFTInverse);
+    m_gpuCompute.fft(testInputVec, &testOutputVec, GPSOpenCl::SpectrumEngine::FFTInverse);
 
     TestUtils::measureElapsedTime("IFFT function for 8192 points", timeBegin);
 
@@ -155,7 +155,7 @@ TEST_F(GPUTest, IFFTTest4)
 
     auto timeBegin = TestUtils::startElapsedTimeMeasurement();
 
-    m_gpuCompute.fft(testInputVec, &testOutputVec, GPSOpenCl::Compute::FFTInverse);
+    m_gpuCompute.fft(testInputVec, &testOutputVec, GPSOpenCl::SpectrumEngine::FFTInverse);
 
     TestUtils::measureElapsedTime("IFFT function for 16384 points", timeBegin);
 
@@ -204,34 +204,21 @@ TEST_F(GPUTest, ComplexMultiplicationTest2)
     TestUtils::compareComplexResults(testOutputVec, expectedOutputVec, MULTIPLICATION_TOLERANCE);
 }
 
-TEST(GPUComputeClampTest, RoundDownToPowerOfTwo)
+TEST(SpectrumEngineClampTest, RoundDownToPowerOfTwo)
 {
-    EXPECT_EQ(GPSOpenCl::Compute::roundDownToPowerOfTwo(0), 0u);
-    EXPECT_EQ(GPSOpenCl::Compute::roundDownToPowerOfTwo(1), 1u);
-    EXPECT_EQ(GPSOpenCl::Compute::roundDownToPowerOfTwo(4096), 4096u);
-    EXPECT_EQ(GPSOpenCl::Compute::roundDownToPowerOfTwo(6144), 4096u);
-    EXPECT_EQ(GPSOpenCl::Compute::roundDownToPowerOfTwo(8191), 4096u);
+    EXPECT_EQ(GPSOpenCl::SpectrumEngine::roundDownToPowerOfTwo(0), 0u);
+    EXPECT_EQ(GPSOpenCl::SpectrumEngine::roundDownToPowerOfTwo(1), 1u);
+    EXPECT_EQ(GPSOpenCl::SpectrumEngine::roundDownToPowerOfTwo(4096), 4096u);
+    EXPECT_EQ(GPSOpenCl::SpectrumEngine::roundDownToPowerOfTwo(6144), 4096u);
+    EXPECT_EQ(GPSOpenCl::SpectrumEngine::roundDownToPowerOfTwo(8191), 4096u);
 }
 
-TEST(GPUComputeClampTest, ClampLocalSizeNeverTruncatesPointsPerItemBelowMinimum)
+TEST(SpectrumEngineClampTest, ClampLocalSizeNeverTruncatesPointsPerItemBelowMinimum)
 {
-    EXPECT_EQ(GPSOpenCl::Compute::clampLocalSizeForMinPointsPerItem(2048, 256, 4), 64u);
-    EXPECT_EQ(GPSOpenCl::Compute::clampLocalSizeForMinPointsPerItem(16, 256, 4), 16u);
-    EXPECT_EQ(GPSOpenCl::Compute::clampLocalSizeForMinPointsPerItem(2048, 256, 1), 256u);
-    EXPECT_EQ(GPSOpenCl::Compute::clampLocalSizeForMinPointsPerItem(1024, 1, 4), 1u);
+    EXPECT_EQ(GPSOpenCl::SpectrumEngine::clampLocalSizeForMinPointsPerItem(2048, 256, 4), 64u);
+    EXPECT_EQ(GPSOpenCl::SpectrumEngine::clampLocalSizeForMinPointsPerItem(16, 256, 4), 16u);
+    EXPECT_EQ(GPSOpenCl::SpectrumEngine::clampLocalSizeForMinPointsPerItem(2048, 256, 1), 256u);
+    EXPECT_EQ(GPSOpenCl::SpectrumEngine::clampLocalSizeForMinPointsPerItem(1024, 1, 4), 1u);
 }
 
-TEST_F(GPUTest, SumEmptyInputContributesZero)
-{
-    GPSOpenCl::FloatVector warmup(64, 2.0f);
-    float warmupSum = 0.0f;
-    m_gpuCompute.sum(warmup, &warmupSum);
-    EXPECT_NEAR(warmupSum, 128.0f, 0.01f);
-
-    GPSOpenCl::FloatVector empty;
-    float sumValue = 0.0f;
-    m_gpuCompute.sum(empty, &sumValue);
-
-    EXPECT_FLOAT_EQ(sumValue, 0.0f);
-}
 }

@@ -54,81 +54,54 @@ bool FileSource::loadAllSamples(const std::string &filePath, size_t samplesPerBl
     m_currentBlockIndex = 0;
     m_streaming = false;
 
-    if (filePath.find(".bin") != std::string::npos)
+    std::ifstream file(filePath);
+    if (!file.is_open())
     {
-        std::ifstream file(filePath, std::ios::binary);
-        if (!file.is_open())
-        {
-            return false;
-        }
-
-        file.seekg(0, std::ios::end);
-        const size_t fileSize = file.tellg();
-        file.seekg(0, std::ios::beg);
-
-        const size_t numSamples = fileSize / 2;
-        m_allSamples.resize(numSamples);
-        std::vector<int8_t> buffer(numSamples * 2);
-        file.read(reinterpret_cast<char *>(buffer.data()), static_cast<std::streamsize>(numSamples * 2));
-
-        for (size_t i = 0; i < numSamples; i++)
-        {
-            auto re = static_cast<float>(buffer[2 * i]);
-            auto im = static_cast<float>(buffer[(2 * i) + 1]);
-            m_allSamples[i] = std::complex<float>(re, im);
-        }
+        return false;
     }
-    else
-    {
-        std::ifstream file(filePath);
-        if (!file.is_open())
-        {
-            return false;
-        }
 
-        std::string str;
-        int lineCounter = 0;
-        size_t fileLine = 0;
-        size_t badLineCount = 0;
-        float realVal = 0.0f;
-        float imagVal = 0.0f;
-        while (std::getline(file, str))
+    std::string str;
+    int lineCounter = 0;
+    size_t fileLine = 0;
+    size_t badLineCount = 0;
+    float realVal = 0.0f;
+    float imagVal = 0.0f;
+    while (std::getline(file, str))
+    {
+        fileLine++;
+        if (str.empty())
         {
-            fileLine++;
-            if (str.empty())
-            {
-                continue;
-            }
-            float parsed = 0.0f;
-            try
-            {
-                parsed = std::stof(str);
-            }
-            catch (const std::exception &)
-            {
-                if (badLineCount == 0)
-                {
-                    std::cerr << "FileSource: skipping unparseable sample at " << filePath << ":" << fileLine << " ('"
-                              << str << "')" << '\n';
-                }
-                badLineCount++;
-                continue;
-            }
-            if (lineCounter % 2 == 0)
-            {
-                realVal = parsed;
-            }
-            else
-            {
-                imagVal = parsed;
-                m_allSamples.emplace_back(realVal, imagVal);
-            }
-            lineCounter++;
+            continue;
         }
-        if (badLineCount > 0)
+        float parsed = 0.0f;
+        try
         {
-            std::cerr << "FileSource: skipped " << badLineCount << " unparseable line(s) in " << filePath << '\n';
+            parsed = std::stof(str);
         }
+        catch (const std::exception &)
+        {
+            if (badLineCount == 0)
+            {
+                std::cerr << "FileSource: skipping unparseable sample at " << filePath << ":" << fileLine << " ('"
+                          << str << "')" << '\n';
+            }
+            badLineCount++;
+            continue;
+        }
+        if (lineCounter % 2 == 0)
+        {
+            realVal = parsed;
+        }
+        else
+        {
+            imagVal = parsed;
+            m_allSamples.emplace_back(realVal, imagVal);
+        }
+        lineCounter++;
+    }
+    if (badLineCount > 0)
+    {
+        std::cerr << "FileSource: skipped " << badLineCount << " unparseable line(s) in " << filePath << '\n';
     }
 
     return !m_allSamples.empty();

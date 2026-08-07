@@ -6,43 +6,48 @@
 
 using namespace GPSOpenCl;
 
-Acquisition::Acquisition(const Settings::Configuration &conf)
-    : m_inputConfig(conf.acquisitionInput),
-      m_numberOfFreqencyBins(((m_inputConfig.acquisitionDopplerMaximum - m_inputConfig.acquisitionDopplerMinimum) /
-                              m_inputConfig.acquisitionDopplerSearchRange) +
-                             1),
-      m_initialFrequencyHz(static_cast<float>(m_inputConfig.acquisitionDopplerMinimum)),
-      m_freqSpacingHz(static_cast<float>(m_inputConfig.acquisitionDopplerSearchRange)),
-      m_length(m_inputConfig.numberOfSamplesPerCode),
-      m_samplingFrequencyHz(static_cast<float>(m_inputConfig.samplingFrequencyHz)),
-      m_reuseFactor(computeReuseFactor())
+Acquisition::Acquisition(const Settings::Configuration &conf) : Acquisition(conf.acquisitionInput)
 {
-
-    createDopplerSearchTable();
 }
 
 Acquisition::Acquisition(const AcquisitionInput &input)
     : m_inputConfig(input),
-      m_numberOfFreqencyBins(((m_inputConfig.acquisitionDopplerMaximum - m_inputConfig.acquisitionDopplerMinimum) /
-                              m_inputConfig.acquisitionDopplerSearchRange) +
-                             1),
+      m_numberOfFreqencyBins(computeNumberOfFrequencyBins(input)),
       m_initialFrequencyHz(static_cast<float>(m_inputConfig.acquisitionDopplerMinimum)),
       m_freqSpacingHz(static_cast<float>(m_inputConfig.acquisitionDopplerSearchRange)),
       m_length(m_inputConfig.numberOfSamplesPerCode),
       m_samplingFrequencyHz(static_cast<float>(m_inputConfig.samplingFrequencyHz)),
       m_reuseFactor(computeReuseFactor())
 {
-
     createDopplerSearchTable();
+
+    m_binSlotShift.resize(static_cast<size_t>(m_numberOfFreqencyBins));
+    for (int freqBin = 0; freqBin < m_numberOfFreqencyBins; freqBin++)
+    {
+        m_binSlotShift[static_cast<size_t>(freqBin)] = {freqBin % m_reuseFactor, freqBin / m_reuseFactor};
+    }
 }
 
 Acquisition::~Acquisition() = default;
+
+int Acquisition::computeNumberOfFrequencyBins(const AcquisitionInput &input)
+{
+    const int span = input.acquisitionDopplerMaximum - input.acquisitionDopplerMinimum;
+    const int step = input.acquisitionDopplerSearchRange;
+
+    if (span <= 0 || step <= 0)
+    {
+        return 1;
+    }
+
+    return ((span + step - 1) / step) + 1;
+}
 
 void Acquisition::createDopplerSearchTable()
 {
     float frequency = m_initialFrequencyHz;
 
-    for (int freqBin = 0; freqBin < m_numberOfFreqencyBins; freqBin++)
+    for (int freqBin = 0; freqBin < m_reuseFactor; freqBin++)
     {
         m_dopplerSearch.emplace_back();
 
@@ -87,13 +92,18 @@ int Acquisition::computeReuseFactor() const
     return rounded;
 }
 
-void Acquisition::correlate(const ComplexFloatVector &input, Compute *gpu, Code *code, Channel *acqChannel)
+void Acquisition::correlate(const ComplexFloatVector &input,
+                            SpectrumEngine *gpu,
+                            CaCodeGenerator *code,
+                            Channel *acqChannel)
 {
     acqChannel->resetAcquisitionMetrics();
 
+    gpu->invalidateResidentInput();
+
     for (int r = 0; r < m_reuseFactor; r++)
     {
-        if (gpu->complexMultiplyThenFftToSlot(input, m_dopplerSearch[r], Compute::FFTForward, r) != 0)
+        if (gpu->complexMultiplyThenFftToSlot(input, m_dopplerSearch[r], SpectrumEngine::FFTForward, r) != 0)
         {
             std::cerr << "Acquisition::correlate: forward FFT failed for SV " << acqChannel->svId
                       << " (samplesPerCode=" << m_length
@@ -138,21 +148,16 @@ void Acquisition::correlate(const ComplexFloatVector &input, Compute *gpu, Code 
         }
     };
 
-    std::vector<std::pair<int, int>> binSlotShift(static_cast<size_t>(m_numberOfFreqencyBins));
-    for (int freqBin = 0; freqBin < m_numberOfFreqencyBins; freqBin++)
-    {
-        binSlotShift[static_cast<size_t>(freqBin)] = {freqBin % m_reuseFactor, freqBin / m_reuseFactor};
-    }
-
-    FloatVector batchAbs;
+    m_batchAbs.clear();
     if (gpu->complexMultiplyResidentThenFftThenAbsoluteBatch(
-            codeSpectrum, binSlotShift, Compute::FFTInverse, &batchAbs) == 0 &&
-        batchAbs.size() == static_cast<size_t>(m_numberOfFreqencyBins) * static_cast<size_t>(m_length))
+            codeSpectrum, m_binSlotShift, SpectrumEngine::FFTInverse, &m_batchAbs) == 0 &&
+        m_batchAbs.size() == static_cast<size_t>(m_numberOfFreqencyBins) * static_cast<size_t>(m_length))
     {
         float frequency = m_initialFrequencyHz;
         for (int freqBin = 0; freqBin < m_numberOfFreqencyBins; freqBin++)
         {
-            const float *binValues = batchAbs.data() + (static_cast<size_t>(freqBin) * static_cast<size_t>(m_length));
+            const float *binValues =
+                m_batchAbs.data() + (static_cast<size_t>(freqBin) * static_cast<size_t>(m_length));
             accumulateBin(binValues, static_cast<size_t>(m_length), frequency);
             frequency += m_freqSpacingHz;
         }
@@ -167,7 +172,7 @@ void Acquisition::correlate(const ComplexFloatVector &input, Compute *gpu, Code 
             const int shift = freqBin / m_reuseFactor;
 
             if (gpu->complexMultiplyResidentThenFftThenAbsolute(
-                    codeSpectrum, residue, shift, Compute::FFTInverse, &correlationAbs) != 0)
+                    codeSpectrum, residue, shift, SpectrumEngine::FFTInverse, &correlationAbs) != 0)
             {
                 std::cerr << "Acquisition::correlate: inverse FFT failed (samplesPerCode=" << m_length
                           << " is not a power of two); skipping correlation for SV " << acqChannel->svId << '\n';

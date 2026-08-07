@@ -37,14 +37,9 @@ void Profiler::recordStageTimeMs(Stage stage, double timeMs)
     }
 }
 
-void Profiler::recordTrackingSubStageTimings(double earlyLatePromptGenMs,
-                                             double numericOscillatorMs,
-                                             double accumulatorMs,
-                                             double maxWorkerMs)
+void Profiler::recordTrackingSubStageTimings(double correlatorMs, double maxWorkerMs)
 {
-    m_currentOutput.earlyLatePromptGenTimeMs = earlyLatePromptGenMs;
-    m_currentOutput.numericOscillatorTimeMs = numericOscillatorMs;
-    m_currentOutput.accumulatorTimeMs = accumulatorMs;
+    m_currentOutput.accumulatorTimeMs = correlatorMs;
     m_currentOutput.trackingMaxWorkerTimeMs = maxWorkerMs;
 }
 

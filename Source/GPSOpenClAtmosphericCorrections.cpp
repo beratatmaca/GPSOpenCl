@@ -5,15 +5,6 @@
 
 using namespace GPSOpenCl;
 
-AtmosphericCorrections::AtmosphericCorrections()
-    : m_inputConfig{STRUCT_VERSION_1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}
-{
-}
-
-AtmosphericCorrections::AtmosphericCorrections(const AtmosphericInput &input) : m_inputConfig(input)
-{
-}
-
 AtmosphericOutput AtmosphericCorrections::computeCorrections(int svId,
                                                              const GeodeticPosition &rxPos,
                                                              const EcefPosition &rxEcef,
@@ -45,15 +36,6 @@ AtmosphericOutput AtmosphericCorrections::computeCorrections(int svId,
     out.tropoDelayMeters = saastamoinenTroposphericDelay(rxPos.altitudeMeters, elDeg);
 
     return out;
-}
-
-AtmosphericOutput AtmosphericCorrections::computeCorrections(int svId,
-                                                             const GeodeticPosition &rxPos,
-                                                             const EcefPosition &rxEcef,
-                                                             const EcefPosition &satEcef,
-                                                             double gpsTimeSec) const
-{
-    return computeCorrections(svId, rxPos, rxEcef, satEcef, gpsTimeSec, m_inputConfig);
 }
 
 void AtmosphericCorrections::computeAzimuthElevation(const EcefPosition &rxEcef,

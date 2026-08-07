@@ -1,5 +1,6 @@
 #include "GPSOpenClTracking.h"
 
+#include "GPSOpenClCaCodeGenerator.h"
 #include "GPSOpenClLockDetector.h"
 
 #include <algorithm>
@@ -22,59 +23,19 @@ float Tracking::loopFilterTau2(double noiseBandwidthHz)
     return static_cast<float>(2.0 * zeta / wn);
 }
 
-Tracking::Tracking(const Settings::Configuration &conf)
-    : m_configuration(conf),
-      m_inputConfig{STRUCT_VERSION_1,
-                    conf.trackingInput.pllBandwidthHz,
-                    conf.trackingInput.dllBandwidthHz,
-                    conf.acquisitionInput.samplingFrequencyHz,
-                    conf.acquisitionInput.numberOfSamplesPerCode},
-      m_totalSamples(conf.acquisitionInput.numberOfSamplesPerCode),
-      m_pllTau1(loopFilterTau1(conf.trackingInput.pllBandwidthHz)),
-      m_pllTau2(loopFilterTau2(conf.trackingInput.pllBandwidthHz)),
-      m_carrFreqBasisHz(0.0f),
-      m_carrFreqHz(0.0f),
-      m_remCarrPhase(0.0f),
-      m_carrNco(0.0f),
-      m_carrNcoPrev(0.0f),
-      m_carrErrorCycles(0.0f),
-      m_carrErrorPrevCycles(0.0f),
-      m_fllGain(4.0f * static_cast<float>(conf.trackingInput.fllBandwidthHz) *
-                static_cast<float>(GPS_CA_CODE_PERIOD_SEC)),
-      m_rateAidGain(4.0f * static_cast<float>(conf.trackingInput.rateAidBandwidthHz) *
-                    static_cast<float>(GPS_CA_CODE_PERIOD_SEC)),
-      m_fllNco(0.0f),
-      m_ipPrev(0.0f),
-      m_qpPrev(0.0f),
-      m_promptMagnitudeEma(0.0f),
-      m_blocksSinceInit(0),
-      m_fllPullInBlocks(conf.trackingInput.fllPullInBlocks),
-      m_dllTau1(loopFilterTau1(conf.trackingInput.dllBandwidthHz)),
-      m_dllTau2(loopFilterTau2(conf.trackingInput.dllBandwidthHz)),
-      m_codeFreqBasisHz(GPS_CA_CODE_FREQUENCY_HZ),
-      m_codeFreqHz(GPS_CA_CODE_FREQUENCY_HZ),
-      m_codePhaseStep(0.0f),
-      m_remCodePhase(0.0f),
-      m_codeNco(0.0f),
-      m_codeNcoPrev(0.0f),
-      m_codeErrorChips(0.0f),
-      m_codeErrorPrevChips(0.0f),
-      m_Ie(0.0f),
-      m_Ip(0.0f),
-      m_Il(0.0f),
-      m_Qe(0.0f),
-      m_Qp(0.0f),
-      m_Ql(0.0f),
-      m_carrierLockEma(0.0f),
-      m_codeLockEma(0.0f),
-      m_lastChannelState(0)
+namespace
 {
-    m_code.setConfiguration(m_configuration);
+TrackingInput makeTrackingInput(const Settings::Configuration &conf)
+{
+    TrackingInput input = conf.trackingInput;
+    input.samplingFrequencyHz = conf.acquisitionInput.samplingFrequencyHz;
+    input.numberOfSamplesPerCode = conf.acquisitionInput.numberOfSamplesPerCode;
+    return input;
+}
+}
 
-    if (m_configuration.acquisitionInput.samplingFrequencyHz > 0.0f)
-    {
-        m_codePhaseStep = m_codeFreqHz / m_configuration.acquisitionInput.samplingFrequencyHz;
-    }
+Tracking::Tracking(const Settings::Configuration &conf) : Tracking(makeTrackingInput(conf))
+{
 }
 
 Tracking::Tracking(const TrackingInput &input)
@@ -117,15 +78,9 @@ Tracking::Tracking(const TrackingInput &input)
       m_codeLockEma(0.0f),
       m_lastChannelState(0)
 {
-    m_configuration.trackingInput = input;
-    m_configuration.acquisitionInput.samplingFrequencyHz = static_cast<float>(input.samplingFrequencyHz);
-    m_configuration.acquisitionInput.numberOfSamplesPerCode = input.numberOfSamplesPerCode;
-
-    m_code.setConfiguration(m_configuration);
-
-    if (m_configuration.acquisitionInput.samplingFrequencyHz > 0.0f)
+    if (input.samplingFrequencyHz > 0.0)
     {
-        m_codePhaseStep = m_codeFreqHz / m_configuration.acquisitionInput.samplingFrequencyHz;
+        m_codePhaseStep = m_codeFreqHz / static_cast<float>(input.samplingFrequencyHz);
     }
 }
 
@@ -150,9 +105,9 @@ void Tracking::initTrackingState(float initDopplerHz, float initCodePhaseChips)
     m_remCodePhase = initCodePhaseChips;
     m_codeFreqBasisHz = GPS_CA_CODE_FREQUENCY_HZ;
     m_codeFreqHz = GPS_CA_CODE_FREQUENCY_HZ;
-    if (m_configuration.acquisitionInput.samplingFrequencyHz > 0.0f)
+    if (m_inputConfig.samplingFrequencyHz > 0.0)
     {
-        m_codePhaseStep = m_codeFreqHz / m_configuration.acquisitionInput.samplingFrequencyHz;
+        m_codePhaseStep = m_codeFreqHz / static_cast<float>(m_inputConfig.samplingFrequencyHz);
     }
     m_codeNco = 0.0f;
     m_codeNcoPrev = 0.0f;
@@ -169,8 +124,6 @@ void Tracking::doWork(const ComplexFloatVector &input, int prn, ComplexFloatVect
 {
     m_lastChannelState = channelState;
 
-    m_earlyLatePromptGenTimeMs = 0.0f;
-    m_numericOscillatorTimeMs = 0.0f;
     if (m_timingEnabled)
     {
         auto subStageT0 = std::chrono::high_resolution_clock::now();
@@ -248,36 +201,32 @@ TrackingOutput Tracking::getTrackingOutput(int prn) const
     return out;
 }
 
-void Tracking::getSubStageTimings(float *earlyLatePromptGenMs, float *numericOscillatorMs, float *accumulatorMs) const
-{
-    *earlyLatePromptGenMs = m_earlyLatePromptGenTimeMs;
-    *numericOscillatorMs = m_numericOscillatorTimeMs;
-    *accumulatorMs = m_accumulatorTimeMs;
-}
-
 void Tracking::correlator(const ComplexFloatVector &input, int prn)
 {
-    const float samplingFreq = m_configuration.acquisitionInput.samplingFrequencyHz;
+    const auto samplingFreq = static_cast<float>(m_inputConfig.samplingFrequencyHz);
     if (samplingFreq <= 0.0f)
     {
         return;
     }
 
     const int svIndex = std::clamp(prn - 1, 0, GPS_CA_SV_COUNT - 1);
-    const char *caCode = m_code.caCode[svIndex];
+    const char *caCode = CaCodeGenerator::rawCaCodes()[static_cast<size_t>(svIndex)].data();
 
     const double phaseStepRad = 2.0 * M_PI * static_cast<double>(m_carrFreqHz) / samplingFreq;
-    const std::complex<float> step = std::exp(IMAGINARY_UNIT * static_cast<float>(phaseStepRad));
-    std::complex<float> phasor = std::exp(IMAGINARY_UNIT * m_remCarrPhase);
 
     const size_t length = std::min(input.size(), static_cast<size_t>(m_totalSamples));
 
-    float ie = 0.0f;
-    float qe = 0.0f;
-    float ip = 0.0f;
-    float qp = 0.0f;
-    float il = 0.0f;
-    float ql = 0.0f;
+    constexpr size_t lanes = 8;
+    static thread_local std::vector<float> earlyChips;
+    static thread_local std::vector<float> promptChips;
+    static thread_local std::vector<float> lateChips;
+    static thread_local std::vector<float> carrierRe;
+    static thread_local std::vector<float> carrierIm;
+    earlyChips.resize(length);
+    promptChips.resize(length);
+    lateChips.resize(length);
+    carrierRe.resize(length);
+    carrierIm.resize(length);
 
     for (size_t i = 0; i < length; i++)
     {
@@ -301,24 +250,99 @@ void Tracking::correlator(const ComplexFloatVector &input, int prn)
         int lateIndex = (frac < 0.5f) ? promptIndex : promptIndex + 1;
         lateIndex -= (lateIndex >= GPS_CA_CODE_LENGTH) ? GPS_CA_CODE_LENGTH : 0;
 
-        const float earlyChip = caCode[earlyIndex];
-        const float promptChip = caCode[promptIndex];
-        const float lateChip = caCode[lateIndex];
+        earlyChips[i] = caCode[earlyIndex];
+        promptChips[i] = caCode[promptIndex];
+        lateChips[i] = caCode[lateIndex];
+    }
 
-        const std::complex<float> wipeoff = input[i] * std::conj(phasor);
-        phasor *= step;
+    float laneRe[lanes];
+    float laneIm[lanes];
+    for (size_t l = 0; l < lanes; l++)
+    {
+        const auto angle = static_cast<float>(m_remCarrPhase + (phaseStepRad * static_cast<double>(l)));
+        laneRe[l] = std::cos(angle);
+        laneIm[l] = std::sin(angle);
+    }
+    const auto blockAngle = static_cast<float>(phaseStepRad * static_cast<double>(lanes));
+    const float blockRe = std::cos(blockAngle);
+    const float blockIm = std::sin(blockAngle);
 
-        const float re = wipeoff.real();
-        const float im = wipeoff.imag();
+    const size_t vectorLength = length - (length % lanes);
+    for (size_t i = 0; i < vectorLength; i += lanes)
+    {
+        for (size_t l = 0; l < lanes; l++)
+        {
+            carrierRe[i + l] = laneRe[l];
+            carrierIm[i + l] = laneIm[l];
+        }
+        for (size_t l = 0; l < lanes; l++)
+        {
+            const float nextRe = (laneRe[l] * blockRe) - (laneIm[l] * blockIm);
+            const float nextIm = (laneRe[l] * blockIm) + (laneIm[l] * blockRe);
+            laneRe[l] = nextRe;
+            laneIm[l] = nextIm;
+        }
+    }
+    for (size_t i = vectorLength; i < length; i++)
+    {
+        const auto angle = static_cast<float>(m_remCarrPhase + (phaseStepRad * static_cast<double>(i)));
+        carrierRe[i] = std::cos(angle);
+        carrierIm[i] = std::sin(angle);
+    }
 
-        ie += re * earlyChip;
-        qe += im * earlyChip;
+    float ieLane[lanes] = {0.0f};
+    float qeLane[lanes] = {0.0f};
+    float ipLane[lanes] = {0.0f};
+    float qpLane[lanes] = {0.0f};
+    float ilLane[lanes] = {0.0f};
+    float qlLane[lanes] = {0.0f};
 
-        ip += re * promptChip;
-        qp += im * promptChip;
+    for (size_t i = 0; i < vectorLength; i += lanes)
+    {
+        for (size_t l = 0; l < lanes; l++)
+        {
+            const float inRe = input[i + l].real();
+            const float inIm = input[i + l].imag();
+            const float re = (inRe * carrierRe[i + l]) + (inIm * carrierIm[i + l]);
+            const float im = (inIm * carrierRe[i + l]) - (inRe * carrierIm[i + l]);
 
-        il += re * lateChip;
-        ql += im * lateChip;
+            ieLane[l] += re * earlyChips[i + l];
+            qeLane[l] += im * earlyChips[i + l];
+            ipLane[l] += re * promptChips[i + l];
+            qpLane[l] += im * promptChips[i + l];
+            ilLane[l] += re * lateChips[i + l];
+            qlLane[l] += im * lateChips[i + l];
+        }
+    }
+
+    float ie = 0.0f;
+    float qe = 0.0f;
+    float ip = 0.0f;
+    float qp = 0.0f;
+    float il = 0.0f;
+    float ql = 0.0f;
+    for (size_t l = 0; l < lanes; l++)
+    {
+        ie += ieLane[l];
+        qe += qeLane[l];
+        ip += ipLane[l];
+        qp += qpLane[l];
+        il += ilLane[l];
+        ql += qlLane[l];
+    }
+    for (size_t i = vectorLength; i < length; i++)
+    {
+        const float inRe = input[i].real();
+        const float inIm = input[i].imag();
+        const float re = (inRe * carrierRe[i]) + (inIm * carrierIm[i]);
+        const float im = (inIm * carrierRe[i]) - (inRe * carrierIm[i]);
+
+        ie += re * earlyChips[i];
+        qe += im * earlyChips[i];
+        ip += re * promptChips[i];
+        qp += im * promptChips[i];
+        il += re * lateChips[i];
+        ql += im * lateChips[i];
     }
 
     m_Ie = ie;
@@ -435,9 +459,9 @@ void Tracking::codeDiscriminator()
     m_codeErrorPrevChips = m_codeErrorChips;
 
     m_codeFreqHz = m_codeFreqBasisHz + (m_carrFreqHz / GPS_L1_CARRIER_TO_CODE_RATIO) - m_codeNco;
-    if (m_configuration.acquisitionInput.samplingFrequencyHz > 0.0f)
+    if (m_inputConfig.samplingFrequencyHz > 0.0)
     {
-        m_codePhaseStep = m_codeFreqHz / m_configuration.acquisitionInput.samplingFrequencyHz;
+        m_codePhaseStep = m_codeFreqHz / static_cast<float>(m_inputConfig.samplingFrequencyHz);
     }
 }
 

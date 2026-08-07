@@ -97,12 +97,9 @@ class Channel
      *  @return Prompt I/Q history. */
     const ComplexFloatVector &getPromptHistory() const { return m_promptHistory; }
 
-    /** @brief Get the latest tracking sub-stage timings (ms). Zero if not currently tracking.
-     *  @param earlyLatePromptGenMs Output, earlyLatePromptGen duration (ms).
-     *  @param numericOscillatorMs  Output, numericOscillator duration (ms).
-     *  @param accumulatorMs        Output, accumulator duration (ms). */
-    void
-        getTrackingSubStageTimings(float *earlyLatePromptGenMs, float *numericOscillatorMs, float *accumulatorMs) const;
+    /** @brief Get the fused correlator duration of the last tracked block.
+     *  @return Correlator duration (ms), zero if not currently tracking. */
+    float getTrackingCorrelatorTimeMs() const;
 
     /** @brief Set telemetry sink.
      *  @param sink Sink implementation. */

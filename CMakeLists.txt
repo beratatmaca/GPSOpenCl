@@ -6,6 +6,8 @@ project(GPSOpenCl
         )
 
 set(CMAKE_CXX_STANDARD 17)
+# Fail configure on toolchains without C++17 instead of silently decaying to an older standard.
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Default to Release: the receiver is real-time; a Debug default ships a 5-50x slower binary.
 if(NOT CMAKE_BUILD_TYPE)
@@ -23,11 +25,13 @@ endif()
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# Safe fast-math subset: keeps results bit-identical while letting sqrt/atan2 inline and FP loops vectorize.
-add_compile_options(-fno-math-errno -fno-trapping-math)
+# Safe fast-math subset: identical results for the finite values the DSP loops see, but lets
+# sqrt/atan2 inline, removes the __mulsc3 NaN-guard libcall on complex multiplies, and vectorizes.
+add_compile_options(-fno-math-errno -fno-trapping-math -fcx-limited-range)
 
-# Tune for the build machine's CPU (SIMD width, FMA); disable for portable deployment binaries.
-option(GPSOPENCL_NATIVE "Compile with -march=native for the build machine" ON)
+# Tune for the build machine's CPU (SIMD width, FMA). OFF by default: a native binary built on
+# one board SIGILLs on an older one; enable only for benchmarking on the build machine itself.
+option(GPSOPENCL_NATIVE "Compile with -march=native for the build machine" OFF)
 if(GPSOPENCL_NATIVE)
     include(CheckCXXCompilerFlag)
     check_cxx_compiler_flag("-march=native" GPSOPENCL_HAS_MARCH_NATIVE)
@@ -63,7 +67,12 @@ if(NOT OpenCL_FOUND)
         GIT_TAG v2023.12.14
     )
     set(OPENCL_ICD_LOADER_BUILD_TESTING OFF CACHE BOOL "" FORCE)
+    # Static ICD loader: deployment hosts (stock RPi/Jetson) ship no libOpenCL.so.1, and a shared
+    # loader would fail at load time before the CPU fallback can run.
+    set(GPSOPENCL_SAVED_BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS})
+    set(BUILD_SHARED_LIBS OFF)
     FetchContent_MakeAvailable(opencl_headers opencl_icd_loader)
+    set(BUILD_SHARED_LIBS ${GPSOPENCL_SAVED_BUILD_SHARED_LIBS})
 
     if(NOT TARGET OpenCL::OpenCL)
         add_library(OpenCL::OpenCL ALIAS OpenCL)
@@ -81,10 +90,14 @@ if(GPSOPENCL_ENABLE_ZMQ)
     endif()
 endif()
 
-enable_testing()
-
 add_subdirectory(Source)
-add_subdirectory(Tests)
+
+# Tests are optional so an offline host can build the receiver without fetching GoogleTest.
+option(GPSOPENCL_BUILD_TESTS "Build the GoogleTest suite" ON)
+if(GPSOPENCL_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(Tests)
+endif()
 
 # The simulator is a vendored submodule; a clone without submodule init must still configure.
 if(EXISTS ${CMAKE_SOURCE_DIR}/Tools/gps-sdr-sim/CMakeLists.txt)

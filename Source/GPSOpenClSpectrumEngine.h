@@ -1,7 +1,7 @@
 #ifndef INCLUDED_GPSOPENCL_COMPUTE_H
 #define INCLUDED_GPSOPENCL_COMPUTE_H
 
-/** @file GPSOpenClGPUCompute.h
+/** @file GPSOpenClSpectrumEngine.h
  *  @brief FFT, complex math, and NCO compute back-end.
  */
 
@@ -28,15 +28,15 @@ namespace GPSOpenCl
  *
  *   Every GPU entry point has a CPU path with identical math. A
  *   machine without OpenCL produces the same results. */
-class Compute
+class SpectrumEngine
 {
   public:
-    Compute();
-    ~Compute();
-    Compute(const Compute &) = delete;
-    Compute &operator=(const Compute &) = delete;
-    Compute(Compute &&) = delete;
-    Compute &operator=(Compute &&) = delete;
+    SpectrumEngine();
+    ~SpectrumEngine();
+    SpectrumEngine(const SpectrumEngine &) = delete;
+    SpectrumEngine &operator=(const SpectrumEngine &) = delete;
+    SpectrumEngine(SpectrumEngine &&) = delete;
+    SpectrumEngine &operator=(SpectrumEngine &&) = delete;
 
     /** @brief FFT direction flag. */
     using FFTDirectionType = enum FFTDirection : std::int8_t
@@ -74,13 +74,6 @@ class Compute
      *  @return 0 on success. */
     int absolute(const ComplexFloatVector &input1, FloatVector *output);
 
-    /** @brief Parallel reduction sum. The GPU path runs one dispatch. Each work group writes one
-     *   partial sum. No chunked host round-trip loop.
-     *  @param input    Float vector.
-     *  @param sumValue Output sum.
-     *  @return 0 on success. */
-    int sum(const FloatVector &input, float *sumValue);
-
     /** @brief Complex multiply then FFT into a numbered slot. The result stays resident. GPU path
      *   uses a device buffer. CPU fallback uses a host vector. Pair with
      *   complexMultiplyResidentThenFftThenAbsolute() for reuse without host round trips.
@@ -93,6 +86,15 @@ class Compute
                                      const ComplexFloatVector &input2,
                                      FFTDirectionType direction,
                                      int slot);
+
+    /** @brief Forget the device-resident input1 cache. The cache keys on the host pointer, so a
+     *   reused buffer with new contents at the same address would otherwise be mistaken for the
+     *   cached upload. Call before a batch whose input1 storage may have been recycled. */
+    void invalidateResidentInput()
+    {
+        m_cachedInput1Ptr = nullptr;
+        m_cachedInput1Len = 0;
+    }
 
     /** @brief Multiply input1 with a shifted slot vector. Then FFT, then magnitude squared.
      *   Computes output = |FFT(input1[i] * slot[(i + length - shiftBins) mod length])|^2. The shift
@@ -135,6 +137,13 @@ class Compute
      *  @param length         Total points to process.
      *  @return Clamped points-per-group value. */
     static unsigned int clampPointsPerGroup(unsigned int pointsPerGroup, unsigned int length);
+
+    /** @brief Complex points that fit the device local memory, minus a safety reserve. Some
+     *   devices keep part of the reported local memory for themselves, and requesting all of it
+     *   fails at enqueue.
+     *  @param localMemoryBytes Reported device local memory (bytes).
+     *  @return Complex points usable per work-group. */
+    static unsigned int usableLocalMemoryPoints(unsigned long long localMemoryBytes);
 
     /** @brief Shrink a work-group size until pointsPerGroup/localSize meets a minimum.
      *  @param localSize        Work-group size, assumed already a power of two.
@@ -242,14 +251,13 @@ class Compute
     cl_command_queue m_queue{nullptr};         ///< OpenCL command queue.
     cl_int m_error{-1};                        ///< Last OpenCL error.
     std::vector<float> m_allocatedMemory;      ///< Scratch memory buffer.
-    std::vector<float> m_partialSums;          ///< Scratch buffer for sum() partial-sum readback.
 
     bool m_deviceInfoCached{false};            ///< True once per-kernel/device info below is cached.
+    bool m_batchPathUnavailable{false};        ///< Latched when the batch path structurally cannot run.
     cl_ulong m_localMemorySize{0};             ///< Cached device local memory size (bytes).
     size_t m_fftLocalSize{0};                  ///< Cached fft_init kernel work-group size.
     size_t m_complexMultiplierLocalSize{0};    ///< Cached complexMultiplier kernel work-group size.
     size_t m_absoluteLocalSize{0};             ///< Cached absolute kernel work-group size.
-    size_t m_sumLocalSize{0};                  ///< Cached sum kernel work-group size.
 
     cl_mem m_fftBuffer{nullptr};               ///< Persistent FFT data buffer.
     size_t m_fftBufferCapacity{0};             ///< FFT buffer capacity (floats).
@@ -265,11 +273,6 @@ class Compute
     cl_mem m_absBufferC{nullptr};              ///< Persistent absolute() output buffer.
     size_t m_absBufferCapacityA{0};            ///< absolute() input buffer capacity (floats).
     size_t m_absBufferCapacityC{0};            ///< absolute() output buffer capacity (floats).
-
-    cl_mem m_sumBufferInput{nullptr};          ///< Persistent sum() input buffer.
-    cl_mem m_sumBufferOutput{nullptr};         ///< Persistent sum() partial-sum output buffer.
-    size_t m_sumBufferInputCapacity{0};        ///< sum() input buffer capacity (floats).
-    size_t m_sumBufferOutputCapacity{0};       ///< sum() output buffer capacity (floats, one per work-group).
 
     /** @brief Residency state of a numbered result slot. */
     using SlotStateType = enum SlotState : std::int8_t

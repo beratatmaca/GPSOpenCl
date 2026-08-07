@@ -47,24 +47,6 @@ TEST(PVTSolverTest, OrbitCalculation)
     EXPECT_NEAR(radius, expectedRadius, 10.0);
 }
 
-TEST(PVTSolverTest, StructOverloadResetsOutputOnFailure)
-{
-    std::vector<GPSOpenCl::NavDecoderOutput> outputs(2);
-    std::vector<double> measuredRanges(2, 20000000.0);
-    std::vector<double> transmitTimes(2, 0.0);
-
-    GPSOpenCl::PVTSolver solver;
-    GPSOpenCl::PvtSolverOutput outputSolution{};
-    outputSolution.isValid = 1;
-    outputSolution.latitudeDeg = 12.34;
-
-    bool success = solver.solvePosition(outputs, measuredRanges, transmitTimes, outputSolution);
-
-    EXPECT_FALSE(success);
-    EXPECT_EQ(outputSolution.isValid, 0u);
-    EXPECT_EQ(outputSolution.latitudeDeg, 0.0);
-}
-
 TEST(PVTSolverTest, MinSatellitesGateRejectsBelowThreshold)
 {
     GPSOpenCl::PvtSolverInput input{};

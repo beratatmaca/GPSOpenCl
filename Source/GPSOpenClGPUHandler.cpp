@@ -122,11 +122,22 @@ int GpuHandler::buildProgram()
         }
 
         fseek(programHandle.get(), 0, SEEK_END);
-        programSize = ftell(programHandle.get());
+        const long fileSize = ftell(programHandle.get());
+        if (fileSize <= 0)
+        {
+            std::cout << "Couldn't read the program file: " << filename << '\n';
+            return -1;
+        }
+        programSize = static_cast<size_t>(fileSize);
         fseek(programHandle.get(), 0, SEEK_SET);
         std::vector<char> programBuffer(programSize + 1, '\0');
-        fread(programBuffer.data(), sizeof(char), programSize, programHandle.get());
+        const size_t bytesRead = fread(programBuffer.data(), sizeof(char), programSize, programHandle.get());
         programHandle.reset();
+        if (bytesRead != programSize)
+        {
+            std::cout << "Couldn't read the program file: " << filename << '\n';
+            return -1;
+        }
 
         const char *sourcePtr = programBuffer.data();
         auto *program = clCreateProgramWithSource(context, 1, &sourcePtr, &programSize, &m_lastError);

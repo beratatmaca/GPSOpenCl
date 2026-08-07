@@ -1,9 +1,11 @@
 #include "GPSOpenClGpsSdrSimSource.h"
 
 #include <cerrno>
+#include <chrono>
 #include <cmath>
 #include <cstring>
 #include <fcntl.h>
+#include <thread>
 #include <iostream>
 #include <poll.h>
 #include <sys/stat.h>
@@ -101,7 +103,7 @@ bool GpsSdrSimSource::readBlock(ComplexFloatVector &outputSamples, SourceOutput 
         }
         if (res == 0)
         {
-            usleep(100'000);
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
         else
         {

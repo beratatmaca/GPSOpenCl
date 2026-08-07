@@ -77,12 +77,6 @@ class PVTSolver
      *  @return Satellite orbit and clock correction. */
     static SatelliteOrbit computeSatelliteOrbit(const GpsEphemeris &ephem, double transmitTimeSeconds);
 
-    /** @brief Compute satellite ECEF position from NavDecoderOutput.
-     *  @param navOut             Nav decoder output struct.
-     *  @param transmitTimeSeconds GPS transmit time (s).
-     *  @return Satellite orbit and clock correction. */
-    static SatelliteOrbit computeSatelliteOrbit(const NavDecoderOutput &navOut, double transmitTimeSeconds);
-
     /** @brief Convert ECEF to WGS-84 geodetic coordinates.
      *  @param ecef ECEF position (m).
      *  @return Geodetic lat/lon/alt. */
@@ -105,17 +99,12 @@ class PVTSolver
      *  @return Output struct. */
     static PvtSolverOutput solutionToOutput(const ReceiverPvtSolution &sol);
 
-    /** @brief Convert PvtSolverOutput to ReceiverPvtSolution.
-     *  @param out Output struct.
-     *  @return Solution struct. */
-    static ReceiverPvtSolution outputToSolution(const PvtSolverOutput &out);
-
     /** @brief Solve receiver position with weighted least squares. Weights are sin^2 of elevation.
      *   Low satellites carry more noise and multipath. The elevation mask needs a trusted position.
      *   So it engages only after a successful solve. A worst residual above the gate drops that
      *   satellite. The solve then repeats with the rest. One faulted measurement cannot poison the
-     *   fix. m_referenceEcef seeds the solve and transit times. Every call updates it from the
-     *   converged state, even rejected ones. A wrong seed self corrects across calls.
+     *   fix. m_referenceEcef seeds the solve and transit times. It updates only after a
+     *   successful solve, so it stays at the compiled-in seed until the first fix.
      *  @param ephemerides          Satellite ephemeris data.
      *  @param measuredPseudoranges Pseudorange measurements (m).
      *  @param transmitTimesSeconds Signal transmit times (s).
@@ -126,17 +115,6 @@ class PVTSolver
                        const std::vector<double> &transmitTimesSeconds,
                        ReceiverPvtSolution &solution);
 
-    /** @brief Solve receiver position from NavDecoderOutput structs.
-     *  @param outputs              Nav decoder outputs.
-     *  @param measuredPseudoranges Pseudorange measurements (m).
-     *  @param transmitTimesSeconds Signal transmit times (s).
-     *  @param outputSolution       Output struct.
-     *  @return True if solution converged. */
-    bool solvePosition(const std::vector<NavDecoderOutput> &outputs,
-                       const std::vector<double> &measuredPseudoranges,
-                       const std::vector<double> &transmitTimesSeconds,
-                       PvtSolverOutput &outputSolution);
-
     /** @brief Set broadcast Klobuchar ionospheric coefficients used for atmospheric correction.
      *  @param params Alpha and beta coefficients, e.g. from the nav decoder. */
     void setIonosphericParams(const AtmosphericInput &params) { m_ionoParams = params; }
@@ -145,6 +123,10 @@ class PVTSolver
      *   estimates. Updated after every successful solve.
      *  @return Best known ECEF receiver position (m). */
     EcefPosition getReferenceEcef() const { return m_referenceEcef; }
+
+    /** @brief Whether a solve has ever succeeded, i.e. the reference position is trustworthy.
+     *  @return True after the first successful fix. */
+    bool hasValidFix() const { return m_hasValidFix; }
 
   private:
     PvtSolverInput m_inputConfig;       ///< Solver parameters.

@@ -23,6 +23,10 @@
 namespace GPSOpenCl
 {
 
+#if defined(__BYTE_ORDER__) && defined(__ORDER_LITTLE_ENDIAN__) && (__BYTE_ORDER__ != __ORDER_LITTLE_ENDIAN__)
+#error "Wire structs are written in host byte order and the protocol is little-endian"
+#endif
+
 #pragma pack(push, 1)
 
 /** @brief Struct wire-format version tag. */
@@ -106,7 +110,7 @@ struct TrackingOutput
     int32_t prn{0};                              ///< Satellite PRN number.
     double carrierFreqHz{0.0};                   ///< Current carrier frequency (Hz).
     double codeFreqHz{0.0};                      ///< Current code frequency (Hz).
-    double carrierErrorCycles{0.0};              ///< PLL phase error (rad).
+    double carrierErrorCycles{0.0};              ///< PLL phase error (cycles).
     double codeErrorChips{0.0};                  ///< DLL code error (chips).
     double Ie{0.0};                              ///< In-phase Early correlator.
     double Ip{0.0};                              ///< In-phase Prompt correlator.
@@ -186,10 +190,10 @@ struct PvtSolverOutput
     double altitudeMeters{0.0};                  ///< Altitude above WGS-84 in meters.
     double clockBiasMeters{0.0};                 ///< Receiver clock bias (m).
     double clockBiasSeconds{0.0};                ///< Receiver clock bias (s).
-    double dopGDOP{0.0};                         ///< Geometric DOP.
-    double dopPDOP{0.0};                         ///< Position DOP.
-    double dopHDOP{0.0};                         ///< Horizontal DOP.
-    double dopVDOP{0.0};                         ///< Vertical DOP.
+    double dopGDOP{0.0};                         ///< Geometric DOP. 99.9 when the DOP matrix inversion failed.
+    double dopPDOP{0.0};                         ///< Position DOP. 99.9 when the DOP matrix inversion failed.
+    double dopHDOP{0.0};                         ///< Horizontal DOP. 99.9 when the DOP matrix inversion failed.
+    double dopVDOP{0.0};                         ///< Vertical DOP. 99.9 when the DOP matrix inversion failed.
     uint32_t isValid{0};                         ///< 1 if solution valid.
     uint32_t satellitesUsed{0};                  ///< Satellites in the accepted solution.
     double maxResidualMeters{0.0};               ///< Largest converged pseudorange residual (m).

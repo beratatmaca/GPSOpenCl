@@ -1,16 +1,24 @@
-include(FetchContent)
+# Prefer a system GoogleTest so offline hosts can build; fetch only when absent.
+find_package(GTest QUIET)
+if(NOT GTest_FOUND)
+  include(FetchContent)
 
-FetchContent_Declare(
-  googletest
-  URL https://github.com/google/googletest/archive/609281088cfefc76f9d0ce82e1ff6c30cc3591e5.zip
-)
+  FetchContent_Declare(
+    googletest
+    URL https://github.com/google/googletest/archive/609281088cfefc76f9d0ce82e1ff6c30cc3591e5.zip
+  )
 
-set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-set(BUILD_GMOCK OFF CACHE BOOL "" FORCE)
+  set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+  set(BUILD_GMOCK OFF CACHE BOOL "" FORCE)
 
-option(INSTALL_GTEST "Enable installation of googletest." OFF)
+  option(INSTALL_GTEST "Enable installation of googletest." OFF)
 
-FetchContent_MakeAvailable(googletest)
+  FetchContent_MakeAvailable(googletest)
+endif()
+
+if(NOT TARGET GTest::gtest_main)
+  add_library(GTest::gtest_main ALIAS gtest_main)
+endif()
 
 include(GoogleTest)
 
@@ -18,8 +26,8 @@ add_executable(
     GPSOpenClTest
     Main.cpp
     ${CMAKE_SOURCE_DIR}/Source/GPSOpenClGPUHandler.cpp
-    ${CMAKE_SOURCE_DIR}/Source/GPSOpenClGPUCompute.cpp
-    ${CMAKE_SOURCE_DIR}/Source/GPSOpenClCode.cpp
+    ${CMAKE_SOURCE_DIR}/Source/GPSOpenClSpectrumEngine.cpp
+    ${CMAKE_SOURCE_DIR}/Source/GPSOpenClCaCodeGenerator.cpp
     ${CMAKE_SOURCE_DIR}/Source/GPSOpenClSettings.cpp
     ${CMAKE_SOURCE_DIR}/Source/GPSOpenClAcquisition.cpp
     ${CMAKE_SOURCE_DIR}/Source/GPSOpenClTracking.cpp
@@ -35,6 +43,9 @@ add_executable(
     ${CMAKE_SOURCE_DIR}/Source/GPSOpenClFileSink.cpp
     ${CMAKE_SOURCE_DIR}/Source/GPSOpenClZmqSink.cpp
     ${CMAKE_SOURCE_DIR}/Source/GPSOpenClProfiler.cpp
+    ${CMAKE_SOURCE_DIR}/Source/GPSOpenClMeasurementAssembler.cpp
+    ${CMAKE_SOURCE_DIR}/Source/GPSOpenClTelemetryExporter.cpp
+    ${CMAKE_SOURCE_DIR}/Source/GPSOpenClTrackingWorkerPool.cpp
     GPUTest.cpp
     AcquisitionTest.cpp
     CaCodeTest.cpp
@@ -43,6 +54,7 @@ add_executable(
     NavigationDecoderTest.cpp
     ApplicationTest.cpp
     BoundedQueueTest.cpp
+    TrackingWorkerPoolTest.cpp
     TelemetryJsonTest.cpp
     PVTSolverTest.cpp
     NmeaGeneratorTest.cpp
@@ -72,7 +84,7 @@ target_include_directories(
 target_link_libraries(
   GPSOpenClTest
   PUBLIC 
-  gtest_main
+  GTest::gtest_main
   OpenCL::OpenCL
 )
 

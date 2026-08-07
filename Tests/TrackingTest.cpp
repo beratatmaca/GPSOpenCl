@@ -1,6 +1,6 @@
 #include "GPSOpenClTracking.h"
 
-#include "GPSOpenClCode.h"
+#include "GPSOpenClCaCodeGenerator.h"
 #include "GPSOpenClSettings.h"
 
 #include "gtest/gtest.h"
@@ -29,7 +29,7 @@ TEST(TrackingCarrierAidingTest, CodeFreqTracksDopplerScaledRateWithinFewBlocks)
     GPSOpenCl::Settings settings;
     settings.captureSettings();
 
-    GPSOpenCl::Code code;
+    GPSOpenCl::CaCodeGenerator code;
     code.setConfiguration(settings.configuration);
 
     const int prn = 1;

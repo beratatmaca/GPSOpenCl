@@ -13,11 +13,12 @@ If no OpenCL-compatible GPU platform or vendor driver is detected on the host sy
 This README describes the project as it exists today. GPSOpenCl is moving toward a hardware-deployable, real-time architecture built on an abstract `Source`/`Sink` contract, single-source-of-truth binary structs, a ZMQ publisher, and a dedicated profiler module.
 
 - See [`CLAUDE.md`](CLAUDE.md) for the current vs. target architecture.
-- See [`DEVELOPMENT_PLAN.md`](DEVELOPMENT_PLAN.md) for the phased rollout plan.
 
 ---
 
 ## Key Features & Architecture
+
+A conceptual walkthrough of the receiver (signal path, thread topology, cold-start timeline) lives in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -30,7 +31,7 @@ This README describes the project as it exists today. GPSOpenCl is moving toward
           │                         │                          │
 ┌─────────▼─────────────┐ ┌─────────▼──────────────┐ ┌─────────▼─────────┐
 │ Keplerian Orbit ECEF  │ │ Atmospheric Delays     │ │ Navigation Bit    │
-│ & Clock Corrections   │ │ (Klobuchar/Saastamoinen│ │ Subframes 1-3     │
+│ & Clock Corrections   │ │ (Klobuchar/Saastamoinen│ │ Subframes 1-5     │
 └───────────────────────┘ └────────────────────────┘ └─────────▲─────────┘
                                                                │
 ┌──────────────────────────────────────────────────────────────┴─────────┐
@@ -49,7 +50,7 @@ This README describes the project as it exists today. GPSOpenCl is moving toward
 - **OpenCL GPU Compute & CPU Fallbacks**: Parallelized kernel execution for FFT, IFFT, complex multiplication, NCO mixing, and magnitude computation, backed by CPU software fallback algorithms.
 - **Satellite Acquisition Engine**: Parallel Doppler search grid ($\pm 4\text{ kHz}$) with frequency-domain circular cross-correlation and Carrier-to-Noise Ratio ($C/N_0$) peak estimation.
 - **Satellite Tracking Engine**: 0.5-chip Early/Prompt/Late code replica generator with 2nd-order Phase-Locked Loop (PLL) and Delay-Locked Loop (DLL) discriminators & loop filters.
-- **Navigation Preamble & Message Decoder**: Telemetry (TLM) preamble detection (`0x8B`/`0x74`), IS-GPS-200 30-bit Hamming parity verification, and Subframe 1–3 ephemeris parsing.
+- **Navigation Preamble & Message Decoder**: Telemetry (TLM) preamble detection (`0x8B`/`0x74`), IS-GPS-200 30-bit Hamming parity verification, and Subframe 1–5 decoding, including Subframe 1–3 ephemeris parsing and Subframe 4 page 18 Klobuchar ionospheric parameters.
 - **PVT Position & Orbit Solver**: Keplerian 3D Earth-Centered Earth-Fixed (ECEF) satellite orbit calculator, relativistic clock bias correction, Sagnac Earth rotation compensation, Gauss-Jordan Weighted Least Squares (WLS) receiver position solver, Dilution of Precision (GDOP, PDOP, HDOP, VDOP) matrix computation, and Geodetic WGS-84 (Latitude, Longitude, Altitude) conversion.
 - **Atmospheric Delay Corrections**: Klobuchar Ionospheric model (Subframe 4 parameters) and Saastamoinen Tropospheric delay model.
 - **NMEA-0183 Output Engine**: Standard `$GPGGA`, `$GPRMC`, `$GPGSA`, and `$GPGSV` sentence generation with 8-bit XOR checksums.
@@ -124,10 +125,15 @@ Output files generated:
 
 ### 3. Running Unit & Integration Test Suite
 
-To run all 33 Google Tests (including OpenCL GPU fallbacks, tracking loops, orbit solvers, and `gps-sdr-sim` E2E integration):
+The test suite has three tiers:
+
+- **Unit tests** (default, ~15 s): 118 GoogleTest cases covering acquisition, tracking loops, nav decode, PVT math, queues, sources, and sinks.
+- **Ground-truth integration tests** (gated, minutes): stream a full gps-sdr-sim scenario through the receiver and assert ephemeris, pseudorange, and fix accuracy against simulator truth. Enable with `GPSOPENCL_RUN_INTEGRATION_TESTS=1`.
+- **Benchmark** (`Tools/e2e_benchmark.py`): measures throughput and position error; run it after any algorithm change.
 
 ```bash
 ctest --test-dir build --output-on-failure
+GPSOPENCL_RUN_INTEGRATION_TESTS=1 ctest --test-dir build -R GroundTruth --output-on-failure
 ```
 
 ---
@@ -135,8 +141,33 @@ ctest --test-dir build --output-on-failure
 ### 4. Running Standalone Receiver Executable
 
 ```bash
-./build/Source/GPSOpenCl
+./build/Source/GPSOpenCl [signal_file]
 ```
+
+The first argument is the path to the input signal. A path containing `.fifo` selects the gps-sdr-sim streaming source; anything else is read as a file. Without an argument, the receiver probes `build/live_stream.bin`, `../build/live_stream.bin`, and `live_stream.bin`, then falls back to `inputSignal.txt` under `Tests/Scripts/` (see `Source/Main.cpp`).
+
+#### Configuration
+
+At startup the receiver loads `DefaultConf.ini`, searched in the working directory, `build/Source/`, and `Tests/Scripts/ConfigurationFile/`. If no file is found, built-in defaults apply. Recognized keys (see `Source/GPSOpenClSettings.cpp`):
+
+| Key | Default | Unit / Meaning |
+| --- | --- | --- |
+| `DataSource` | `capture.dat` | Signal file or FIFO path. A `.fifo` path enables the gps-sdr-sim streaming source. |
+| `SamplingFrequency` | `4096000` | Hz. Must yield a power-of-two samples per 1 ms code period. |
+| `AcquisitionMinimumDoppler` | `-4000` | Hz. Lower edge of the Doppler search window. |
+| `AcquisitionMaximumDoppler` | `4000` | Hz. Upper edge of the Doppler search window. |
+| `AcquisitionDopplerSearchRange` | `500` | Hz. Doppler bin step. |
+| `AcquisitionCn0Threshold` | `43.0` | dB-Hz. Minimum C/N0 to declare a satellite acquired. |
+| `TrackingTelemetryIntervalBlocks` | `10` | Blocks between TrackingOutput publishes per channel. |
+| `PllBandwidthHz` | `25.0` | Hz. PLL noise bandwidth. |
+| `DllBandwidthHz` | `2.0` | Hz. DLL noise bandwidth. |
+| `FllBandwidthHz` | `10.0` | Hz. FLL pull-in noise bandwidth. |
+| `RateAidBandwidthHz` | `1.0` | Hz. Continuous Doppler-rate-aiding bandwidth. |
+| `FllPullInBlocks` | `75` | Blocks of FLL-assisted pull-in before the PLL takes over. |
+| `FixOutputIntervalBlocks` | `100` | Blocks between PVT solves and telemetry output. |
+| `PvtTropoEnabled` | `1` | 0/1. Saastamoinen troposphere correction. Keep 0 for simulated signals. |
+| `PvtElevationMaskDeg` | `0.0` | Degrees. Elevation mask once a fix exists. 0 disables. |
+| `ProfilerEnabled` | `1` | 0/1. Per-stage timing telemetry. |
 
 ---
 
@@ -166,4 +197,4 @@ To enable hardware GPU acceleration, install the appropriate OpenCL driver for y
 
 ## License
 
-This project is licensed under the terms of the MIT / GPL License.
+This project is licensed under the terms of the GPL-3.0 License.
