@@ -22,6 +22,8 @@ class FileSink : public Sink
     /** @brief Construct with output file path.
      *  @param outputFilePath Path to output file. */
     explicit FileSink(const std::string &outputFilePath);
+
+    /** @brief Stop the writer thread and close the output file. */
     ~FileSink() override;
     FileSink(const FileSink &) = delete;
     FileSink &operator=(const FileSink &) = delete;

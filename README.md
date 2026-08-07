@@ -48,14 +48,14 @@ A conceptual walkthrough of the receiver (signal path, thread topology, cold-sta
 ```
 
 - **OpenCL GPU Compute & CPU Fallbacks**: Parallelized kernel execution for FFT, IFFT, complex multiplication, NCO mixing, and magnitude computation, backed by CPU software fallback algorithms.
-- **Satellite Acquisition Engine**: Parallel Doppler search grid ($\pm 4\text{ kHz}$) with frequency-domain circular cross-correlation and Carrier-to-Noise Ratio ($C/N_0$) peak estimation.
+- **Satellite Acquisition Engine**: Parallel Doppler search grid (±4 kHz) with frequency-domain circular cross-correlation and Carrier-to-Noise Ratio (C/N0) peak estimation.
 - **Satellite Tracking Engine**: 0.5-chip Early/Prompt/Late code replica generator with 2nd-order Phase-Locked Loop (PLL) and Delay-Locked Loop (DLL) discriminators & loop filters.
 - **Navigation Preamble & Message Decoder**: Telemetry (TLM) preamble detection (`0x8B`/`0x74`), IS-GPS-200 30-bit Hamming parity verification, and Subframe 1–5 decoding, including Subframe 1–3 ephemeris parsing and Subframe 4 page 18 Klobuchar ionospheric parameters.
 - **PVT Position & Orbit Solver**: Keplerian 3D Earth-Centered Earth-Fixed (ECEF) satellite orbit calculator, relativistic clock bias correction, Sagnac Earth rotation compensation, Gauss-Jordan Weighted Least Squares (WLS) receiver position solver, Dilution of Precision (GDOP, PDOP, HDOP, VDOP) matrix computation, and Geodetic WGS-84 (Latitude, Longitude, Altitude) conversion.
 - **Atmospheric Delay Corrections**: Klobuchar Ionospheric model (Subframe 4 parameters) and Saastamoinen Tropospheric delay model.
 - **NMEA-0183 Output Engine**: Standard `$GPGGA`, `$GPRMC`, `$GPGSA`, and `$GPGSV` sentence generation with 8-bit XOR checksums.
-- **Interactive Plotly/Dash Dashboard**: Live web analytics interface displaying satellite skyplots, $C/N_0$ signal bars, Doppler shifts, WGS-84 location, and NMEA log streams.
-- **Simulation & LLM Benchmarking Suite**: Powered by `gps-sdr-sim` for end-to-end scenario generation, throughput measurements ($\text{MSamples/s}$), and machine-parsable JSON performance logging.
+- **Interactive Plotly/Dash Dashboard**: Live web analytics interface displaying satellite skyplots, C/N0 signal bars, Doppler shifts, WGS-84 location, and NMEA log streams.
+- **Simulation & LLM Benchmarking Suite**: Powered by `gps-sdr-sim` for end-to-end scenario generation, throughput measurements (MSamples/s), and machine-parsable JSON performance logging.
 
 ---
 

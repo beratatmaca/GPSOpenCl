@@ -31,7 +31,11 @@ namespace GPSOpenCl
 class SpectrumEngine
 {
   public:
+    /** @brief Initialize the GPU device and command queue, if available. Falls back to CPU compute
+     *   on failure. */
     SpectrumEngine();
+
+    /** @brief Finish pending GPU work and release buffers, queue, and device. */
     ~SpectrumEngine();
     SpectrumEngine(const SpectrumEngine &) = delete;
     SpectrumEngine &operator=(const SpectrumEngine &) = delete;

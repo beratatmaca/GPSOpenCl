@@ -16,6 +16,9 @@
 
 namespace GPSOpenCl
 {
+/** @brief Default ZMQ PUB endpoint for telemetry, when none is given. */
+inline const std::string ZMQ_DEFAULT_TELEMETRY_ENDPOINT = "ipc:///tmp/gpsopencl/telemetry.sock";
+
 /** @brief Telemetry sink publishing via a ZMQ PUB socket. publish() copies onto a bounded queue
  *   and returns. A background thread does the zmq_send calls. A slow subscriber never stalls the
  *   caller. A full queue drops new messages. This matches the sink may drop design. */
@@ -24,7 +27,9 @@ class ZmqSink : public Sink
   public:
     /** @brief Construct with ZMQ endpoint.
      *  @param endpoint ZMQ endpoint URI. */
-    explicit ZmqSink(std::string endpoint = "ipc:///tmp/gpsopencl/telemetry.sock");
+    explicit ZmqSink(std::string endpoint = ZMQ_DEFAULT_TELEMETRY_ENDPOINT);
+
+    /** @brief Stop the sender thread and tear down the ZMQ socket. */
     ~ZmqSink() override;
     ZmqSink(const ZmqSink &) = delete;
     ZmqSink &operator=(const ZmqSink &) = delete;

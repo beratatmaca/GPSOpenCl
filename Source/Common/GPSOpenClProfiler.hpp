@@ -28,7 +28,9 @@ class Profiler
         PvtSolve        ///< PVT solve stage.
     };
 
+    /** @brief Construct with profiling enabled by default. */
     Profiler();
+
     ~Profiler();
     Profiler(const Profiler &) = delete;
     Profiler &operator=(const Profiler &) = delete;
@@ -84,6 +86,7 @@ class Profiler
             }
         }
 
+        /** @brief Record the elapsed time as the stage duration, unless disabled. */
         ~ScopedTimer()
         {
             if (m_armed && m_profiler.isEnabled())

@@ -22,38 +22,44 @@ namespace GPSOpenCl
  *   iodc, iode2 and iode3 which do not go on the wire. */
 struct GpsEphemeris
 {
-    int svId;                               ///< Satellite vehicle ID.
-    int weekNumber;                         ///< GPS week number.
-    double tow;                             ///< Time of week (s).
-    int subframeId;                         ///< Subframe ID (1-5).
-    bool isValid;                           ///< True if decode valid.
+    int svId;           ///< Satellite vehicle ID.
+    int weekNumber;     ///< GPS week number.
+    double tow;         ///< Time of week (s).
+    int subframeId;     ///< Subframe ID (1-5).
+    bool isValid;       ///< True if decode valid.
 
-    double toc;                             ///< Clock reference time (s).
-    double af0;                             ///< Clock bias (s).
-    double af1;                             ///< Clock drift (s/s).
-    double af2;                             ///< Clock drift rate (s/s^2).
-    double tgd;                             ///< Group delay differential (s).
-    int iodc;                               ///< Issue of Data, Clock (10-bit, subframe 1).
+    double toc;         ///< Clock reference time (s).
+    double af0;         ///< Clock bias (s).
+    double af1;         ///< Clock drift (s/s).
+    double af2;         ///< Clock drift rate (s/s^2).
+    double tgd;         ///< Group delay differential (s).
+    int iodc;           ///< Issue of Data, Clock (10-bit, subframe 1).
 
-    double toe;                             ///< Ephemeris reference time (s).
-    double sqrtA;                           ///< Sqrt of semi-major axis (m^1/2).
-    double e;                               ///< Orbital eccentricity.
-    double i0;                              ///< Inclination at reference time (rad).
-    double omega0;                          ///< Longitude of ascending node (rad).
-    double omega;                           ///< Argument of perigee (rad).
-    double M0;                              ///< Mean anomaly at reference time (rad).
-    double deltaN;                          ///< Mean motion correction (rad/s).
-    double omegaDot;                        ///< Rate of right ascension (rad/s).
-    double idot;                            ///< Rate of inclination (rad/s).
-    double Cuc, Cus, Crc, Crs, Cic, Cis;    ///< Harmonic correction terms.
-    int iode2;                              ///< Issue of Data, Ephemeris from subframe 2.
-    int iode3;                              ///< Issue of Data, Ephemeris from subframe 3.
+    double toe;         ///< Ephemeris reference time (s).
+    double sqrtA;       ///< Sqrt of semi-major axis (m^1/2).
+    double e;           ///< Orbital eccentricity.
+    double i0;          ///< Inclination at reference time (rad).
+    double omega0;      ///< Longitude of ascending node (rad).
+    double omega;       ///< Argument of perigee (rad).
+    double M0;          ///< Mean anomaly at reference time (rad).
+    double deltaN;      ///< Mean motion correction (rad/s).
+    double omegaDot;    ///< Rate of right ascension (rad/s).
+    double idot;        ///< Rate of inclination (rad/s).
+    double Cuc;         ///< Argument of latitude cosine correction (rad).
+    double Cus;         ///< Argument of latitude sine correction (rad).
+    double Crc;         ///< Orbit radius cosine correction (m).
+    double Crs;         ///< Orbit radius sine correction (m).
+    double Cic;         ///< Inclination cosine correction (rad).
+    double Cis;         ///< Inclination sine correction (rad).
+    int iode2;          ///< Issue of Data, Ephemeris from subframe 2.
+    int iode3;          ///< Issue of Data, Ephemeris from subframe 3.
 };
 
 /** @brief GPS L1 C/A navigation message decoder. */
 class NavigationDecoder
 {
   public:
+    /** @brief Construct with default decoder settings. */
     NavigationDecoder();
 
     /** @brief Construct from decoder parameters.
@@ -169,6 +175,7 @@ class NavigationDecoder
      *  @param bitOffset           Bit offset within the phase-aligned bit stream (in/out).
      *  @param ephem               Output ephemeris.
      *  @param subframeStartSample Subframe start sample index (output).
+     *  @param codePhaseHistory    Optional per-block DLL code phase history, for sub-block start refinement.
      *  @return True if a parity-valid subframe decoded at this phase. */
     bool decodeAtPhaseOffset(int svId,
                              const ComplexFloatVector &promptHistory,
@@ -193,6 +200,7 @@ class NavigationDecoder
      *                             bitPosition when false. Otherwise the cursor outpaces the buffer.
      *  @param ephem               Output ephemeris.
      *  @param subframeStartSample Subframe start sample index (output).
+     *  @param codePhaseHistory    Optional per-block DLL code phase history, for sub-block start refinement.
      *  @return True if a parity-valid subframe starts at exactly this position. */
     bool tryDecodeAtBitPosition(int svId,
                                 const ComplexFloatVector &promptHistory,

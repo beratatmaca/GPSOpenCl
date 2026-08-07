@@ -40,6 +40,8 @@ class Application
     /** @brief Construct from configuration.
      *  @param conf Application configuration. */
     Application(const Settings::Configuration &conf);
+
+    /** @brief Stop background acquisition and worker threads. */
     ~Application();
     Application(const Application &) = delete;
     Application &operator=(const Application &) = delete;
@@ -149,7 +151,8 @@ class Application
 
     /** @brief Apply finished acquisition search results. Checks C/N0, starts tracking, publishes
      *   telemetry. Must run on the consumer thread only. It mutates shared channel lifecycle state.
-     *  @param channelIndex Channel index (0-based, PRN - 1) whose search just completed. */
+     *  @param channelIndex Channel index (0-based, PRN - 1) whose search just completed.
+     *  @param correlateMs  Correlation search time (ms), for telemetry. */
     void finalizeAcquisition(int channelIndex, double correlateMs);
 
     /** @brief Persistent background acquisition thread body. Runs the Doppler search off the

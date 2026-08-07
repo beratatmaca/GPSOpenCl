@@ -50,7 +50,10 @@ class TelemetryExporter
         std::string gsaSentence;                       ///< Pre generated GSA sentence.
     };
 
+    /** @brief Start the background writer thread. */
     TelemetryExporter();
+
+    /** @brief Stop the writer thread and drain the queue. */
     ~TelemetryExporter();
     TelemetryExporter(const TelemetryExporter &) = delete;
     TelemetryExporter &operator=(const TelemetryExporter &) = delete;

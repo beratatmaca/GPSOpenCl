@@ -6,8 +6,8 @@ OUTPUT_DIRECTORY = docs
 
 # Kernels/*.cl carries Doxygen comments but no distinct OpenCL parser exists; map it to C.
 EXTENSION_MAPPING = cl=C
-INPUT             = README.md Source Kernels
-FILE_PATTERNS     = *.hpp *.cpp *.cl
+INPUT             = README.md CLAUDE.md docs/ARCHITECTURE.md Source Kernels
+FILE_PATTERNS     = *.hpp *.cpp *.cl *.md
 RECURSIVE         = YES
 USE_MDFILE_AS_MAINPAGE = README.md
 TAB_SIZE          = 4

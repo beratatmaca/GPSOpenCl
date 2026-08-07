@@ -17,6 +17,8 @@ class GpsSdrSimSource : public Source
 {
   public:
     GpsSdrSimSource();
+
+    /** @brief Close the data and control FIFOs. */
     ~GpsSdrSimSource() override;
     GpsSdrSimSource(const GpsSdrSimSource &) = delete;
     GpsSdrSimSource &operator=(const GpsSdrSimSource &) = delete;

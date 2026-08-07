@@ -18,13 +18,13 @@ using FloatVector = std::vector<float>;
 using ComplexFloatVector = std::vector<std::complex<float>>;
 
 /** @brief C/A code length (chips). */
-const int GPS_CA_CODE_LENGTH(1023);
+const int GPS_CA_CODE_LENGTH = 1023;
 
 /** @brief Number of GPS L1 C/A satellites (PRN 1-32). */
-const int GPS_CA_SV_COUNT(32);
+const int GPS_CA_SV_COUNT = 32;
 
 /** @brief C/A code chipping rate (Hz). */
-const float GPS_CA_CODE_FREQUENCY_HZ(1'023'000);
+const float GPS_CA_CODE_FREQUENCY_HZ = 1'023'000;
 
 /** @brief C/A code period (s). Double precision on purpose. Float 0.001 carries 5e-11 relative
  *   error. That grows to centimeter pseudorange error per second. */
@@ -33,7 +33,7 @@ constexpr double GPS_CA_CODE_PERIOD_SEC = 0.001;
 /** @brief Ratio of L1 carrier to code chipping rate. Equals 1575.42 MHz over 1.023 MHz, exact.
  *   Carrier and code Doppler scale by this ratio. Dividing carrier Doppler gives the code rate
  *   correction. */
-const float GPS_L1_CARRIER_TO_CODE_RATIO(1540.0);
+const float GPS_L1_CARRIER_TO_CODE_RATIO = 1540.0;
 
 /** @brief Speed of light (m/s), per IS-GPS-200. */
 constexpr double SPEED_OF_LIGHT_M_S = 299792458.0;
@@ -57,7 +57,7 @@ constexpr double WGS84_EARTH_ROTATION_RATE_RAD_S = 7.2921151467e-5;
 constexpr double WGS84_GRAVITATIONAL_PARAMETER = 3.986005e14;
 
 /** @brief Complex imaginary unit (0 + 1j). */
-const std::complex<float> IMAGINARY_UNIT(0.0f, 1.0f);
+const std::complex<float> IMAGINARY_UNIT = {0.0f, 1.0f};
 
 /** @brief Software name string. */
 inline const std::string SOFTWARE_NAME = "GPSOpenCl";

@@ -17,7 +17,9 @@ namespace GPSOpenCl
 class Settings
 {
   public:
+    /** @brief Construct with built-in defaults, before captureSettings() loads the INI file. */
     Settings();
+
     ~Settings();
     Settings(const Settings &) = delete;
     Settings &operator=(const Settings &) = delete;
@@ -38,7 +40,9 @@ class Settings
         AtmosphericInput atmosphericInput;        ///< Atmospheric module input.
         NmeaGeneratorInput nmeaGeneratorInput;    ///< NMEA generator module input.
         ProfilerInput profilerInput;              ///< Profiler module input.
-    } configuration;
+    };
+
+    Configuration configuration;    ///< Live configuration, populated by captureSettings().
 
   private:
     /** @brief Parse one key=value line.

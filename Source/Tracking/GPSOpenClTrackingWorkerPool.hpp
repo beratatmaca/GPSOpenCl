@@ -40,6 +40,7 @@ class TrackingWorkerPool
      *  @param maxWorkers Upper bound on thread count. */
     TrackingWorkerPool(WorkFunction work, int maxWorkers);
 
+    /** @brief Signal shutdown and join every worker thread. */
     ~TrackingWorkerPool();
     TrackingWorkerPool(const TrackingWorkerPool &) = delete;
     TrackingWorkerPool &operator=(const TrackingWorkerPool &) = delete;
@@ -55,7 +56,8 @@ class TrackingWorkerPool
     double maxWorkerDurationMs() const;
 
   private:
-    /** @brief Worker thread body. Waits for a new generation then drains the cursor. */
+    /** @brief Worker thread body. Waits for a new generation then drains the cursor.
+     *  @param workerIndex Index of this worker into m_workers/m_workerDurationMs. */
     void workerLoop(int workerIndex);
 
     /** @brief Pull item indices from the cursor until none remain. */

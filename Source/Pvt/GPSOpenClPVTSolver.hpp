@@ -59,6 +59,7 @@ struct ReceiverPvtSolution
 class PVTSolver
 {
   public:
+    /** @brief Construct with a minimum of 4 satellites and a 30 m max residual. */
     PVTSolver();
 
     /** @brief Construct from solver parameters.

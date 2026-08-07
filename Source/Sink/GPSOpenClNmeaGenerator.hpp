@@ -20,6 +20,7 @@ namespace GPSOpenCl
 class NmeaGenerator
 {
   public:
+    /** @brief Construct with all NMEA sentences enabled. */
     NmeaGenerator();
 
     /** @brief Construct from generator parameters.

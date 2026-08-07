@@ -18,6 +18,8 @@ class GpuHandler
 {
   public:
     GpuHandler();
+
+    /** @brief Release OpenCL kernels, programs, and the context/device. */
     ~GpuHandler();
     GpuHandler(const GpuHandler &) = delete;
     GpuHandler &operator=(const GpuHandler &) = delete;
@@ -71,8 +73,11 @@ class GpuHandler
   private:
     cl_platform_id m_platform{nullptr};    ///< OpenCL platform ID.
     cl_int m_lastError{0};                 ///< Last OpenCL error code.
+
+    /** @brief Source file name per GPUProgramList entry. */
     std::string m_programCharList[GPSOpenClProgramCount]{"Acquisition.cl"};
 
+    /** @brief Kernel function name per GPSOpenClAcquisitionKernelList entry. */
     std::string m_acquisitionKernelCharList[AcquisitionKernelCount]{"fft_init", "fft_stage", "fft_scale", "complexMultiplier", "absolute", "complexMultiplierBatch"};
 };
 }

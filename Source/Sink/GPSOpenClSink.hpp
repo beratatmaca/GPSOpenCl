@@ -168,7 +168,10 @@ class CompositeSink : public Sink
         }
     }
 
-    /** @brief Forward data to all downstream sinks. */
+    /** @brief Forward data to all downstream sinks.
+     *  @param identifier Topic/module name.
+     *  @param data       Struct data pointer.
+     *  @param size       Data size (bytes). */
     void publish(const std::string &identifier, const void *data, size_t size) override
     {
         for (auto &s : m_sinks)

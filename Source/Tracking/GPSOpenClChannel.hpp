@@ -29,6 +29,7 @@ enum class ChannelState : uint8_t
 class Channel
 {
   public:
+    /** @brief Construct in the Acquiring state, eligible for acquisition. */
     Channel();
     ~Channel();
     Channel(const Channel &) = delete;
