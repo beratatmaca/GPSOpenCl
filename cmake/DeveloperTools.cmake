@@ -59,6 +59,31 @@ else()
     message(STATUS "cppcheck not found; 'cppcheck' target unavailable")
 endif()
 
+find_program(GCOVR_EXE NAMES gcovr)
+if(GPSOPENCL_ENABLE_COVERAGE AND NOT GCOVR_EXE)
+    message(STATUS "gcovr not found; 'coverage' target unavailable")
+elseif(NOT GPSOPENCL_ENABLE_COVERAGE)
+    message(STATUS "'coverage' target unavailable; reconfigure with -DGPSOPENCL_ENABLE_COVERAGE=ON")
+elseif(TARGET GPSOpenClTest)
+    add_custom_target(coverage
+        COMMAND find ${CMAKE_BINARY_DIR}/Tests -name "*.gcda" -delete
+        COMMAND ${CMAKE_CTEST_COMMAND} --test-dir ${CMAKE_BINARY_DIR} --output-on-failure
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/coverage
+        COMMAND ${GCOVR_EXE}
+                --root ${CMAKE_SOURCE_DIR}
+                --filter "${CMAKE_SOURCE_DIR}/Source/.*"
+                --object-directory ${CMAKE_BINARY_DIR}/Tests
+                --html-details ${CMAKE_BINARY_DIR}/coverage/index.html
+                --print-summary
+                --gcov-ignore-parse-errors negative_hits.warn_once_per_file
+                ${CMAKE_BINARY_DIR}/Tests
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+        COMMENT "Running tests with coverage instrumentation; report at build/coverage/index.html"
+        VERBATIM
+    )
+    add_dependencies(coverage GPSOpenClTest)
+endif()
+
 find_package(Doxygen QUIET)
 if(DOXYGEN_FOUND)
     add_custom_target(docs

@@ -123,17 +123,34 @@ Output files generated:
 
 ---
 
-### 3. Running Unit & Integration Test Suite
+### 3. Running the Test Suite
 
-The test suite has three tiers:
+Two consolidated tests (`Tests/GroundTruthTest.cpp`) drive the full receiver pipeline through
+`gps-sdr-sim` and check the result against the simulator's exported ground truth, at a randomized
+receiver position/trajectory each run:
 
-- **Unit tests** (default, ~15 s): 118 GoogleTest cases covering acquisition, tracking loops, nav decode, PVT math, queues, sources, and sinks.
-- **Ground-truth integration tests** (gated, minutes): stream a full gps-sdr-sim scenario through the receiver and assert ephemeris, pseudorange, and fix accuracy against simulator truth. Enable with `GPSOPENCL_RUN_INTEGRATION_TESTS=1`.
+- **`SingleChannelMatchesSimulatorGroundTruth`**: isolates one satellite (bypassing `Application`,
+  driving `Acquisition`/`Channel` directly) and checks acquisition/tracking Doppler.
+- **`MultiChannelMatchesSimulatorGroundTruth`**: runs the full `Application` pipeline across a
+  static position and a moving trajectory, checking multi-satellite acquisition/tracking Doppler.
+
+Both always run their fast smoke checks (~5 s total). Set `GPSOPENCL_RUN_INTEGRATION_TESTS=1` to
+additionally run the slow (~1-2 min) deep checks: full ephemeris decode vs. RINEX, pseudorange and
+PVT fix accuracy, and subframe code-phase timing. The random seed defaults to a fixed value for
+reproducible CI runs; override with `GPSOPENCL_TEST_SEED=<n>` to reproduce or fuzz a specific run.
+Known open issue: at some scenario positions (e.g. `GPSOPENCL_TEST_SEED=7`) the deep phase fails
+because no first PVT fix ever forms: the nav decoder's whole-block subframe anchor attribution is
+a per-satellite coin flip when the bit edge sits at a block seam, splitting the constellation into
+transmit-time clusters one code period apart. The median snap repairs this after a first fix, but
+an unlucky cluster split can prevent the first fix entirely. Fully root-caused with a fix design
+recorded in `Source/NavDecode/GPSOpenClNavigationDecoder.cpp` above the anchor refinement.
+
 - **Benchmark** (`Tools/e2e_benchmark.py`): measures throughput and position error; run it after any algorithm change.
 
 ```bash
 ctest --test-dir build --output-on-failure
-GPSOPENCL_RUN_INTEGRATION_TESTS=1 ctest --test-dir build -R GroundTruth --output-on-failure
+GPSOPENCL_RUN_INTEGRATION_TESTS=1 ctest --test-dir build --output-on-failure
+GPSOPENCL_TEST_SEED=424242 GPSOPENCL_RUN_INTEGRATION_TESTS=1 ctest --test-dir build --output-on-failure -R MultiChannel
 ```
 
 ---

@@ -236,7 +236,7 @@ struct PvtSolverInput
     double maxPseudorangeErrMeters{30.0};        ///< Max converged residual (m) before rejection or exclusion.
     int32_t fixOutputIntervalBlocks{100};        ///< Blocks between PVT solve and telemetry output.
     int32_t tropoEnabled{1};                     ///< Apply Saastamoinen correction, 0 for simulated signals.
-    double elevationMaskDeg{0.0};                ///< Elevation mask (deg) once a fix exists, 0 disables.
+    double elevationMaskDeg{10.0};               ///< Elevation mask (deg) once a fix exists, 0 disables.
 };
 
 /** @brief PVT solver output with position and DOP. */

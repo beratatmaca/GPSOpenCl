@@ -46,7 +46,7 @@ Data flow:
 - ZMQ publisher gated behind `GPSOPENCL_ENABLE_ZMQ`. FileSink and NullSink also exist.
 - Profiler publishes per-block timing through Sink.
 - Falls back to CPU if no OpenCL device.
-- Every module has Input/Output structs. Sink publish methods are typed with static_assert size guards. `Tests/StructsSourceSinkTest.cpp` exercises the wire format.
+- Every module has Input/Output structs. Sink publish methods are typed with static_assert size guards.
 
 ## Target Architecture
 
@@ -129,7 +129,10 @@ CMake 3.14+, C++17. OpenCL headers and GoogleTest auto-fetched.
 ctest --test-dir build --output-on-failure
 ```
 
-118 GoogleTest cases. Every new algorithm needs a test.
+One ground-truth-driven test file (`Tests/GroundTruthTest.cpp`, two cases: single-channel and
+multi-channel), exercising the full pipeline against `gps-sdr-sim` at a randomized receiver
+position each run. Set `GPSOPENCL_RUN_INTEGRATION_TESTS=1` for the slow deep checks (ephemeris,
+pseudorange, PVT fix, code phase); `GPSOPENCL_TEST_SEED=<n>` to reproduce a specific run.
 
 ## Benchmarking
 

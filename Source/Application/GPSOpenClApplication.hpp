@@ -168,21 +168,22 @@ class Application
      *   Publish cost never extends the barrier. */
     void publishTrackingOutputs();
 
-    /** @brief Whether the solver reference position can steer millisecond snapping. The compiled-in
-     *   seed is trusted optimistically so a cold start near it resolves the systematic one-code-
-     *   period bit-edge ambiguity. Repeated pre-fix solve failures are the signature of a wrong
-     *   seed, so trust is withdrawn until the first successful fix.
-     *  @return True while the seed is presumed good or after any successful fix. */
-    bool isReferencePositionTrusted() const { return m_pvtSolver.hasValidFix() || m_seedSolveFailures < SEED_TRUST_SOLVE_FAILURES; }
+    /** @brief Whether the solver reference position can steer millisecond snapping. Only a
+     *   position validated by a successful fix qualifies. The compiled-in seed is never trusted:
+     *   snapping against it from a cold start far away corrupts transmit times by multiple whole
+     *   code periods, and the resulting solve can still converge (RAIM drops the corrupted
+     *   satellites), silently locking in the bad epochs. Pre-fix, satellites carrying the one-
+     *   code-period bit-edge ambiguity are instead excluded by the solver's residual rejection
+     *   until the first fix enables their repair.
+     *  @return True after any successful fix. */
+    bool isReferencePositionTrusted() const { return m_pvtSolver.hasValidFix(); }
 
     std::unique_ptr<Acquisition> m_acquisition;                     ///< Acquisition engine.
     Settings::Configuration m_configuration;                        ///< Application configuration.
 
     std::unique_ptr<CaCodeGenerator> m_code;                        ///< C/A code generator.
     std::unique_ptr<SpectrumEngine> m_gpu;                          ///< GPU/CPU compute back-end.
-    static constexpr int SEED_TRUST_SOLVE_FAILURES = 10;            ///< Pre-fix solve failures before the seed is distrusted.
     PVTSolver m_pvtSolver;                                          ///< Position solver.
-    int m_seedSolveFailures{0};                                     ///< Failed pre-fix solves with a snap-trusted seed.
     NavigationDecoder m_navDecoder;                                 ///< Navigation decoder.
     NmeaGenerator m_nmeaGenerator;                                  ///< NMEA sentence generator.
     Channel m_channels[GPS_CA_SV_COUNT];                            ///< Per-satellite channels.

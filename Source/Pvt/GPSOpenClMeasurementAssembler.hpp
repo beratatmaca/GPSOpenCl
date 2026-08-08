@@ -52,6 +52,10 @@ class MeasurementAssembler
      *   whole millisecond. Snaps such outliers onto the median cluster.
      *   The cluster need not hold the true epoch. A common shift is
      *   absorbed by the receiver clock bias, so only consistency matters.
+     *   Corrections are limited to one code period: the bit edge
+     *   ambiguity is inherently plus or minus one block, so any larger
+     *   implied offset means the reference geometry is wrong and the
+     *   satellite is left untouched for the solver's residual gate.
      *  @param transmitTimes   Per satellite transmit times in seconds, corrected in place.
      *  @param impliedArrivals Per satellite modeled arrival instants in seconds, same order. */
     static void snapTransmitTimesToMedianArrival(std::vector<double> &transmitTimes, const std::vector<double> &impliedArrivals);

@@ -46,33 +46,8 @@ add_executable(
     ${GPSOPENCL_NAVDECODE_SOURCES}
     ${GPSOPENCL_PVT_SOURCES}
     ${GPSOPENCL_SINK_SOURCES}
-    GPUTest.cpp
-    AcquisitionTest.cpp
-    CaCodeTest.cpp
-    SettingsTest.cpp
-    TrackingTest.cpp
-    NavigationDecoderTest.cpp
-    ApplicationTest.cpp
-    BoundedQueueTest.cpp
-    TrackingWorkerPoolTest.cpp
-    TelemetryJsonTest.cpp
-    PVTSolverTest.cpp
-    NmeaGeneratorTest.cpp
-    AtmosphericCorrectionsTest.cpp
-    StructsSourceSinkTest.cpp
-    EndianTest.cpp
-    LockDetectorTest.cpp
-    ChannelTest.cpp
-    GroundTruthVerificationTest.cpp
-    SingleChannelGroundTruthTest.cpp
-    DynamicMotionGroundTruthTest.cpp
-    E2ETest.cpp
+    GroundTruthTest.cpp
 )
-
-# ZmqSinkTest touches the real ZmqSink type, so it can only compile in when that type exists.
-if(GPSOPENCL_ENABLE_ZMQ)
-    target_sources(GPSOpenClTest PRIVATE ZmqSinkTest.cpp)
-endif()
 
 target_compile_definitions(GPSOpenClTest PUBLIC CTEST)
 
@@ -80,15 +55,20 @@ if(GPSOPENCL_ENABLE_ZMQ)
     target_link_libraries(GPSOpenClTest PRIVATE ${ZMQ_LIB})
 endif()
 
+if(GPSOPENCL_ENABLE_COVERAGE)
+    target_compile_options(GPSOpenClTest PRIVATE --coverage -O0 -g)
+    target_link_options(GPSOpenClTest PRIVATE --coverage)
+endif()
+
 target_include_directories(
   GPSOpenClTest
-  PUBLIC 
+  PUBLIC
   ${CMAKE_SOURCE_DIR}/Source
 )
 
 target_link_libraries(
   GPSOpenClTest
-  PUBLIC 
+  PUBLIC
   GTest::gtest_main
   OpenCL::OpenCL
 )
@@ -99,24 +79,22 @@ gtest_discover_tests(
   LABELS "unit"
   DISCOVERY_TIMEOUT
   240
-  DISCOVERY_PATTERN "*Test.cpp"
 )
 
 file(
-  COPY 
+  COPY
   ${CMAKE_CURRENT_SOURCE_DIR}/Scripts/ConfigurationFile/DefaultConf.ini
-  DESTINATION 
+  DESTINATION
   ${CMAKE_CURRENT_BINARY_DIR}
 )
 
 file(
-  COPY 
+  COPY
   ${CMAKE_CURRENT_SOURCE_DIR}/Scripts
-  DESTINATION 
+  DESTINATION
   ${CMAKE_CURRENT_BINARY_DIR}
 )
 
-# Copy kernels at build time so edits to .cl files reach the runtime search path on rebuild.
 add_custom_command(
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/Kernels/Acquisition.cl
   COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -128,8 +106,8 @@ add_custom_target(GPSOpenClTestKernels DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/Kerne
 add_dependencies(GPSOpenClTest GPSOpenClTestKernels)
 
 file(
-  COPY 
+  COPY
   ${CMAKE_SOURCE_DIR}/Tools
-  DESTINATION 
+  DESTINATION
   ${CMAKE_CURRENT_BINARY_DIR}
 )

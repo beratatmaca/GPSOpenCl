@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <vector>
 
 using namespace GPSOpenCl;
 
@@ -36,11 +37,12 @@ void MeasurementAssembler::snapTransmitTimesToMedianArrival(std::vector<double> 
     const double medianArrival = sortedArrivals[sortedArrivals.size() / 2];
 
     constexpr double snapGuardBandCodePeriods = 0.25;
+    constexpr double maxSnapCodePeriods = 1.0;
     for (size_t i = 0; i < transmitTimes.size(); i++)
     {
         const double offsetCodePeriods = (medianArrival - impliedArrivals[i]) / GPS_CA_CODE_PERIOD_SEC;
         const double wholePeriods = std::round(offsetCodePeriods);
-        if (wholePeriods != 0.0 && std::fabs(offsetCodePeriods - wholePeriods) < snapGuardBandCodePeriods)
+        if (wholePeriods != 0.0 && std::fabs(wholePeriods) <= maxSnapCodePeriods && std::fabs(offsetCodePeriods - wholePeriods) < snapGuardBandCodePeriods)
         {
             transmitTimes[i] += wholePeriods * GPS_CA_CODE_PERIOD_SEC;
         }

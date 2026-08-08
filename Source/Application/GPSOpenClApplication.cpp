@@ -285,10 +285,6 @@ bool Application::computeNavigationSolution(ReceiverPvtSolution &solution)
     }
 
     const bool success = m_pvtSolver.solvePosition(ephemerides, measuredPseudoranges, transmitTimes, solution);
-    if (!success && !m_pvtSolver.hasValidFix())
-    {
-        m_seedSolveFailures++;
-    }
     if (success)
     {
         std::ostringstream consoleOut;

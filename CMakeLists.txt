@@ -21,7 +21,6 @@ if(GPSOPENCL_STDLIB_DEBUG)
 endif()
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
 add_compile_options(-fno-math-errno -fno-trapping-math -fcx-limited-range)
 option(GPSOPENCL_NATIVE "Compile with -march=native for the build machine" OFF)
 if(GPSOPENCL_NATIVE)
@@ -78,6 +77,8 @@ if(GPSOPENCL_ENABLE_ZMQ)
         set(GPSOPENCL_ENABLE_ZMQ OFF CACHE BOOL "" FORCE)
     endif()
 endif()
+
+option(GPSOPENCL_ENABLE_COVERAGE "Instrument GPSOpenCl/GPSOpenClTest with gcov for code coverage" OFF)
 
 add_subdirectory(Source)
 
